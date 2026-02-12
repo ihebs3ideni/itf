@@ -10,7 +10,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("//:defs.bzl", "py_itf_test")
+load("//:defs.bzl", "py_itf_test", "py_sctf_test")
+load("//score/itf/plugins:plugins.bzl", "dlt", "docker", "qemu")
 
 py_itf_test(
     name = "test_rules_are_working_correctly",
@@ -29,7 +30,7 @@ py_itf_test(
         "--docker-image=ubuntu:24.04",
     ],
     plugins = [
-        "itf.plugins.docker",
+        docker,
     ],
 )
 
@@ -37,6 +38,15 @@ py_itf_test(
     name = "test_dlt",
     srcs = [
         "test_dlt.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location //test/resources:image_tarball)",
+        "--docker-image=score_itf_examples:latest",
+    ],
+    data = ["//test/resources:image_tarball"],
+    plugins = [
+        dlt,
+        docker,
     ],
 )
 
@@ -46,15 +56,45 @@ py_itf_test(
         "test_ssh.py",
     ],
     args = [
-        "--target_config=config/target_config.json",
+        "--target_config=$(location //test/resources:target_config)",
+        "--dlt-config=$(location //test/resources:dlt_config)",
         "--ecu=s_core_ecu_qemu_bridge_network",
-        "--os=qnx",
         "--qemu",
     ],
-    plugins = [
-        "itf.plugins.base.base_plugin",
+    data = [
+        "//test/resources:dlt_config",
+        "//test/resources:target_config",
     ],
-    tags = ["manual"],
+    plugins = [
+        qemu,
+        dlt,
+    ],
+    tags = [
+        "local",
+        "manual",
+    ],
+)
+
+py_itf_test(
+    name = "test_ssh_bridge_network_no_dlt",
+    srcs = [
+        "test_ssh.py",
+    ],
+    args = [
+        "--target_config=$(location //test/resources:target_config)",
+        "--ecu=s_core_ecu_qemu_bridge_network",
+        "--qemu",
+    ],
+    data = [
+        "//test/resources:target_config",
+    ],
+    plugins = [
+        qemu,
+    ],
+    tags = [
+        "local",
+        "manual",
+    ],
 )
 
 py_itf_test(
@@ -63,13 +103,26 @@ py_itf_test(
         "test_ssh.py",
     ],
     args = [
-        "--target_config=config/target_config.json",
+        "--target_config=$(location //test/resources:target_config)",
         "--ecu=s_core_ecu_qemu_port_forwarding",
-        "--os=qnx",
         "--qemu",
     ],
-    plugins = [
-        "itf.plugins.base.base_plugin",
+    data = [
+        "//test/resources:target_config",
     ],
-    tags = ["manual"],
+    plugins = [
+        qemu,
+        dlt,
+    ],
+    tags = [
+        "local",
+        "manual",
+    ],
+)
+
+py_sctf_test(
+    name = "test_simple_environment",
+    srcs = [
+        "test_simple_environment.py",
+    ],
 )
