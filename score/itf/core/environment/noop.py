@@ -105,13 +105,17 @@ class NoopEnvironment(Environment):
         timeout = timeout if timeout is not None else self._timeout
         proc = handle.parent
 
-        try:
-            proc.terminate()
-            exit_code = proc.wait(timeout)
-        except psutil.TimeoutExpired:
-            logger.error("Process did not stop in %ss, sending SIGKILL", timeout)
-            proc.kill()
-            exit_code = proc.wait()
+        # If the process already finished, just collect its exit code.
+        if not proc.is_running():
+            exit_code = proc.wait(timeout=0)
+        else:
+            try:
+                proc.terminate()
+                exit_code = proc.wait(timeout)
+            except psutil.TimeoutExpired:
+                logger.error("Process did not stop in %ss, sending SIGKILL", timeout)
+                proc.kill()
+                exit_code = proc.wait()
 
         if handle.stdout_thread:
             handle.stdout_thread.join(timeout=5)

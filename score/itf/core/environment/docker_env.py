@@ -41,11 +41,44 @@ import tempfile
 import time
 from typing import Optional
 
-import docker as pypi_docker
-
 from score.itf.core.environment.base import Environment, ProcessHandle
 
 logger = logging.getLogger(__name__)
+
+
+def _get_docker_client():
+    """Create a Docker client, working around the requests/urllib3 version conflict.
+
+    The system-installed ``docker`` SDK (5.x) uses ``http+docker://`` as the URL
+    scheme for Unix socket communication.  If a newer ``requests`` (>=2.32) is
+    installed (e.g. in ``~/.local``), its ``HTTPAdapter.get_connection_with_tls_context``
+    rejects that scheme.  We detect this situation and patch the adapter so that
+    the Unix-socket transport works correctly.
+    """
+    import docker as pypi_docker  # local import to allow patching first
+
+    try:
+        return pypi_docker.from_env()
+    except pypi_docker.errors.DockerException as exc:
+        if "http+docker" not in str(exc):
+            raise
+
+    # --- Apply compatibility patch -------------------------------------------
+    logger.debug("Applying http+docker compatibility patch for docker SDK / requests")
+    import requests.adapters
+    from docker.transport import UnixHTTPAdapter
+
+    _orig = requests.adapters.HTTPAdapter.get_connection_with_tls_context
+
+    def _patched(self, request, verify, proxies=None, cert=None):
+        if isinstance(self, UnixHTTPAdapter):
+            # UnixHTTPAdapter overrides ``send()`` completely and never uses the
+            # poolmanager, so we can return a dummy connection.
+            return self.get_connection(request.url, proxies)
+        return _orig(self, request, verify, proxies, cert)
+
+    requests.adapters.HTTPAdapter.get_connection_with_tls_context = _patched
+    return pypi_docker.from_env()
 
 _DEFAULT_TIMEOUT = 15.0
 
@@ -90,7 +123,7 @@ class DockerEnvironment(Environment):
         self._network_mode = network_mode
         self._timeout = timeout
 
-        self._client: pypi_docker.DockerClient | None = None
+        self._client = None  # docker.DockerClient, set in setup()
         self._container = None
         self._tmp_image_tag: str | None = None  # Track images we create so we can clean up
 
@@ -151,7 +184,7 @@ class DockerEnvironment(Environment):
     # ------------------------------------------------------------------
 
     def setup(self) -> None:
-        self._client = pypi_docker.from_env()
+        self._client = _get_docker_client()
 
         # Optional pre-bootstrap (e.g. docker load)
         if self._bootstrap_command:
@@ -260,9 +293,17 @@ class DockerEnvironment(Environment):
             except Exception:  # noqa: BLE001
                 pass
 
-        # Re-inspect for final exit code
-        info = self._client.api.exec_inspect(exec_id)
-        handle.exit_code = info.get("ExitCode", -1)
+        # Wait briefly for the kill to take effect, then re-inspect
+        kill_deadline = time.monotonic() + 5
+        while time.monotonic() < kill_deadline:
+            info = self._client.api.exec_inspect(exec_id)
+            if not info["Running"]:
+                break
+            time.sleep(0.2)
+
+        exit_code = info.get("ExitCode")
+        # ExitCode can be None if Docker couldn't determine it — treat as killed
+        handle.exit_code = exit_code if exit_code is not None else -9
         return handle.exit_code
 
     def is_process_running(self, handle: ProcessHandle) -> bool:
@@ -319,8 +360,11 @@ class DockerEnvironment(Environment):
             with tarfile.open(tmp_tar, "w") as tar:
                 tar.add(sysroot, arcname=".")
 
-            with open(tmp_tar, "rb") as f:
-                self._client.images.import_image(f, repository=tag.split(":")[0], tag=tag.split(":")[1])
+            self._client.api.import_image(
+                src=tmp_tar,
+                repository=tag.split(":")[0],
+                tag=tag.split(":")[1],
+            )
         finally:
             os.unlink(tmp_tar)
 
