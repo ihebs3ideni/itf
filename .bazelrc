@@ -1,8 +1,12 @@
+common --registry=https://raw.githubusercontent.com/eclipse-score/bazel_registry/main/
 common --registry=https://bcr.bazel.build
 
 test --test_output=errors
 
-
+# ITF Qemu integration tests
 build:qemu-integration --run_under=//scripts:run_under_qemu
 build:qemu-integration --test_arg="--qemu"
-build:qemu-integration --test_arg="--os=qnx"
+
+# Setup network namespace for SCTF tests
+build:sctf --run_under=//scripts:run_in_network_namespace
+# build:sctf --config=spp_host_gcc

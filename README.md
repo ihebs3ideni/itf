@@ -39,7 +39,7 @@ The bazel configs generally influence the build options. These include modifying
 - `--config=qemu-integration` - Run ITF for QEMU target. If `--qemu_image` is specified, ITF will automatically start QEMU with the provided image before running the tests.
 
 The Python arguments customize the runtime behavior.
-They can be found in [`itf/plugins/base/base_plugin.py`](itf/plugins/base/base_plugin.py) file or displayed by passing `--test_arg="--help"` to any test invocation.
+They can be found in [`score/itf/plugins/base/base_plugin.py`](score/itf/plugins/base/base_plugin.py) file or displayed by passing `--test_arg="--help"` to any test invocation.
 All the options can be passed in command line wrapped in `--test_arg="<...>"` or in `args` parameter of `py_itf_test` macro in `BUILD` file.
 
 Runtime arguments:
@@ -127,7 +127,8 @@ Other processors: `other_processors`
 ITF provides a macro `py_itf_test` to simplify the creation of ITF based tests.
 BUILD file example:
 ```python
-load("@itf//:defs.bzl", "py_itf_test")
+load("//:defs.bzl", "py_itf_test")
+load("//score/itf/plugins:plugins.bzl", "base")
 
 py_itf_test(
     name = "test_ssh_qemu",
@@ -140,7 +141,7 @@ py_itf_test(
         "--qemu_image=$(location //build:init)",
     ],
     plugins = [
-        "itf.plugins.base.base_plugin",
+        "base",
     ],
     data = [
         "//build:init",
@@ -214,7 +215,7 @@ Tests are written using `pytest` framework. Tests can utilize various ITF plugin
 
 Example test using SSH to connect to the target ECU:
 ```python
-from itf.plugins.com.ssh import execute_command
+from score.itf.core.com.ssh import execute_command
 
 
 def test_ssh_with_default_user(target_fixture):
@@ -226,17 +227,17 @@ Main plugin is base plugin which provides common functionality, fixtures and arg
 It should be specified in the `plugins` parameter of `py_itf_test` macro.
 ```python
     plugins = [
-        "itf.plugins.base.base_plugin",
+        "score.itf.plugins.base.base_plugin",
     ],
 ```
 
 Fixtures provided by base plugin are:
-* [`target_fixture`](itf/plugins/base/base_plugin.py#L89) - Provides access to the target ECU under test, its processors, connection methods, etc.
-* [`test_config_fixture`](itf/plugins/base/base_plugin.py#L78) - Provides access to the test configuration, command line arguments.
-* [`target_config_fixture`](itf/plugins/base/base_plugin.py#L83) - Provides access to the target configuration read from target configuration file.
+* [`target_fixture`](score/itf/core/base/base_plugin.py#L80) - Provides access to the target ECU under test, its processors, connection methods, etc.
+* [`test_config_fixture`](score/itf/core/base/base_plugin.py#L69) - Provides access to the test configuration, command line arguments.
+* [`target_config_fixture`](score/itf/core/base/base_plugin.py#L74) - Provides access to the target configuration read from target configuration file.
 
 ### Communication with ECU
-Main communication with target ECU is done via [`target_fixture`](itf/plugins/base/base_plugin.py#L89).
+Main communication with target ECU is done via [`target_fixture`](score/itf/core/base/base_plugin.py#L80).
 
 Usage of `target_fixture` to get performance processor SSH connection:
 ```python
@@ -260,14 +261,14 @@ Usage of `target_fixture` to check is ping lost of performance processor:
 target_fixture.sut.performance_processor.ping_lost()
 ```
 
-For parameters of above mentioned functionality see [`target_processor.py`](itf/plugins/base/target/processors/target_processor.py).
+For parameters of above mentioned functionality see [`target_processor.py`](score/itf/core/base/target/processors/target_processor.py).
 
 ## Capture DLT messages
 By default ITF will start capturing DLT messages from the target ECU's performance processor
 when the test starts and stop capturing when the test ends.
 Captured DLT messages can be found in `dlt_receive.dlt` which can be found in `bazel-testlogs` folder.
 
-Class [`DltWindow`](itf/plugins/dlt/dlt_window.py) can used in test to capture DLT messages in tests.
+Class [`DltWindow`](score/itf/plugins/dlt/dlt_window.py) can used in test to capture DLT messages in tests.
 ```python
 dlt = DltWindow(dlt_file="./my_test.dlt")
 with dlt.record():
@@ -285,4 +286,91 @@ dlt_thread_results = dlt.find(query=query_dict)
 
 # Clear captured messages
 dlt.clear()
+```
+# Software Component Test Framework
+Software Component Test Framework allows developers to execute a single or multiple applications
+in order to interact with them through their external interfaces (pipes, sockets, shared memory, etc.).
+
+# Design
+
+The framework uses [`pytest`](https://docs.pytest.org/en/latest/contents.html) as a test runner.
+Applications are run in a sandboxed environment using `bubblewrap`. The sandbox environment is shared
+between all applications and mocks used in the test, and resembles in structure the target file system.
+Each application runs as a separate process under sandboxed root directory, thus the execution is separated
+from your file system. This also helps parallelize test execution.
+
+Common use cases consist of verifying a single application integration to the ARA:COM stack:
+does it report states Running/Terminating properly, does it produce expected output for given input.
+
+The key functionality tested is the SOME-IP and IPC communication. SOME-IP is typically used across
+ECUs and is built on top of Ethernet, whereas IPC is for inside ECU communication and currently is
+based on Unix domain sockets.
+
+These interfaces are defined within Franca+ files, and the framework is meant to test against those.
+In order to do that, you need to provide the mirror Franca+ files, i.e.: for each Required Port,
+the mirror Franca+ must contain a Provided Port. The scope of the provided Franca+ mirrored model is
+up to you, but at least should ensure the application under test starts correctly and can be tested.
+From these, we can generate C++/Python bindings that allow for expressive tests to be written.
+
+Note: Currently the recommended solution to provide and use the mirrored code to send/receive
+to/from your application is to wrap the code in a C++/Python bindings library.
+Alternatively, the entire C++ code could be wrapped into a separate binary and started in the framework.
+
+## Setup
+To ensure your development setup supports running SCTF,
+you need to have Python3, `bubblewrap`, `catchsegv` (`glibc-tools`) installed.
+All other packages are managed by Bazel build system, and should not need require manual installation. To see the list of dependencies please refer to the Bazel BUILD file and various deps sections.
+
+If you're running on Ubuntu 23.10 or higher you need to disable apparmor to unblock unshare,
+this however should be done before the bazel server is started! If an instance of bazel is already
+running. it needs to be shutdown before running the next commands.
+```bash
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+```
+
+To make this change permanent (survives reboot), add the following lines to `/etc/sysctl.conf`,
+then reload with `sudo sysctl --system`
+```bash
+kernel.apparmor_restrict_unprivileged_unconfined=0
+kernel.apparmor_restrict_unprivileged_userns=0
+```
+
+Source: https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces
+
+If your are running Ubuntu 24.04 or higher you need to install the following:
+- `catchsegv` is not available by default on Ubuntu 24.04. Install it with
+```bash
+sudo apt-get install glibc-tools
+```
+## Running tests
+```bash
+bazel test //test:test_simple_environment --config=sctf
+```
+## Bazel
+SCTF provides a macro [`py_sctf_test`](bazel/py_sctf_test.bzl) to simplify the creation of SCTF based tests.
+```python
+def py_sctf_test(
+    name,                   # Name of the test target
+    srcs,                   # List of source files for the test
+    main=None,              # Main entry point for the test (optional)
+    data=None,              # Data files needed for the test. Put C++ test binary dependencies here
+    deps=None,              # List of additional dependencies for the test.
+    extra_tags=None,        # Additional tags to add to the test target.
+    args = None,            # Additional arguments to pass to SCTF
+    env = None,             # Environment variables to set for the test.
+    timeout = "moderate",   # Timeout setting for the test.
+    flaky = False           # If True, marks the test as flaky
+)
+```
+BUILD file example:
+```python
+load("//:defs.bzl", "py_sctf_test")
+
+py_sctf_test(
+    name = "test_simple_environment",
+    srcs = [
+        "test_simple_environment.py",
+    ],
+)
 ```

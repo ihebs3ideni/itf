@@ -21,7 +21,7 @@ module(
 # Python version
 #
 ###############################################################################
-bazel_dep(name = "rules_python", version = "1.0.0")
+bazel_dep(name = "rules_python", version = "1.4.1")
 
 PYTHON_VERSION = "3.12"
 
@@ -30,7 +30,6 @@ python.toolchain(
     is_default = True,
     python_version = PYTHON_VERSION,
 )
-use_repo(python)
 
 ###############################################################################
 #
@@ -51,7 +50,7 @@ use_repo(pip, "itf_pip")
 # Provides formatting and linting of Bazel files.
 #
 ###############################################################################
-bazel_dep(name = "buildifier_prebuilt", version = "6.4.0")
+bazel_dep(name = "buildifier_prebuilt", version = "8.2.0.2")
 
 ###############################################################################
 #
@@ -70,7 +69,7 @@ git_override(
 # C++ rules
 #
 ###############################################################################
-bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "rules_cc", version = "0.1.5")
 
 ###############################################################################
 #
@@ -79,28 +78,99 @@ bazel_dep(name = "rules_cc", version = "0.1.1")
 ###############################################################################
 bazel_dep(name = "rules_shell", version = "0.6.0")
 
+###############################################################################
+#
+# Container dependencies
+#
+###############################################################################
+bazel_dep(name = "rules_oci", version = "2.2.5")
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+
+# Declare external images you need to pull, for example:
+oci.pull(
+    name = "ubuntu_24_04",
+    digest = "sha256:2e863c44b718727c860746568e1d54afd13b2fa71b160f5cd9058fc436217b30",
+    image = "ubuntu",
+    platforms = ["linux/amd64"],
+    tag = "24.04",
+)
+
+# For each oci.pull call, repeat the "name" here to expose them as dependencies.
+use_repo(oci, "ubuntu_24_04", "ubuntu_24_04_linux_amd64")
+
+###############################################################################
+#
+# Packaging dependencies
+#
+###############################################################################
+bazel_dep(name = "rules_pkg", version = "1.0.1")
+
+###############################################################################
+#
+# skylib dependency
+#
+###############################################################################
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+
+###############################################################################
+#
+# Score custom modules loading
+#
+###############################################################################
+bazel_dep(name = "score_tooling", version = "1.0.4")
+
 ################################################################################
 #
 # Load DLT dependencies
 #
 ################################################################################
-git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
-git_repository(
-    name = "dlt_daemon",
-    branch = "master",
-    build_file = "//deps:dlt_daemon.BUILD",
-    remote = "https://github.com/draganbjedov/dlt-daemon.git",
-)
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 PYTHON_DLT_VERSION = "2.18.10.1"
 
-http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
 http_archive(
     name = "python_dlt",
-    build_file = "//deps:python_dlt.BUILD",
+    build_file = "//third_party/python_dlt:python_dlt.BUILD",
+    patch_args = ["-p1"],
+    patches = [
+        "//third_party/python_dlt:0001-Use-runfiles-to-find-libdlt.so.2.patch",
+    ],
     sha256 = "cae256ac791d06c4e6e4665dc938e497a7de5784bf6a1244667572953990f324",
     strip_prefix = "python-dlt-%s" % PYTHON_DLT_VERSION,
     url = "https://github.com/bmwcarit/python-dlt/archive/refs/tags/v%s.tar.gz" % PYTHON_DLT_VERSION,
+)
+
+DLT_DAEMON_VERSION = "2.18.11"
+
+http_archive(
+    name = "dlt_daemon_%s" % DLT_DAEMON_VERSION.replace(".", "_"),
+    build_file = "//third_party/dlt/2_18_11:dlt_daemon.BUILD",
+    patch_args = ["-p1"],
+    patches = [
+        "//third_party/dlt/2_18_11:0001-Make-dlt_user.h-real.patch",
+        "//third_party/dlt/2_18_11:0002-Add-version-file.patch",
+        "//third_party/dlt/2_18_11:0003-dlt-receive-force-flush.patch",
+        "//third_party/dlt/2_18_11:0004-Add-multicast-config.patch",
+        "//third_party/dlt/2_18_11:0005-Debug-stdin-adaptor.patch",
+    ],
+    sha256 = "23698ce31aae71e6f4c5a2a463709a0333ac4b94fc2933edc61f433aaf427ae9",
+    strip_prefix = "dlt-daemon-%s" % DLT_DAEMON_VERSION,
+    url = "https://github.com/COVESA/dlt-daemon/archive/refs/tags/v%s.tar.gz" % DLT_DAEMON_VERSION,
+)
+
+DLT_DAEMON_CUSTOM_SHA = "35d11c2c4f4060957cf52c78c5cb426b6c543c47"
+
+http_archive(
+    name = "dlt_daemon",
+    build_file = "//third_party/dlt/custom:dlt_daemon.BUILD",
+    patch_args = ["-p1"],
+    patches = [
+        "//third_party/dlt/custom:0001-Fix-offline-log-storage-global-init.patch",
+        "//third_party/dlt/custom:0002-Add-mutlicast-config.patch",
+        "//third_party/dlt/custom:0003-Add-force-flush-for-dlt-receive.patch",
+    ],
+    sha256 = "1944197123c910d8926b5d2bc4e9eb436c1a2768f333834fae7b7386bc53eb97",
+    strip_prefix = "dlt-daemon-%s" % DLT_DAEMON_CUSTOM_SHA,
+    url = "https://github.com/draganbjedov/dlt-daemon/archive/%s.zip" % DLT_DAEMON_CUSTOM_SHA,
 )
