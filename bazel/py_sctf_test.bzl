@@ -25,9 +25,16 @@ def py_sctf_test(
         args = None,
         env = None,
         timeout = "moderate",
-        flaky = False,
-        backend = "bwrap"):
+        flaky = False):
     """Bazel macro for running SCTF tests.
+
+    The sandbox backend is selected at build time via the
+    ``--//bazel:sctf_backend`` flag (values: ``bwrap``, ``docker``, ``none``).
+    Convenience aliases are available in ``.bazelrc``::
+
+        bazel test //test:foo --config=sctf-docker
+        bazel test //test:foo --config=sctf-bwrap
+        bazel test //test:foo --config=sctf-none
 
     Args:
       name: Name of the test target.
@@ -40,7 +47,6 @@ def py_sctf_test(
       env: Environment variables to set for the test.
       timeout: Timeout setting for the test.
       flaky: If true, marks the test as flaky.
-      backend: Sandbox backend: "bwrap" (default), "docker", or "none".
     """
     pytest_ini = Label("@score_itf//score/sctf:pytest.ini")
 
@@ -52,10 +58,9 @@ def py_sctf_test(
     deps.append(Label("@score_itf//score/sctf:sctf"))
 
     args = [] if args == None else args
-    args = args + ["--sctf-backend=%s" % backend]
 
     plugins = ["score.sctf.plugins.basic_sandbox"]
-    plugin_args = ["-p %s" % name for name in plugins]
+    plugin_args = ["-p %s" % p for p in plugins]
 
     extra_env = {}
     if env:
@@ -67,30 +72,37 @@ def py_sctf_test(
     # Increasing reserved cores seems to reduce flakiness in CI
     tags.append("cpu:2")
 
-    if backend == "docker":
-        tags.append("requires-docker")
-
     if extra_tags:
         tags.extend(extra_tags)
 
-    all_deps = deps + [
+    # -- Backend-dependent attributes resolved via select() ------------------
+    backend_args = select({
+        "//bazel:sctf_backend_docker": ["--sctf-backend=docker"],
+        "//bazel:sctf_backend_none": ["--sctf-backend=none"],
+        "//conditions:default": ["--sctf-backend=bwrap"],
+    })
+
+    backend_deps = select({
+        "//bazel:sctf_backend_docker": [requirement("docker")],
+        "//conditions:default": [],
+    })
+
+    base_deps = deps + [
         requirement("pytest"),
         requirement("psutil"),
         requirement("rpdb"),
         requirement("tenacity"),
         requirement("pytest_timeout"),
     ]
-    if backend == "docker":
-        all_deps = all_deps + [requirement("docker")]
 
     py_test(
         name = name,
         srcs = srcs,
         main = main,
         data = [pytest_ini] + data,
-        deps = all_deps,
+        deps = base_deps + backend_deps,
         precompile = "disabled",
-        args = ["-c $(location %s)" % pytest_ini] + args + plugin_args,
+        args = ["-c $(location %s)" % pytest_ini] + args + plugin_args + backend_args,
         env = extra_env,
         size = "large",
         timeout = timeout,

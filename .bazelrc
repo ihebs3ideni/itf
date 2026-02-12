@@ -10,3 +10,9 @@ build:qemu-integration --test_arg="--qemu"
 # Setup network namespace for SCTF tests
 build:sctf --run_under=//scripts:run_in_network_namespace
 # build:sctf --config=spp_host_gcc
+
+# SCTF backend selection aliases
+#   bazel test //test:foo --config=sctf --config=sctf-docker
+build:sctf-bwrap  --//bazel:sctf_backend=bwrap
+build:sctf-docker --//bazel:sctf_backend=docker
+build:sctf-none   --//bazel:sctf_backend=none
