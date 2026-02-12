@@ -73,20 +73,23 @@ def py_sctf_test(
     if extra_tags:
         tags.extend(extra_tags)
 
+    all_deps = deps + [
+        requirement("pytest"),
+        requirement("psutil"),
+        requirement("rpdb"),
+        requirement("tenacity"),
+        requirement("pytest_timeout"),
+    ]
+    if backend == "docker":
+        all_deps = all_deps + [requirement("docker")]
+
     py_test(
         name = name,
         srcs = srcs,
         main = main,
         data = [pytest_ini] + data,
-        deps = deps + [
-            requirement("pytest"),
-            requirement("psutil"),
-            requirement("rpdb"),
-            requirement("tenacity"),
-            requirement("pytest_timeout"),
-        ]
-        if backend == "docker":
-            deps = deps + [requirement("docker")],
+        deps = all_deps,
+        precompile = "disabled",
         args = ["-c $(location %s)" % pytest_ini] + args + plugin_args,
         env = extra_env,
         size = "large",

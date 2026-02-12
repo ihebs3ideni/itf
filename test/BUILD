@@ -132,5 +132,6 @@ py_sctf_test(
     srcs = [
         "test_simple_environment.py",
     ],
+    main = "test_simple_environment.py",
     backend = "docker",
 )
