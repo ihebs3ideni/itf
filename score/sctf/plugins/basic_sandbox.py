@@ -29,9 +29,31 @@ from score.sctf.sandbox import BwrapSandbox
 from score.sctf.utils import get_filesystem_scope, list_files
 from score.itf.core.utils.bunch import Bunch
 from score.itf.core.utils.bazel import get_output_dir
+from score.itf.core.environment import BwrapEnvironment, DockerEnvironment, NoopEnvironment
 
 
 logger = logging.getLogger(__name__)
+
+# Supported sandbox backend identifiers
+BACKEND_BWRAP = "bwrap"
+BACKEND_DOCKER = "docker"
+BACKEND_NONE = "none"
+_VALID_BACKENDS = {BACKEND_BWRAP, BACKEND_DOCKER, BACKEND_NONE}
+
+
+def pytest_addoption(parser):
+    """Register the --sctf-backend command-line option."""
+    parser.addoption(
+        "--sctf-backend",
+        action="store",
+        default=BACKEND_BWRAP,
+        choices=sorted(_VALID_BACKENDS),
+        help=(
+            "Sandbox backend for SCTF tests.  "
+            f"Choices: {', '.join(sorted(_VALID_BACKENDS))}. "
+            f"Default: {BACKEND_BWRAP}"
+        ),
+    )
 
 
 # Pylint doesn't handle pytest fixture chains well
@@ -234,9 +256,52 @@ def _print_tmp_filesystem(environment):
     list_files(environment.tmp_sysroot)
 
 
+def _create_unified_environment(backend, *, sysroot, workspace, persistent, artifact_output_path, bazel_solibs):
+    """Factory: create a :class:`~score.itf.core.environment.Environment` for the chosen backend."""
+    if backend == BACKEND_BWRAP:
+        return BwrapEnvironment(
+            sysroot=sysroot,
+            workspace=workspace,
+            persistent=persistent,
+            artifact_output_path=artifact_output_path,
+            bazel_solibs=bazel_solibs,
+            run_under_tool=sctf_config.RUN_APPS_UNDER_TOOL,
+            run_under_app_list=sctf_config.RUN_APPS_UNDER_LIST,
+            retry_count=sctf_config.RETRY_COUNT,
+            retry_delay=sctf_config.RETRY_DELAY_S,
+            timeout=sctf_config.TIMEOUT_S,
+        )
+    if backend == BACKEND_DOCKER:
+        mounts = {
+            "/tmp": workspace,
+            "/persistent": persistent,
+        }
+        if artifact_output_path:
+            mounts["/tmp/artifacts"] = artifact_output_path
+        return DockerEnvironment.from_sysroot(
+            sysroot,
+            mounts=mounts,
+            env_vars={
+                "SCTF": "SCTF",
+                "AMSR_DISABLE_INTEGRITY_CHECK": "1",
+                "TEST_PREMATURE_EXIT_FILE": "/tmp/gtest.exited_prematurely",
+            },
+            timeout=sctf_config.TIMEOUT_S,
+        )
+    if backend == BACKEND_NONE:
+        return NoopEnvironment(timeout=sctf_config.TIMEOUT_S)
+
+    raise ValueError(f"Unknown SCTF backend: {backend!r}")
+
+
 @pytest.fixture
-def basic_sandbox(bazel_solibs, tmp_shm, tmp_workspace, tmp_sysroot, tmp_persistent, artifact_output_path, caplog):
-    """Gathers together all fixtures in one dictionary-like structure."""
+def basic_sandbox(request, bazel_solibs, tmp_shm, tmp_workspace, tmp_sysroot, tmp_persistent, artifact_output_path, caplog):
+    """Gathers together all fixtures in one dictionary-like structure.
+
+    The sandbox backend is selected via ``--sctf-backend`` (default: bwrap).
+    Supported values: ``bwrap``, ``docker``, ``none``.
+    """
+    backend = request.config.getoption("--sctf-backend", BACKEND_BWRAP)
 
     env = Bunch(
         bazel_solibs=bazel_solibs,
@@ -251,11 +316,29 @@ def basic_sandbox(bazel_solibs, tmp_shm, tmp_workspace, tmp_sysroot, tmp_persist
         copy_to_sandbox=_copy_to_sandbox_sysroot,
         copy_to_sandbox_dst=_copy_to_sandbox_dst_sysroot,
         extra_mount_list=None,
+        backend=backend,
     )
 
+    # Legacy sandbox — kept for backward compatibility with tests that use
+    # ``basic_sandbox.sandbox`` directly (e.g. BaseSim).
     env.sandbox = BwrapSandbox(env)
 
+    # New unified environment — preferred for new code.
+    unified_env = _create_unified_environment(
+        backend,
+        sysroot=str(tmp_sysroot),
+        workspace=str(tmp_workspace),
+        persistent=tmp_persistent,
+        artifact_output_path=artifact_output_path,
+        bazel_solibs=bazel_solibs,
+    )
+    unified_env.setup()
+    env.environment = unified_env
+
     yield env
+
+    # Teardown the unified environment
+    unified_env.teardown()
 
     if sctf_config.FILE_SYSTEM_PRINT:
         _print_tmp_filesystem(env)

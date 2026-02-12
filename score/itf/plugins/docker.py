@@ -10,13 +10,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+"""ITF Docker plugin — runs integration tests inside Docker containers.
+
+This plugin now delegates to :class:`~score.itf.core.environment.DockerEnvironment`
+so that ITF and SCTF share the same container runtime infrastructure.
+"""
+
 import logging
-import subprocess
-import docker as pypi_docker
 import pytest
 
 from score.itf.plugins.core import determine_target_scope
 from score.itf.plugins.core import Target
+from score.itf.core.environment import DockerEnvironment
 
 
 logger = logging.getLogger(__name__)
@@ -41,23 +46,40 @@ DOCKER_CAPABILITIES = ["exec"]
 
 
 class DockerTarget(Target):
-    def __init__(self, container, capabilities=DOCKER_CAPABILITIES):
-        super().__init__(capabilities=capabilities)
+    """Target backed by a :class:`DockerEnvironment`.
+
+    Provides the same interface as before — the underlying Docker container
+    is accessible via ``self.container`` for tests that use the Docker SDK
+    directly (``target.exec_run(...)``), while new code can use
+    ``self.environment`` for the unified API.
+    """
+
+    def __init__(self, environment: DockerEnvironment, container, capabilities=DOCKER_CAPABILITIES):
+        super().__init__(capabilities=set(capabilities))
+        self.environment = environment
         self.container = container
 
     def __getattr__(self, name):
+        # Delegate unknown attributes to the underlying Docker container
+        # so that existing tests using target.exec_run(...) keep working.
         return getattr(self.container, name)
 
 
 @pytest.fixture(scope=determine_target_scope)
 def target_init(request):
-    docker_image_bootstrap = request.config.getoption("docker_image_bootstrap")
-    if docker_image_bootstrap:
-        logger.info(f"Executing custom image bootstrap command: {docker_image_bootstrap}")
-        subprocess.run([docker_image_bootstrap], check=True)
-
     docker_image = request.config.getoption("docker_image")
-    client = pypi_docker.from_env()
-    container = client.containers.run(docker_image, "sleep infinity", detach=True, auto_remove=True, init=True)
-    yield DockerTarget(container)
-    container.stop(timeout=1)
+    docker_image_bootstrap = request.config.getoption("docker_image_bootstrap")
+
+    env = DockerEnvironment.from_image(
+        docker_image,
+        bootstrap_command=docker_image_bootstrap,
+    )
+    env.setup()
+
+    # Expose the raw container for backward compatibility
+    container = env._container
+
+    yield DockerTarget(env, container)
+
+    env.teardown()
+

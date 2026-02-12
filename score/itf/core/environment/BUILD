@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -14,24 +14,34 @@ load("@itf_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
 py_library(
-    name = "core",
-    srcs = ["core.py"],
+    name = "environment",
+    srcs = [
+        "__init__.py",
+        "base.py",
+        "bwrap.py",
+        "docker_env.py",
+        "noop.py",
+    ],
     visibility = ["//visibility:public"],
     deps = [
-        "//score/itf/core/target",
-        requirement("pytest"),
+        requirement("psutil"),
+        requirement("tenacity"),
+        requirement("docker"),
     ],
 )
 
+# Lighter target without docker dependency — for environments that only need bwrap/noop
 py_library(
-    name = "docker",
-    srcs = ["docker.py"],
+    name = "environment_lite",
+    srcs = [
+        "__init__.py",
+        "base.py",
+        "bwrap.py",
+        "noop.py",
+    ],
     visibility = ["//visibility:public"],
     deps = [
-        ":core",
-        "//score/itf/core/target",
-        "//score/itf/core/environment",
-        requirement("docker"),
-        requirement("pytest"),
+        requirement("psutil"),
+        requirement("tenacity"),
     ],
 )

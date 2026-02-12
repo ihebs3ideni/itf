@@ -25,7 +25,8 @@ def py_sctf_test(
         args = None,
         env = None,
         timeout = "moderate",
-        flaky = False):
+        flaky = False,
+        backend = "bwrap"):
     """Bazel macro for running SCTF tests.
 
     Args:
@@ -39,6 +40,7 @@ def py_sctf_test(
       env: Environment variables to set for the test.
       timeout: Timeout setting for the test.
       flaky: If true, marks the test as flaky.
+      backend: Sandbox backend: "bwrap" (default), "docker", or "none".
     """
     pytest_ini = Label("@score_itf//score/sctf:pytest.ini")
 
@@ -50,6 +52,7 @@ def py_sctf_test(
     deps.append(Label("@score_itf//score/sctf:sctf"))
 
     args = [] if args == None else args
+    args = args + ["--sctf-backend=%s" % backend]
 
     plugins = ["score.sctf.plugins.basic_sandbox"]
     plugin_args = ["-p %s" % name for name in plugins]
@@ -63,6 +66,9 @@ def py_sctf_test(
     # Bazel default to one core per test, whereas SCTF tests spawn several processes
     # Increasing reserved cores seems to reduce flakiness in CI
     tags.append("cpu:2")
+
+    if backend == "docker":
+        tags.append("requires-docker")
 
     if extra_tags:
         tags.extend(extra_tags)
@@ -78,7 +84,9 @@ def py_sctf_test(
             requirement("rpdb"),
             requirement("tenacity"),
             requirement("pytest_timeout"),
-        ],
+        ]
+        if backend == "docker":
+            deps = deps + [requirement("docker")],
         args = ["-c $(location %s)" % pytest_ini] + args + plugin_args,
         env = extra_env,
         size = "large",

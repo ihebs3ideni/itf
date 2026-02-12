@@ -10,7 +10,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Responsible for handling process lifetime."""
+"""Responsible for handling process lifetime.
+
+.. deprecated::
+    The classes in this module (``BaseEnvironment``, ``NoSandbox``, ``BwrapSandbox``)
+    are kept for backward compatibility.  New code should use the unified
+    :mod:`score.itf.core.environment` interface instead::
+
+        from score.itf.core.environment import BwrapEnvironment, NoopEnvironment, DockerEnvironment
+"""
 
 import os
 import stat
@@ -23,6 +31,9 @@ import score.sctf.config as sctf_config
 from score.sctf.utils import is_file_executable
 from score.sctf.exception import SctfRuntimeError, SctfAssertionError
 from score.sctf.sandbox import async_log
+
+# Re-export new unified environment classes for convenient access from existing imports
+from score.itf.core.environment import BwrapEnvironment, DockerEnvironment, NoopEnvironment  # noqa: F401
 
 logger = logging.getLogger(__name__)
 LINE_BUFFER = ["/usr/bin/stdbuf", "-oL"]
