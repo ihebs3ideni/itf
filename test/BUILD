@@ -126,3 +126,11 @@ py_sctf_test(
         "test_simple_environment.py",
     ],
 )
+
+py_sctf_test(
+    name = "test_simple_environment_docker",
+    srcs = [
+        "test_simple_environment.py",
+    ],
+    backend = "docker",
+)
