@@ -14,8 +14,12 @@ load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 sh_binary(
     name = "run_under_qemu",
-    srcs = [
-        "run_under_qemu.sh",
-    ],
+    srcs = ["run_under_qemu.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "run_in_network_namespace",
+    srcs = ["run_in_network_namespace.sh"],
     visibility = ["//visibility:public"],
 )

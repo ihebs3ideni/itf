@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-from itf.plugins.com.ssh import execute_command
+from score.itf.core.com.ssh import execute_command
 
 
 def test_ssh_with_default_user(target_fixture):

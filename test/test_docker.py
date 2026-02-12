@@ -10,6 +10,28 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-def test_docker_runs(docker):
-    exit_code, output = docker.exec_run("echo -n Hello, World!")
-    assert "Hello, World!" == output.decode()
+
+import score.itf
+
+
+def check_command_exec(target, message):
+    exit_code, output = target.exec_run(f"echo -n {message}")
+    return f"{message}" == output.decode()
+
+
+def test_docker_runs_1(target):
+    assert check_command_exec(target, "hello, world 1")
+
+
+def test_docker_runs_2(target):
+    assert check_command_exec(target, "hello, world 1")
+
+
+@score.itf.plugins.core.requires_capabilities("exec")
+def test_docker_runs_for_exec_capability(target):
+    assert check_command_exec(target, "hello, world 1")
+
+
+@score.itf.plugins.core.requires_capabilities("non-existing-capability")
+def test_docker_skipped_for_non_existing_capability(target):
+    assert False, "This test should have been skipped due to missing capability"
