@@ -139,3 +139,10 @@ py_sctf_test(
         "test_hello_sctf.py",
     ],
 )
+
+py_sctf_test(
+    name = "test_sctf_component",
+    srcs = [
+        "test_sctf_component.py",
+    ],
+)

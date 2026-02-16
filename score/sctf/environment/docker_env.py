@@ -229,6 +229,8 @@ class DockerEnvironment(Environment):
                 t.join(timeout=timeout)
 
     def is_process_running(self, handle):
+        if handle.exit_code is not None:
+            return False
         if not handle.parent:
             return False
         return self._docker.is_exec_running(handle.parent)
