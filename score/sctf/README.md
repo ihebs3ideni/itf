@@ -5,78 +5,142 @@ It packages your build artifacts (binaries, shared libraries) into an OCI
 container image at build time and provides a pytest-driven harness to execute
 and observe them at test time.
 
-## Why `py_sctf_test` and `py_itf_test` are separate macros
+## Architecture
 
-At first glance the two macros look similar — both produce a `py_test` that
-runs pytest against a Docker container.  However, they solve fundamentally
-different problems and merging them would weaken both.
+SCTF is built on top of the ITF plugin system.  There are two orthogonal
+pieces:
 
-### What each macro does
+1. **`sctf_image()`** — A standalone Bazel macro that builds an OCI image
+   from your deps.  No test concerns.
+2. **`sctf_docker()` plugin** — A `py_itf_plugin` factory that wires the
+   built image into `py_itf_test` and enables the SCTF pytest fixtures.
 
-| | `py_itf_test` | `py_sctf_test` |
-|---|---|---|
-| **Image source** | A pre-built, externally-provided image (`--docker-image=ubuntu:24.04`) | Builds an OCI image *from your Bazel deps* at analysis time |
-| **Build graph** | Lightweight — `py_test` wrapped in `test_as_exec` | Heavy — `collect_solibs` → `pkg_tar` → `oci_image` → `oci_tarball` (5+ intermediate targets) |
-| **Plugin model** | Composable `py_itf_plugin` structs — user picks and combines `docker`, `qemu`, `dlt`, etc. | Hardcodes `score.sctf.plugins` + the ITF docker plugin; extra plugins are plain strings |
-| **Execution model** | `test_as_exec` (cross-platform exec config support) | Direct `py_test` (Linux-only by convention) |
-| **Test fixture** | `target` — a `DockerTarget` wrapping the raw docker-py container | `docker_sandbox` — yields an `Environment` with structured process tracking (`ProcessHandle`), `execute()` / `stop_process()` lifecycle |
-| **Use case** | *"I have a container; run tests against it"* (integration testing) | *"Package my software into a container and test it there"* (component testing) |
+This separation means **there is only one test macro** (`py_itf_test`) for
+all test types — ITF integration tests, SCTF component tests, QEMU tests,
+etc.  Test behavior is determined entirely by the plugins list.
 
-### Why merging would hurt
+### Execution Model
 
-1. **Unnecessary OCI pipeline overhead.**
-   Most ITF Docker tests point at an existing image (`ubuntu:24.04`,
-   `linuxserver/openssh-server`, …).  They have zero build artifacts to
-   package.  Merging would either force the OCI pipeline on every test
-   (wasted build time) or require a flag to skip it — adding complexity
-   with no benefit.
+```
+┌─────────────────────────────────────────┐
+│             Host (pytest)               │
+│                                         │
+│  py_itf_test                            │
+│    ├─ -p score.itf.plugins.core         │
+│    ├─ -p score.itf.plugins.docker       │
+│    └─ -p score.sctf.plugins             │
+│                                         │
+│  docker_sandbox fixture                 │
+│    └─ DockerEnvironment.from_image()    │
+│         └─ DockerContainer (shared)     │
+│              └─ docker-py SDK           │
+├─────────────────────────────────────────┤
+│           Docker Container (SUT)        │
+│                                         │
+│  OCI image built by sctf_image()        │
+│    ├─ base: @ubuntu_24_04               │
+│    ├─ layer: solibs (shared libraries)  │
+│    └─ layer: tarballs (binaries, data)  │
+│                                         │
+│  Tests call execute(), copy_to(), etc.  │
+└─────────────────────────────────────────┘
+```
 
-2. **Conflicting plugin architectures.**
-   `py_itf_test` uses the `py_itf_plugin` struct system: each plugin
-   declares its `py_library`, `enabled_plugins`, `args`, `data`,
-   `data_as_exec`, and `tags`.  The macro iterates over the list
-   generically.  `py_sctf_test` hardcodes its plugin set because it
-   *must* always have the SCTF plugin and the ITF docker plugin — those
-   are not optional.  Cramming both models into one macro means either
-   special-casing SCTF inside the generic loop or duplicating the
-   generic loop inside SCTF, neither of which is cleaner than two
-   focused macros.
+## Usage
 
-3. **Different `py_test` wrappers.**
-   `py_itf_test` wraps `py_test` in `test_as_exec` to support
-   cross-platform execution configurations (data built for exec vs
-   target platform).  `py_sctf_test` emits a plain `py_test` because
-   its OCI pipeline already handles all packaging.  A merged macro
-   would need conditional wrapper selection — another `if` branch with
-   no upside.
+### BUILD file
 
-4. **Divergent lifecycle contracts.**
-   The `target` fixture (ITF) and `docker_sandbox` fixture (SCTF)
-   expose different APIs to test code.  `target` proxies the raw
-   docker-py container (`exec_run`, `get_ip`, `ssh()`).  `docker_sandbox`
-   exposes the `Environment` interface (`execute()`, `stop_process()`,
-   `copy_to()`, `copy_from()`) with process-handle tracking.  These
-   are intentionally different abstractions — one is thin and direct,
-   the other is structured and observable.
+```starlark
+load("@score_itf//:defs.bzl", "py_itf_test", "sctf_image")
+load("@score_itf//score/itf/plugins:plugins.bzl", "sctf_docker")
+
+# Step 1: Build the OCI image from your binaries
+sctf_image(
+    name = "my_image",
+    base_image = "@ubuntu_24_04",    # default
+    deps = [":my_binary_package"],
+)
+
+# Step 2: Run tests against the image
+py_itf_test(
+    name = "test_my_component",
+    srcs = ["test_my_component.py"],
+    plugins = [sctf_docker(image = "my_image")],
+    size = "large",
+    timeout = "moderate",
+)
+```
+
+### Test file
+
+```python
+def test_my_binary(docker_sandbox):
+    """The docker_sandbox fixture provides a running container."""
+    handle = docker_sandbox.environment.execute(
+        "/opt/bin/my_app", ["--config=/etc/app.yaml"]
+    )
+
+    # Verify the process ran successfully
+    docker_sandbox.environment.stop_process(handle)
+    assert handle.exit_code == 0
+```
+
+### Key fixtures
+
+| Fixture | Scope | Description |
+|---------|-------|-------------|
+| `docker_sandbox` | session | A `Bunch` with `.environment` (DockerEnvironment) and `.tmp_workspace` |
+
+### Key APIs
+
+| Method | Description |
+|--------|-------------|
+| `environment.execute(binary, args, cwd=None, env=None, detach=False)` | Run a process in the container |
+| `environment.stop_process(handle, timeout=5)` | Stop a running process |
+| `environment.is_process_running(handle)` | Check if a process is still alive |
+| `environment.copy_to(src, dst)` | Copy a file from host to container |
+| `environment.copy_from(src, dst)` | Copy a file from container to host |
+
+## Design Decisions
+
+### Why `sctf_docker()` is a factory function, not a static struct
+
+Unlike `docker`, `qemu`, or `dlt` which are static plugin structs,
+`sctf_docker(image=...)` is a function that returns a struct.  This is
+because the plugin needs to carry the image name — the tarball label and
+the `--docker-image` arg depend on which `sctf_image()` the test uses.
+
+### Why the SCTF plugin doesn't register `--docker-image`
+
+The ITF Docker plugin (`score.itf.plugins.docker`) already registers
+`--docker-image` and `--docker-image-bootstrap`.  The SCTF plugin simply
+reads these options.  The `sctf_docker()` factory ensures both plugins are
+always loaded together by listing both in `enabled_plugins`.  This avoids
+option registration conflicts and keeps a single source of truth.
 
 ### Where shared code lives
 
-The macros are separate, but they share everything that *should* be
-shared:
-
-- **`score.itf.core.docker.DockerContainer`** — the single source of
-  truth for Docker SDK interactions (container lifecycle, exec, file
-  copy).  Both `DockerTarget` (ITF plugin) and `DockerEnvironment`
-  (SCTF) delegate to it.
-- **`score.itf.core.docker.get_docker_client()`** — shared client
+- **`score.itf.core.docker.DockerContainer`** — Single source of truth
+  for Docker SDK interactions (container lifecycle, exec, file copy).
+  Both `DockerTarget` (ITF plugin) and `DockerEnvironment` (SCTF)
+  delegate to it.
+- **`score.itf.core.docker.get_docker_client()`** — Shared client
   factory with the `http+docker://` compatibility patch.
-- **`sctf_docker` plugin in `plugins.bzl`** — allows `py_itf_test` to
-  compose with SCTF if ever needed, without merging the macros.
 
-### Decision
+## OCI Image Pipeline
 
-Keep two macros.  Each has a single, well-defined responsibility.
-Shared infrastructure lives in `score.itf.core.docker`.  If a future
-use case requires both OCI packaging *and* the ITF plugin system,
-compose them via the `sctf_docker` plugin struct rather than merging
-the macros.
+The `sctf_image()` macro creates the following intermediate targets:
+
+```
+deps ──► collect_solibs ──► pkg_tar (solibs)  ──┐
+deps ──► collect_tarballs ──► remap_tar ────────┤
+                                                 ├──► oci_image ──► oci_tarball
+                                 base_image ────┘
+```
+
+- `{name}_solibs` — Shared libraries extracted from transitive deps
+- `{name}_solibs_tarball` — Solibs packed into tar.gz at `/usr/bazel/lib`
+- `{name}_tarballs` — Tarballs from deps (pkg_tar outputs)
+- `{name}_sysroot_remapped` — Sysroot with `/sbin` → `/usr/sbin` remap
+- `{name}_image` — OCI image
+- `{name}_image_tarball` — Docker-loadable tarball (main output)

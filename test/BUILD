@@ -10,8 +10,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("//:defs.bzl", "py_itf_test")
-load("//score/itf/plugins:plugins.bzl", "dlt", "docker", "qemu")
+load("//:defs.bzl", "py_itf_test", "sctf_image")
+load("//score/itf/plugins:plugins.bzl", "dlt", "docker", "qemu", "sctf_docker")
 
 py_itf_test(
     name = "test_rules_are_working_correctly",
@@ -148,9 +148,32 @@ py_itf_test(
     ],
 )
 
-py_sctf_test(
+# --- SCTF Docker tests ---
+# Shared base image used by multiple SCTF tests
+sctf_image(
+    name = "sctf_base_image",
+)
+
+py_itf_test(
+    name = "test_hello_sctf",
+    srcs = [
+        "test_hello_sctf.py",
+    ],
+    plugins = [
+        sctf_docker(image = "sctf_base_image"),
+    ],
+    size = "large",
+    timeout = "moderate",
+)
+
+py_itf_test(
     name = "test_sctf_component",
     srcs = [
         "test_sctf_component.py",
     ],
+    plugins = [
+        sctf_docker(image = "sctf_base_image"),
+    ],
+    size = "large",
+    timeout = "moderate",
 )

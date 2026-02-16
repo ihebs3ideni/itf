@@ -29,6 +29,7 @@ py_library(
     deps = [
         "//score/itf/core/docker",
         "//score/itf/core/utils",
+        "//score/itf/plugins:docker",
         requirement("pytest"),
     ],
 )
