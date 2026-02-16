@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("//:defs.bzl", "py_itf_test")
+load("//:defs.bzl", "py_itf_test", "py_sctf_test")
 load("//score/itf/plugins:plugins.bzl", "dlt", "docker", "qemu")
 
 py_itf_test(
@@ -130,5 +130,12 @@ py_itf_test(
     tags = [
         "local",
         "manual",
+    ],
+)
+
+py_sctf_test(
+    name = "test_hello_sctf",
+    srcs = [
+        "test_hello_sctf.py",
     ],
 )

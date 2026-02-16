@@ -10,10 +10,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF public Bazel interface"""
 
-load("@score_itf//bazel:py_itf_test.bzl", local_py_itf_test = "py_itf_test")
-load("@score_itf//bazel:py_sctf_test.bzl", local_py_sctf_test = "py_sctf_test")
 
-py_itf_test = local_py_itf_test
-py_sctf_test = local_py_sctf_test
+class SctfRuntimeError(Exception):
+    """Raised when an SCTF operation fails at runtime."""
+    pass
