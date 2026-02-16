@@ -16,9 +16,9 @@ different problems and merging them would weaken both.
 | | `py_itf_test` | `py_sctf_test` |
 |---|---|---|
 | **Image source** | A pre-built, externally-provided image (`--docker-image=ubuntu:24.04`) | Builds an OCI image *from your Bazel deps* at analysis time |
-| **Build graph** | Lightweight — `py_test` wrapped in `test_as_exec` | Heavy — `collect_solibs` → `pkg_tar` → `oci_image` → `oci_load` (5+ intermediate targets) |
+| **Build graph** | Lightweight — `py_test` wrapped in `test_as_exec` | Heavy — `collect_solibs` → `pkg_tar` → `oci_image` → `oci_tarball` (5+ intermediate targets) |
 | **Plugin model** | Composable `py_itf_plugin` structs — user picks and combines `docker`, `qemu`, `dlt`, etc. | Hardcodes `score.sctf.plugins` + the ITF docker plugin; extra plugins are plain strings |
-| **Execution model** | `test_as_exec` (cross-platform exec config support) | Direct `py_test` with `target_compatible_with = ["@platforms//os:linux"]` |
+| **Execution model** | `test_as_exec` (cross-platform exec config support) | Direct `py_test` (Linux-only by convention) |
 | **Test fixture** | `target` — a `DockerTarget` wrapping the raw docker-py container | `docker_sandbox` — yields an `Environment` with structured process tracking (`ProcessHandle`), `execute()` / `stop_process()` lifecycle |
 | **Use case** | *"I have a container; run tests against it"* (integration testing) | *"Package my software into a container and test it there"* (component testing) |
 

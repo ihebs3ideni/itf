@@ -147,3 +147,10 @@ py_itf_test(
         "@rules_python//python/runfiles",
     ],
 )
+
+py_sctf_test(
+    name = "test_sctf_component",
+    srcs = [
+        "test_sctf_component.py",
+    ],
+)
