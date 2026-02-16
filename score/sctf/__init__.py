@@ -10,10 +10,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF public Bazel interface"""
+"""SCTF — Software Component Test Framework.
 
-load("@score_itf//bazel:py_itf_test.bzl", local_py_itf_test = "py_itf_test")
-load("@score_itf//bazel:py_sctf_test.bzl", local_py_sctf_test = "py_sctf_test")
+Provides a Docker-based execution environment for running compiled binaries
+inside OCI containers as part of Bazel test targets.
 
-py_itf_test = local_py_itf_test
-py_sctf_test = local_py_sctf_test
+Public API::
+
+    from score.sctf.environment import Environment, ProcessHandle, DockerEnvironment
+    from score.sctf.exception import SctfRuntimeError
+"""
+
+from score.sctf.environment import Environment, ProcessHandle, DockerEnvironment
+from score.sctf.exception import SctfRuntimeError

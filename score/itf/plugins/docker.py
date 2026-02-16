@@ -11,14 +11,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 import logging
-import subprocess
-import docker as pypi_docker
 import pytest
 
 from score.itf.plugins.core import determine_target_scope
 from score.itf.plugins.core import Target
 
 from score.itf.core.com.ssh import Ssh
+from score.itf.core.docker import DockerContainer, get_docker_client
 
 
 logger = logging.getLogger(__name__)
@@ -43,23 +42,35 @@ DOCKER_CAPABILITIES = ["exec"]
 
 
 class DockerTarget(Target):
-    def __init__(self, container, capabilities=DOCKER_CAPABILITIES):
+    """ITF target backed by a Docker container.
+
+    Wraps a :class:`~score.itf.core.docker.DockerContainer` and adds the
+    ``Target`` capability model, SSH convenience, and ``__getattr__`` proxy
+    to the raw ``docker-py`` container for backward compatibility.
+    """
+
+    def __init__(self, docker_container, capabilities=DOCKER_CAPABILITIES):
         super().__init__(capabilities=capabilities)
-        self.container = container
+        self._docker = docker_container
+        # Keep direct reference for __getattr__ backward compat
+        self.container = docker_container.raw
 
     def __getattr__(self, name):
         return getattr(self.container, name)
 
-    def get_ip(self):
-        self.container.reload()
-        return self.container.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
+    def get_ip(self, network="bridge"):
+        return self._docker.get_ip(network)
 
-    def get_gateway(self):
-        self.container.reload()
-        return self.container.attrs["NetworkSettings"]["Networks"]["bridge"]["Gateway"]
+    def get_gateway(self, network="bridge"):
+        return self._docker.get_gateway(network)
 
     def ssh(self, username="score", password="score", port=2222):
         return Ssh(target_ip=self.get_ip(), port=port, username=username, password=password)
+
+    @property
+    def docker_container(self):
+        """The underlying :class:`DockerContainer` instance."""
+        return self._docker
 
 
 @pytest.fixture(scope=determine_target_scope)
@@ -98,19 +109,17 @@ def target_init(request, _docker_configuration):
     print(_docker_configuration)
 
     docker_image_bootstrap = request.config.getoption("docker_image_bootstrap")
-    if docker_image_bootstrap:
-        logger.info(f"Executing custom image bootstrap command: {docker_image_bootstrap}")
-        subprocess.run([docker_image_bootstrap], check=True)
-
     docker_image = request.config.getoption("docker_image")
-    client = pypi_docker.from_env()
-    container = client.containers.run(
-        docker_image,
-        _docker_configuration["command"],
-        detach=True,
-        auto_remove=True,
-        init=_docker_configuration["init"],
-        environment=_docker_configuration["environment"],
+
+    client = get_docker_client()
+    docker_container = DockerContainer.run(
+        client,
+        image=docker_image,
+        command=_docker_configuration["command"],
+        environment=_docker_configuration.get("environment"),
+        init=_docker_configuration.get("init", True),
+        bootstrap_command=docker_image_bootstrap,
     )
-    yield DockerTarget(container)
-    container.stop(timeout=1)
+
+    yield DockerTarget(docker_container)
+    docker_container.stop(timeout=1)
