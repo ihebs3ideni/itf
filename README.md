@@ -20,6 +20,8 @@ ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testi
 - **Flexible Testing**: Write tests once, run across multiple targets (Docker, QEMU, hardware)
 - **Capability System**: Tests can query and adapt based on available target capabilities
 - **Bazel Integration**: Seamless integration with Bazel build system via `py_itf_test` macro
+- **SCTF (Software Component Test Framework)**: Docker-based component testing with automatic OCI image packaging via `py_sctf_test` macro
+- **Shared Docker Core**: Single `DockerContainer` abstraction used by both ITF and SCTF, with streaming stdout/stderr capture
 
 ## Quick Start
 
@@ -502,19 +504,129 @@ py_itf_test(
 ## Project Structure
 
 ```
-score/itf/
-├── core/                 # Core ITF functionality
-│   ├── com/              # Communication modules (SSH, SFTP)
-│   ├── process/          # Process management
-│   ├── target/           # Target base class
-│   └── utils/            # Utility functions
-├── plugins/              # Plugin implementations
-│   ├── core.py           # Core plugin with Target and decorators
-│   ├── docker.py         # Docker plugin
-│   ├── dlt/              # DLT plugin
-│   └── qemu/             # QEMU plugin
-└── ...
+score/
+├── itf/                      # Integration Test Framework
+│   ├── core/                 # Core ITF functionality
+│   │   ├── com/              # Communication modules (SSH, SFTP)
+│   │   ├── docker/           # Shared Docker abstraction (DockerContainer)
+│   │   ├── process/          # Process management
+│   │   ├── target/           # Target base class
+│   │   └── utils/            # Utility functions
+│   ├── plugins/              # Plugin implementations
+│   │   ├── core.py           # Core plugin with Target and decorators
+│   │   ├── docker.py         # Docker plugin (uses core/docker)
+│   │   ├── dlt/              # DLT plugin
+│   │   └── qemu/             # QEMU plugin
+│   └── ...
+└── sctf/                     # Software Component Test Framework
+    ├── bazel_gen/            # OCI pipeline build rules
+    │   ├── collect_solibs.bzl
+    │   ├── collect_tarballs.bzl
+    │   ├── oci_pipeline.bzl
+    │   └── remap_tar.bzl
+    ├── environment/          # Execution environment backends
+    │   ├── base.py           # Environment ABC + ProcessHandle
+    │   └── docker_env.py     # Docker backend (uses core/docker)
+    ├── exception/            # SCTF-specific exceptions
+    └── plugins/              # Pytest plugin (docker_sandbox fixture)
 ```
+
+## SCTF — Software Component Test Framework
+
+SCTF is a Docker-based component testing layer within ITF. While `py_itf_test` runs tests against *pre-built* container images, SCTF **packages your build artifacts** (binaries, shared libraries) into an OCI image at build time and provides a structured environment to execute and observe them.
+
+### SCTF vs ITF Docker — When to Use Which
+
+| | `py_itf_test` + docker plugin | `py_sctf_test` |
+|---|---|---|
+| **Image source** | Pre-built (`--docker-image=ubuntu:24.04`) | Built from your Bazel deps at analysis time |
+| **Plugin model** | Composable `py_itf_plugin` structs | Hardcoded `score.sctf.plugins` |
+| **Test fixture** | `target` — a `DockerTarget` with exec/ssh capabilities | `docker_sandbox` — an `Environment` with process lifecycle tracking |
+| **Use case** | *"I have a container; run tests against it"* (integration testing) | *"Package my software into a container and test it"* (component testing) |
+
+See [score/sctf/README.md](score/sctf/README.md) for a detailed architectural rationale.
+
+### SCTF Quick Start
+
+```python
+# test_my_component.py
+def test_my_binary(docker_sandbox):
+    env = docker_sandbox.environment
+    handle = env.execute("/opt/bin/my_app", ["--mode", "test"])
+    env.stop_process(handle)
+    assert handle.exit_code == 0
+```
+
+```starlark
+# BUILD
+load("@score_itf//bazel:py_sctf_test.bzl", "py_sctf_test")
+
+py_sctf_test(
+    name = "test_my_component",
+    srcs = ["test_my_component.py"],
+    data = [":my_binary_package"],
+)
+```
+
+The `py_sctf_test` macro automatically:
+1. Collects shared libraries from your `data` dependencies
+2. Packages them into a `pkg_tar` archive
+3. Builds an OCI image via `oci_image` + `oci_tarball`
+4. Generates a self-extracting bootstrap script that runs `docker load`
+5. Creates a `py_test` with the correct flags to boot the container and run pytest
+
+### SCTF Environment API
+
+The `docker_sandbox` fixture provides a `DockerEnvironment` implementing the `Environment` ABC:
+
+```python
+def test_process_lifecycle(docker_sandbox):
+    env = docker_sandbox.environment
+
+    # Execute a binary — returns a ProcessHandle
+    handle = env.execute("/opt/bin/sender", ["--mode", "send"], cwd="/opt/app")
+
+    # Check if still running
+    assert env.is_process_running(handle)
+
+    # Stop with timeout (returns exit code)
+    exit_code = env.stop_process(handle, timeout=10.0)
+
+    # Copy files in/out of the container
+    env.copy_to("/local/config.json", "/opt/app/config.json")
+    env.copy_from("/opt/app/output.log", "/local/output.log")
+```
+
+Stdout and stderr from executed processes are automatically captured and streamed to the test log via Python's `logging` module, using the binary name as the logger (e.g., `[INFO] [sender] message`).
+
+## Shared Docker Core
+
+Both ITF's Docker plugin and SCTF's Docker environment delegate container operations to a single shared abstraction: `score.itf.core.docker.DockerContainer`.
+
+```python
+from score.itf.core.docker import DockerContainer, get_docker_client
+
+client = get_docker_client()
+container = DockerContainer.run(client, image="ubuntu:24.04", command="sleep infinity")
+
+# Synchronous exec
+result = container.exec(["echo", "hello"])  # returns (exit_code, output)
+
+# Streaming exec (for log capture)
+exec_id, stream = container.exec(["my_app"], stream=True)  # returns (exec_id, generator)
+
+# File transfer
+container.copy_to("/local/file", "/container/file")
+container.copy_from("/container/file", "/local/file")
+
+# Network inspection
+ip = container.get_ip()
+gateway = container.get_gateway()
+
+container.stop()
+```
+
+This avoids code duplication and ensures both ITF and SCTF benefit from fixes and improvements in one place.
 
 ## Contributing
 

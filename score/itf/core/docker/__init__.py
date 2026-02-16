@@ -10,10 +10,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF public Bazel interface"""
 
-load("@score_itf//bazel:py_itf_test.bzl", local_py_itf_test = "py_itf_test")
-load("@score_itf//bazel:py_sctf_test.bzl", local_py_sctf_test = "py_sctf_test")
+from score.itf.core.docker.docker import DockerContainer, get_docker_client
 
-py_itf_test = local_py_itf_test
-py_sctf_test = local_py_sctf_test
+__all__ = [
+    "DockerContainer",
+    "get_docker_client",
+]

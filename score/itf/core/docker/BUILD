@@ -10,10 +10,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF public Bazel interface"""
 
-load("@score_itf//bazel:py_itf_test.bzl", local_py_itf_test = "py_itf_test")
-load("@score_itf//bazel:py_sctf_test.bzl", local_py_sctf_test = "py_sctf_test")
+load("@itf_pip//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
 
-py_itf_test = local_py_itf_test
-py_sctf_test = local_py_sctf_test
+py_library(
+    name = "docker",
+    srcs = [
+        "__init__.py",
+        "docker.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        requirement("docker"),
+    ],
+)

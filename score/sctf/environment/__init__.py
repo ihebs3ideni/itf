@@ -10,10 +10,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF public Bazel interface"""
 
-load("@score_itf//bazel:py_itf_test.bzl", local_py_itf_test = "py_itf_test")
-load("@score_itf//bazel:py_sctf_test.bzl", local_py_sctf_test = "py_sctf_test")
+from score.sctf.environment.base import Environment, ProcessHandle
+from score.sctf.environment.docker_env import DockerEnvironment
 
-py_itf_test = local_py_itf_test
-py_sctf_test = local_py_sctf_test
+__all__ = [
+    "Environment",
+    "ProcessHandle",
+    "DockerEnvironment",
+]

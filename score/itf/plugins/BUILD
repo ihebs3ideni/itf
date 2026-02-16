@@ -29,8 +29,8 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         ":core",
+        "//score/itf/core/docker",
         "//score/itf/core/target",
-        requirement("docker"),
         requirement("pytest"),
     ],
 )
