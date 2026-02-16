@@ -27,7 +27,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--docker-image",
         action="store",
-        required=True,
+        required=False,
         help="Docker image to run tests against.",
     )
     parser.addoption(
@@ -110,6 +110,12 @@ def target_init(request, _docker_configuration):
 
     docker_image_bootstrap = request.config.getoption("docker_image_bootstrap")
     docker_image = request.config.getoption("docker_image")
+
+    if not docker_image:
+        raise ValueError(
+            "--docker-image is required when using the Docker plugin. "
+            "Pass it via Bazel args or the sctf_docker() plugin."
+        )
 
     client = get_docker_client()
     docker_container = DockerContainer.run(

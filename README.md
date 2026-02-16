@@ -20,7 +20,7 @@ ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testi
 - **Flexible Testing**: Write tests once, run across multiple targets (Docker, QEMU, hardware)
 - **Capability System**: Tests can query and adapt based on available target capabilities
 - **Bazel Integration**: Seamless integration with Bazel build system via `py_itf_test` macro
-- **SCTF (Software Component Test Framework)**: Docker-based component testing with automatic OCI image packaging via `py_sctf_test` macro
+- **SCTF (Software Component Test Framework)**: Docker-based component testing with automatic OCI image packaging via `sctf_image()` + `sctf_docker()` plugin
 - **Shared Docker Core**: Single `DockerContainer` abstraction used by both ITF and SCTF, with streaming stdout/stderr capture
 
 ## Quick Start
@@ -533,18 +533,22 @@ score/
 
 ## SCTF — Software Component Test Framework
 
-SCTF is a Docker-based component testing layer within ITF. While `py_itf_test` runs tests against *pre-built* container images, SCTF **packages your build artifacts** (binaries, shared libraries) into an OCI image at build time and provides a structured environment to execute and observe them.
+SCTF is a Docker-based component testing layer within ITF. While `py_itf_test` with the `docker` plugin runs tests against *pre-built* container images, SCTF **packages your build artifacts** (binaries, shared libraries) into an OCI image at build time and provides a structured environment to execute and observe them.
+
+SCTF uses the standard `py_itf_test` macro — there is no separate test macro. The two pieces are:
+
+1. **`sctf_image()`** — Standalone macro that builds the OCI image
+2. **`sctf_docker()`** — Plugin factory that wires the image into `py_itf_test`
 
 ### SCTF vs ITF Docker — When to Use Which
 
-| | `py_itf_test` + docker plugin | `py_sctf_test` |
+| | `docker` plugin | `sctf_docker()` plugin |
 |---|---|---|
-| **Image source** | Pre-built (`--docker-image=ubuntu:24.04`) | Built from your Bazel deps at analysis time |
-| **Plugin model** | Composable `py_itf_plugin` structs | Hardcoded `score.sctf.plugins` |
+| **Image source** | Pre-built (`--docker-image=ubuntu:24.04`) | Built from your Bazel deps via `sctf_image()` |
 | **Test fixture** | `target` — a `DockerTarget` with exec/ssh capabilities | `docker_sandbox` — an `Environment` with process lifecycle tracking |
 | **Use case** | *"I have a container; run tests against it"* (integration testing) | *"Package my software into a container and test it"* (component testing) |
 
-See [score/sctf/README.md](score/sctf/README.md) for a detailed architectural rationale.
+See [score/sctf/README.md](score/sctf/README.md) for detailed documentation.
 
 ### SCTF Quick Start
 
@@ -559,21 +563,29 @@ def test_my_binary(docker_sandbox):
 
 ```starlark
 # BUILD
-load("@score_itf//bazel:py_sctf_test.bzl", "py_sctf_test")
+load("@score_itf//:defs.bzl", "py_itf_test", "sctf_image")
+load("@score_itf//score/itf/plugins:plugins.bzl", "sctf_docker")
 
-py_sctf_test(
+sctf_image(
+    name = "my_image",
+    deps = [":my_binary_package"],
+)
+
+py_itf_test(
     name = "test_my_component",
     srcs = ["test_my_component.py"],
-    data = [":my_binary_package"],
+    plugins = [sctf_docker(image = "my_image")],
+    size = "large",
 )
 ```
 
-The `py_sctf_test` macro automatically:
-1. Collects shared libraries from your `data` dependencies
+The `sctf_image()` macro automatically:
+1. Collects shared libraries from your `deps`
 2. Packages them into a `pkg_tar` archive
 3. Builds an OCI image via `oci_image` + `oci_tarball`
 4. Generates a self-extracting bootstrap script that runs `docker load`
-5. Creates a `py_test` with the correct flags to boot the container and run pytest
+
+The `sctf_docker()` plugin then wires the image into `py_itf_test` by injecting the correct `--docker-image` and `--docker-image-bootstrap` args.
 
 ### SCTF Environment API
 

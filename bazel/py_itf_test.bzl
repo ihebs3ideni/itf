@@ -15,18 +15,27 @@
 load("@rules_python//python:defs.bzl", "py_test")
 load("@score_itf//bazel/rules:run_as_exec.bzl", "test_as_exec")
 
-def py_itf_test(name, srcs, args = [], data = [], data_as_exec = [], plugins = [], deps = [], tags = []):
+def py_itf_test(name, srcs, args = [], data = [], data_as_exec = [], plugins = [], deps = [], tags = [], size = None, timeout = None, flaky = False, env = {}, **kwargs):
     """Bazel macro for running ITF tests.
+
+    This is the single entry point for all ITF test types — standard ITF
+    integration tests, SCTF Docker tests, QEMU tests, etc.  Test behavior
+    is determined entirely by the *plugins* list.
 
     Args:
       name: Name of the test target.
       srcs: List of source files for the test.
       args: Additional arguments to pass to ITF.
-      data: Data files that will be build for target config.
-      data_as_exec: Data files that will be build for exec(host) config.
-      plugins: List of pytest plugins to enable.
+      data: Data files that will be built for target config.
+      data_as_exec: Data files that will be built for exec(host) config.
+      plugins: List of py_itf_plugin structs that determine test behavior.
       deps: Additional python dependencies needed for the test.
       tags: Tags forwarded to the test target.
+      size: Bazel test size (default: None → Bazel default "medium").
+      timeout: Bazel test timeout (default: None → derived from size).
+      flaky: Whether the test is flaky.
+      env: Environment variables for the test.
+      **kwargs: Forwarded to test_as_exec.
     """
     pytest_bootstrap = Label("@score_itf//:main.py")
     pytest_ini = Label("@score_itf//:pytest.ini")
@@ -71,12 +80,15 @@ def py_itf_test(name, srcs, args = [], data = [], data_as_exec = [], plugins = [
 
     data_as_exec = [pytest_ini] + srcs + data_as_exec + plugin_data_as_exec
 
-    test_as_exec(
-        name = name,
-        executable = "_" + name,
-        data_as_exec = data_as_exec,
-        data = data + plugin_data,
-        args = args +
+    test_env = {"PYTHONDONOTWRITEBYTECODE": "1"}
+    test_env.update(env)
+
+    test_as_exec_kwargs = {
+        "name": name,
+        "executable": "_" + name,
+        "data_as_exec": data_as_exec,
+        "data": data + plugin_data,
+        "args": args +
                ["-c $(location %s)" % pytest_ini] +
                [
                    "-p no:cacheprovider",
@@ -85,8 +97,17 @@ def py_itf_test(name, srcs, args = [], data = [], data_as_exec = [], plugins = [
                plugin_enable_args +
                plugin_args +
                ["$(location %s)" % x for x in srcs],
-        env = {
-            "PYTHONDONOTWRITEBYTECODE": "1",
-        },
-        tags = tags + plugin_tags,
-    )
+        "env": test_env,
+        "tags": tags + plugin_tags,
+    }
+
+    if size:
+        test_as_exec_kwargs["size"] = size
+    if timeout:
+        test_as_exec_kwargs["timeout"] = timeout
+    if flaky:
+        test_as_exec_kwargs["flaky"] = flaky
+
+    test_as_exec_kwargs.update(kwargs)
+
+    test_as_exec(**test_as_exec_kwargs)

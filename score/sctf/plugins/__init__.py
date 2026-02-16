@@ -12,11 +12,16 @@
 # *******************************************************************************
 """Pytest plugin providing a Docker-based sandbox for SCTF tests.
 
-This plugin adds ``--docker-image`` and ``--docker-image-bootstrap`` CLI
-options and exposes the ``docker_sandbox`` fixture which creates a
+This plugin exposes the ``docker_sandbox`` fixture which creates a
 :class:`~score.sctf.environment.DockerEnvironment`, calls ``setup()``,
 and yields a :class:`~score.itf.core.utils.bunch.Bunch` with the
 environment and workspace paths.
+
+**Important**: This plugin does NOT register ``--docker-image`` or
+``--docker-image-bootstrap``.  Those options are registered by the ITF
+Docker plugin (``score.itf.plugins.docker``), which **must** be loaded
+alongside this plugin.  The ``sctf_docker()`` Bazel plugin factory
+ensures both plugins are always enabled together.
 
 Usage in a test::
 
@@ -40,19 +45,9 @@ from score.sctf.exception import SctfRuntimeError
 logger = logging.getLogger(__name__)
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--docker-image",
-        action="store",
-        required=False,
-        help="Docker image name/tag (set automatically by py_sctf_test for docker backend).",
-    )
-    parser.addoption(
-        "--docker-image-bootstrap",
-        action="store",
-        required=False,
-        help="Bootstrap command to load Docker image (set automatically by py_sctf_test).",
-    )
+# NOTE: No pytest_addoption here.  --docker-image and --docker-image-bootstrap
+# are registered by score.itf.plugins.docker.  This plugin reads them via
+# request.config.getoption().
 
 
 @pytest.fixture(scope="session")
@@ -85,7 +80,8 @@ def docker_sandbox(request, _docker_workspace):
     if not docker_image:
         raise SctfRuntimeError(
             "--docker-image is required. "
-            "This is normally injected by the py_sctf_test Bazel macro."
+            "This is normally injected by the sctf_docker() plugin via "
+            "py_itf_test."
         )
 
     environment = DockerEnvironment.from_image(
