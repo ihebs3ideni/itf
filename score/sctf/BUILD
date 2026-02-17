@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -14,23 +14,22 @@ load("@itf_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
 py_library(
-    name = "core",
-    srcs = ["core.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//score/itf/core/target",
-        requirement("pytest"),
+    name = "sctf",
+    srcs = [
+        "__init__.py",
+        "environment/__init__.py",
+        "environment/base.py",
+        "environment/docker_env.py",
+        "exception/__init__.py",
+        "exception/exception.py",
+        "plugins/__init__.py",
     ],
-)
-
-py_library(
-    name = "docker",
-    srcs = ["docker.py"],
+    imports = [".."],
     visibility = ["//visibility:public"],
     deps = [
-        ":core",
         "//score/itf/core/docker",
-        "//score/itf/core/target",
+        "//score/itf/core/utils",
+        "//score/itf/plugins:docker",
         requirement("pytest"),
     ],
 )

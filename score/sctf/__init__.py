@@ -10,30 +10,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
-load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+"""SCTF — Software Component Test Framework.
 
-cc_binary(
-    name = "example-app",
-    srcs = ["main.cpp"],
-)
+Provides a Docker-based execution environment for running compiled binaries
+inside OCI containers as part of Bazel test targets.
 
-cc_test(
-    name = "example-test",
-    srcs = ["test.cpp"],
-    deps = [
-        "@googletest//:gtest",
-        "@googletest//:gtest_main",
-    ],
-)
+Public API::
 
-pkg_tar(
-    name = "example-app-pkg",
-    srcs = [
-        "example-app",
-    ],
-    visibility = [
-        "//examples/docker:__pkg__",
-        "//examples/itf:__pkg__",
-    ],
-)
+    from score.sctf.environment import Environment, ProcessHandle, DockerEnvironment
+    from score.sctf.exception import SctfRuntimeError
+"""
+
+from score.sctf.environment import Environment, ProcessHandle, DockerEnvironment
+from score.sctf.exception import SctfRuntimeError

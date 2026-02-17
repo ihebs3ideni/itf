@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -10,27 +10,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+
 load("@itf_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
 py_library(
-    name = "core",
-    srcs = ["core.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//score/itf/core/target",
-        requirement("pytest"),
-    ],
-)
-
-py_library(
     name = "docker",
-    srcs = ["docker.py"],
+    srcs = [
+        "__init__.py",
+        "docker.py",
+    ],
     visibility = ["//visibility:public"],
     deps = [
-        ":core",
-        "//score/itf/core/docker",
-        "//score/itf/core/target",
-        requirement("pytest"),
+        requirement("docker"),
     ],
 )

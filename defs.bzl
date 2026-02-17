@@ -13,5 +13,7 @@
 """ITF public Bazel interface"""
 
 load("@score_itf//bazel:py_itf_test.bzl", local_py_itf_test = "py_itf_test")
+load("@score_itf//bazel:sctf_image.bzl", local_sctf_image = "sctf_image")
 
 py_itf_test = local_py_itf_test
+sctf_image = local_sctf_image
