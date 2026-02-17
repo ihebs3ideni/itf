@@ -64,9 +64,9 @@ def _docker_workspace(_docker_root_dir):
     return str(_docker_root_dir)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def docker_sandbox(request, _docker_workspace):
-    """Session-scoped fixture that creates a Docker-based SCTF environment.
+    """Function scoped fixture that creates a Docker-based SCTF environment. for each test.
 
     Yields a :class:`Bunch` with:
         - ``environment``: :class:`DockerEnvironment` instance (already set up)
