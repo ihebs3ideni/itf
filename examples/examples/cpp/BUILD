@@ -32,5 +32,8 @@ pkg_tar(
     srcs = [
         "example-app",
     ],
-    visibility = ["//examples/docker:__pkg__"],
+    visibility = [
+        "//examples/docker:__pkg__",
+        "//examples/itf:__pkg__",
+    ],
 )
