@@ -14,8 +14,7 @@
 
 The QEMU pytest plugin expects a JSON configuration file passed via the
 `--qemu-config` command line option. The configuration is validated using
-Pydantic (unknown keys are rejected) and then converted into an attribute-based
-object (via `types.SimpleNamespace`) so callers can use dot-notation.
+Pydantic (unknown keys are rejected) and returned as a Pydantic model.
 
 The allowed configuration format is based on the JSON files in
 `test/resources/qemu_*_config.json`.
@@ -74,8 +73,6 @@ Example: port-forwarding networking
 import json
 import logging
 import ipaddress
-from types import SimpleNamespace
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -86,7 +83,7 @@ logger = logging.getLogger(__name__)
 _RAM_SIZE_PATTERN = r"^[0-9]+[KMGTP]$"
 
 
-class _Network(BaseModel):
+class Network(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
@@ -105,76 +102,42 @@ class _Network(BaseModel):
         return value
 
 
-class _PortForwarding(BaseModel):
+class PortForwarding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     host_port: int = Field(ge=1, le=65535)
     guest_port: int = Field(ge=1, le=65535)
 
 
-class _QemuConfigModel(BaseModel):
+class QemuConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    networks: list[_Network] = Field(min_length=1)
+    networks: list[Network] = Field(min_length=1)
     ssh_port: int = Field(ge=1, le=65535)
     qemu_num_cores: int = Field(ge=1)
     qemu_ram_size: str = Field(pattern=_RAM_SIZE_PATTERN)
-    port_forwarding: list[_PortForwarding] = Field(default_factory=list)
+    port_forwarding: list[PortForwarding] = Field(default_factory=list)
 
 
-def _validate_qemu_config(config_file: str) -> dict[str, Any]:
-    """Validate and normalize a QEMU config file.
-
-    Args:
-        config_file: Path to a JSON file matching the expected QEMU config
-            structure.
-
-    Returns:
-        A validated dict (plain Python types) suitable for `_dict_to_obj()`.
-
-    Raises:
-        ValueError: If the JSON does not match the expected schema.
-        json.JSONDecodeError: If the file is not valid JSON.
-        OSError: If the file cannot be opened.
-    """
-
-    with open(config_file, "r") as f:
-        config_data = json.load(f)
-
-    try:
-        model = _QemuConfigModel.model_validate(config_data)
-    except ValidationError as exc:
-        prefix = f"Invalid QEMU configuration in '{config_file}'"
-        raise ValueError(prefix + f": {exc}") from exc
-
-    return model.model_dump(mode="python")
-
-
-def _dict_to_obj(data):
-    """
-    Recursively convert a dictionary to an object with attributes.
-    Lists of dictionaries are converted to lists of objects.
-    """
-    if isinstance(data, dict):
-        return SimpleNamespace(**{key: _dict_to_obj(value) for key, value in data.items()})
-    elif isinstance(data, list):
-        return [_dict_to_obj(item) for item in data]
-    else:
-        return data
-
-
-def load_configuration(config_file: str):
-    """Load, validate and convert a QEMU configuration file.
+def load_configuration(config_file: str) -> QemuConfigModel:
+    """Load and validate a QEMU configuration file.
 
     Args:
         config_file: Path to a JSON configuration file.
 
     Returns:
-        An object with attributes corresponding to JSON keys.
+        A validated Pydantic model.
 
     Raises:
         ValueError: If validation fails.
     """
     logger.info(f"Loading configuration from {config_file}")
-    validated = _validate_qemu_config(config_file)
-    return _dict_to_obj(validated)
+
+    with open(config_file, "r") as f:
+        config_data = json.load(f)
+
+    try:
+        return QemuConfigModel.model_validate(config_data)
+    except ValidationError as exc:
+        prefix = f"Invalid QEMU configuration in '{config_file}'"
+        raise ValueError(prefix + f": {exc}") from exc
