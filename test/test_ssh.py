@@ -12,8 +12,6 @@
 # *******************************************************************************
 import pytest
 
-from score.itf.core.com.ssh import execute_command
-
 
 @pytest.fixture(scope="session")
 def docker_configuration():
@@ -29,7 +27,7 @@ def docker_configuration():
 
 
 def check_command_exec(target, message):
-    exit_code, output = target.exec_run(f"echo -n {message}")
+    exit_code, output = target.execute(f"echo -n {message}")
     return f"{message}" == output.decode()
 
 
@@ -38,5 +36,6 @@ def test_docker_runs_1(target):
 
 
 def test_ssh_with_default_user(target):
-    with target.ssh() as ssh:
-        execute_command(ssh, "echo 'Username:' $USER && uname -a")
+    exit_code, output = target.execute("/bin/sh -c \"echo 'Username:' $USER && uname -a\"")
+    assert exit_code == 0
+    assert b"Username:" in output

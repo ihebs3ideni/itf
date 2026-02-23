@@ -15,7 +15,7 @@ import score.itf
 
 
 def check_command_exec(target, message):
-    exit_code, output = target.exec_run(f"echo -n {message}")
+    exit_code, output = target.execute(f"echo -n {message}")
     return f"{message}" == output.decode()
 
 
@@ -35,3 +35,27 @@ def test_docker_runs_for_exec_capability(target):
 @score.itf.plugins.core.requires_capabilities("non-existing-capability")
 def test_docker_skipped_for_non_existing_capability(target):
     assert False, "This test should have been skipped due to missing capability"
+
+
+def test_target_file_transfer_and_restart(target, tmp_path):
+    local_src = tmp_path / "src.txt"
+    local_dst = tmp_path / "dst.txt"
+    remote_path = "/tmp/itf_upload_test.txt"
+
+    content = "hello from host\n"
+    local_src.write_text(content, encoding="utf-8")
+
+    target.upload(str(local_src), remote_path)
+    exit_code, output = target.execute(f"/bin/sh -c 'cat {remote_path}'")
+    assert exit_code == 0
+    assert output.decode() == content
+
+    target.download(remote_path, str(local_dst))
+    assert local_dst.read_text(encoding="utf-8") == content
+
+
+def test_restart(target, tmp_path):
+    target.restart()
+    exit_code, output = target.execute("echo -n restarted")
+    assert exit_code == 0
+    assert output == b"restarted"
