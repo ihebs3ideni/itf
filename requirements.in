@@ -4,3 +4,4 @@ docker==7.1.0
 pytest==9.0.2
 paramiko==4.0.0
 typing-extensions==4.15.0
+pydantic==2.10.6

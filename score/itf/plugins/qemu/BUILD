@@ -29,5 +29,6 @@ py_library(
     deps = [
         "//score/itf/core/process",
         "//score/itf/core/utils",
+        requirement("pydantic"),
     ],
 )

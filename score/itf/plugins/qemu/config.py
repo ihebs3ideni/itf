@@ -10,12 +10,144 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+"""QEMU plugin configuration loading and validation.
+
+The QEMU pytest plugin expects a JSON configuration file passed via the
+`--qemu-config` command line option. The configuration is validated using
+Pydantic (unknown keys are rejected) and then converted into an attribute-based
+object (via `types.SimpleNamespace`) so callers can use dot-notation.
+
+The allowed configuration format is based on the JSON files in
+`test/resources/qemu_*_config.json`.
+
+Required top-level keys:
+    - `networks` (array, at least 1 item)
+    - `ssh_port` (int 1..65535)
+    - `qemu_num_cores` (int >= 1)
+    - `qemu_ram_size` (string like "512M" or "1G")
+
+Optional top-level keys:
+    - `port_forwarding` (array of objects with `host_port` and `guest_port`)
+
+Each entry in `networks` must contain:
+    - `name` (string)
+    - `ip_address` (IPv4 string)
+    - `gateway` (IPv4 string)
+
+Example: bridge/tap networking
+
+        {
+            "networks": [
+                {
+                    "name": "tap0",
+                    "ip_address": "169.254.158.190",
+                    "gateway": "169.254.21.88"
+                }
+            ],
+            "ssh_port": 22,
+            "qemu_num_cores": 2,
+            "qemu_ram_size": "1G"
+        }
+
+Example: port-forwarding networking
+
+        {
+            "networks": [
+                {
+                    "name": "lo",
+                    "ip_address": "127.0.0.1",
+                    "gateway": "127.0.0.1"
+                }
+            ],
+            "ssh_port": 2222,
+            "qemu_num_cores": 2,
+            "qemu_ram_size": "1G",
+            "port_forwarding": [
+                {
+                    "host_port": 2222,
+                    "guest_port": 22
+                }
+            ]
+        }
+"""
+
 import json
 import logging
+import ipaddress
 from types import SimpleNamespace
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
 logger = logging.getLogger(__name__)
+
+
+_RAM_SIZE_PATTERN = r"^[0-9]+[KMGTP]$"
+
+
+class _Network(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    ip_address: str
+    gateway: str
+
+    @field_validator("ip_address", "gateway")
+    @classmethod
+    def _validate_ipv4(cls, value: str) -> str:
+        try:
+            ip = ipaddress.ip_address(value)
+        except ValueError as exc:
+            raise ValueError("must be a valid IPv4 address") from exc
+        if ip.version != 4:
+            raise ValueError("must be a valid IPv4 address")
+        return value
+
+
+class _PortForwarding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    host_port: int = Field(ge=1, le=65535)
+    guest_port: int = Field(ge=1, le=65535)
+
+
+class _QemuConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    networks: list[_Network] = Field(min_length=1)
+    ssh_port: int = Field(ge=1, le=65535)
+    qemu_num_cores: int = Field(ge=1)
+    qemu_ram_size: str = Field(pattern=_RAM_SIZE_PATTERN)
+    port_forwarding: list[_PortForwarding] = Field(default_factory=list)
+
+
+def _validate_qemu_config(config_file: str) -> dict[str, Any]:
+    """Validate and normalize a QEMU config file.
+
+    Args:
+        config_file: Path to a JSON file matching the expected QEMU config
+            structure.
+
+    Returns:
+        A validated dict (plain Python types) suitable for `_dict_to_obj()`.
+
+    Raises:
+        ValueError: If the JSON does not match the expected schema.
+        json.JSONDecodeError: If the file is not valid JSON.
+        OSError: If the file cannot be opened.
+    """
+
+    with open(config_file, "r") as f:
+        config_data = json.load(f)
+
+    try:
+        model = _QemuConfigModel.model_validate(config_data)
+    except ValidationError as exc:
+        prefix = f"Invalid QEMU configuration in '{config_file}'"
+        raise ValueError(prefix + f": {exc}") from exc
+
+    return model.model_dump(mode="python")
 
 
 def _dict_to_obj(data):
@@ -32,11 +164,17 @@ def _dict_to_obj(data):
 
 
 def load_configuration(config_file: str):
-    """
-    Load the configuration from a JSON file.
-    param config_file: The path to the configuration file.
+    """Load, validate and convert a QEMU configuration file.
+
+    Args:
+        config_file: Path to a JSON configuration file.
+
+    Returns:
+        An object with attributes corresponding to JSON keys.
+
+    Raises:
+        ValueError: If validation fails.
     """
     logger.info(f"Loading configuration from {config_file}")
-    with open(config_file, "r") as f:
-        config_data = json.load(f)
-        return _dict_to_obj(config_data)
+    validated = _validate_qemu_config(config_file)
+    return _dict_to_obj(validated)
