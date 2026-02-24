@@ -10,30 +10,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
-load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
-cc_binary(
-    name = "example-app",
-    srcs = ["main.cpp"],
-)
+from score.itf.core.docker.docker import DockerContainer, get_docker_client
 
-cc_test(
-    name = "example-test",
-    srcs = ["test.cpp"],
-    deps = [
-        "@googletest//:gtest",
-        "@googletest//:gtest_main",
-    ],
-)
-
-pkg_tar(
-    name = "example-app-pkg",
-    srcs = [
-        "example-app",
-    ],
-    visibility = [
-        "//examples/docker:__pkg__",
-        "//examples/itf:__pkg__",
-    ],
-)
+__all__ = [
+    "DockerContainer",
+    "get_docker_client",
+]

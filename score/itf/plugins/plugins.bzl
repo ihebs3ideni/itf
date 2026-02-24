@@ -59,3 +59,21 @@ dlt = py_itf_plugin(
     tags = [
     ],
 )
+
+sctf_docker = py_itf_plugin(
+    py_library = "@score_itf//score/sctf",
+    enabled_plugins = [
+        "score.itf.plugins.docker",
+        "score.sctf.plugins",
+    ],
+    args = [
+    ],
+    data = [
+    ],
+    data_as_exec = [
+    ],
+    tags = [
+        "sctf",
+        "cpu:2",
+    ],
+)
