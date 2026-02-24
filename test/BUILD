@@ -10,8 +10,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("//:defs.bzl", "py_itf_test")
-load("//score/itf/plugins:plugins.bzl", "dlt", "docker", "qemu")
+load("//:defs.bzl", "py_itf_test", "sctf_image")
+load("//score/itf/plugins:plugins.bzl", "dlt", "docker", "qemu", "sctf_docker")
 
 py_itf_test(
     name = "test_rules_are_working_correctly",
@@ -146,4 +146,44 @@ py_itf_test(
         "//score/itf/plugins/qemu",
         "@rules_python//python/runfiles",
     ],
+)
+
+# --- SCTF Docker tests ---
+# Shared base image used by multiple SCTF tests
+SCTF_BASE_TARBALL = sctf_image(
+    name = "sctf_base_image",
+)
+
+py_itf_test(
+    name = "test_hello_sctf",
+    srcs = [
+        "test_hello_sctf.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location %s)" % SCTF_BASE_TARBALL,
+        "--docker-image=sctf:sctf_base_image",
+    ],
+    data = [SCTF_BASE_TARBALL],
+    plugins = [
+        sctf_docker,
+    ],
+    size = "large",
+    timeout = "moderate",
+)
+
+py_itf_test(
+    name = "test_sctf_component",
+    srcs = [
+        "test_sctf_component.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location %s)" % SCTF_BASE_TARBALL,
+        "--docker-image=sctf:sctf_base_image",
+    ],
+    data = [SCTF_BASE_TARBALL],
+    plugins = [
+        sctf_docker,
+    ],
+    size = "large",
+    timeout = "moderate",
 )
