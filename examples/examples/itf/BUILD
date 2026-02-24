@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@score_itf//:defs.bzl", "py_itf_test", "sctf_image")
+load("@score_itf//:defs.bzl", "py_itf_test")
 load("@score_itf//score/itf/plugins:plugins.bzl", "dlt", "docker", "qemu", "sctf_docker")
 
 py_itf_test(
@@ -91,16 +91,14 @@ py_itf_test(
 )
 
 # --- SCTF: Test the C++ example app inside a Docker container ---
-sctf_image(
-    name = "example_app_image",
-    base_image = "@ubuntu_24_04_examples",
-    deps = ["//examples/cpp:example-app-pkg"],
-)
-
 py_itf_test(
     name = "test_sctf_example_app",
     srcs = ["test_sctf_example_app.py"],
-    plugins = [sctf_docker(image = "example_app_image")],
+    plugins = [sctf_docker(
+        name = "example_app_image",
+        base_image = "@ubuntu_24_04_examples",
+        deps = ["//examples/cpp:example-app-pkg"],
+    )],
     size = "large",
     timeout = "moderate",
 )

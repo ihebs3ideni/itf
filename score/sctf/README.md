@@ -10,14 +10,14 @@ and observe them at test time.
 SCTF is built on top of the ITF plugin system.  There are two orthogonal
 pieces:
 
-1. **`sctf_image()`** — A standalone Bazel macro that builds an OCI image
-   from your deps.  No test concerns.
-2. **`sctf_docker()` plugin** — A `py_itf_plugin` factory that wires the
-   built image into `py_itf_test` and enables the SCTF pytest fixtures.
+1. **`sctf_docker()` plugin** — A `py_itf_plugin` factory that can build
+   an OCI image from your deps *and* wire it into `py_itf_test`.
+2. **`sctf_image()`** — A standalone Bazel macro for building an OCI image
+   independently (useful when sharing one image across multiple tests).
 
-This separation means **there is only one test macro** (`py_itf_test`) for
-all test types — ITF integration tests, SCTF component tests, QEMU tests,
-etc.  Test behavior is determined entirely by the plugins list.
+There is **only one test macro** (`py_itf_test`) for all test types — ITF
+integration tests, SCTF component tests, QEMU tests, etc.  Test behavior
+is determined entirely by the plugins list.
 
 ### Execution Model
 
@@ -50,26 +50,79 @@ etc.  Test behavior is determined entirely by the plugins list.
 
 ### BUILD file
 
+`sctf_docker()` supports two usage patterns.  Choose based on whether the
+image is used by one test or shared across several.
+
+#### Single test, single image *(recommended for one-off tests)*
+
+Use `name` to let `sctf_docker()` create the image inline — simplest,
+no extra declarations needed:
+
+```starlark
+load("@score_itf//:defs.bzl", "py_itf_test")
+load("@score_itf//score/itf/plugins:plugins.bzl", "sctf_docker")
+
+py_itf_test(
+    name = "test_my_component",
+    srcs = ["test_my_component.py"],
+    plugins = [sctf_docker(
+        name = "my_image",            # creates sctf_image targets automatically
+        deps = [":my_binary_package"],
+        # base_image = "@ubuntu_24_04",  # optional, this is the default
+    )],
+    size = "large",
+    timeout = "moderate",
+)
+```
+
+`deps` is optional — omit it for a bare base-image container:
+
+```starlark
+py_itf_test(
+    name = "test_base_only",
+    srcs = ["test_base_only.py"],
+    plugins = [sctf_docker(name = "my_base_image")],
+)
+```
+
+#### Shared image across multiple tests *(recommended for shared images)*
+
+Declare the image once with `sctf_image()`, then reference it by name
+via the `image` parameter.  This keeps target creation visible at the
+top level of the BUILD file — the idiomatic Bazel pattern:
+
 ```starlark
 load("@score_itf//:defs.bzl", "py_itf_test", "sctf_image")
 load("@score_itf//score/itf/plugins:plugins.bzl", "sctf_docker")
 
-# Step 1: Build the OCI image from your binaries
 sctf_image(
     name = "my_image",
-    base_image = "@ubuntu_24_04",    # default
+    base_image = "@ubuntu_24_04",
     deps = [":my_binary_package"],
 )
 
-# Step 2: Run tests against the image
 py_itf_test(
-    name = "test_my_component",
-    srcs = ["test_my_component.py"],
+    name = "test_a",
+    srcs = ["test_a.py"],
+    plugins = [sctf_docker(image = "my_image")],
+    size = "large",
+    timeout = "moderate",
+)
+
+py_itf_test(
+    name = "test_b",
+    srcs = ["test_b.py"],
     plugins = [sctf_docker(image = "my_image")],
     size = "large",
     timeout = "moderate",
 )
 ```
+
+> **Note:** Avoid calling `sctf_docker(name=...)` once, storing the result
+> in a variable, and passing it to multiple `py_itf_test` targets.  While
+> that works, it hides Bazel target creation inside a variable assignment,
+> making the BUILD file harder to read.  Prefer `sctf_image()` +
+> `sctf_docker(image=...)` for the shared case.
 
 ### Test file
 
@@ -106,9 +159,11 @@ def test_my_binary(docker_sandbox):
 ### Why `sctf_docker()` is a factory function, not a static struct
 
 Unlike `docker`, `qemu`, or `dlt` which are static plugin structs,
-`sctf_docker(image=...)` is a function that returns a struct.  This is
-because the plugin needs to carry the image name — the tarball label and
-the `--docker-image` arg depend on which `sctf_image()` the test uses.
+`sctf_docker()` is a function that returns a struct.  This is because:
+- When using `name`, it must call `sctf_image()` to create the OCI build
+  pipeline before returning the plugin struct.
+- When using `image`, the tarball label and `--docker-image` arg depend on
+  which `sctf_image()` the test references.
 
 ### Why the SCTF plugin doesn't register `--docker-image`
 

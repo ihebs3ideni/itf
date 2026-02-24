@@ -20,7 +20,7 @@ ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testi
 - **Flexible Testing**: Write tests once, run across multiple targets (Docker, QEMU, hardware)
 - **Capability System**: Tests can query and adapt based on available target capabilities
 - **Bazel Integration**: Seamless integration with Bazel build system via `py_itf_test` macro
-- **SCTF (Software Component Test Framework)**: Docker-based component testing with automatic OCI image packaging via `sctf_image()` + `sctf_docker()` plugin
+- **SCTF (Software Component Test Framework)**: Docker-based component testing with automatic OCI image packaging via the `sctf_docker()` plugin
 - **Shared Docker Core**: Single `DockerContainer` abstraction used by both ITF and SCTF, with streaming stdout/stderr capture
 
 ## Quick Start
@@ -535,16 +535,17 @@ score/
 
 SCTF is a Docker-based component testing layer within ITF. While `py_itf_test` with the `docker` plugin runs tests against *pre-built* container images, SCTF **packages your build artifacts** (binaries, shared libraries) into an OCI image at build time and provides a structured environment to execute and observe them.
 
-SCTF uses the standard `py_itf_test` macro — there is no separate test macro. The two pieces are:
+SCTF uses the standard `py_itf_test` macro — there is no separate test macro. The key piece is:
 
-1. **`sctf_image()`** — Standalone macro that builds the OCI image
-2. **`sctf_docker()`** — Plugin factory that wires the image into `py_itf_test`
+- **`sctf_docker()`** — Plugin factory that optionally builds an OCI image and wires it into `py_itf_test`
+
+You can also use `sctf_image()` separately if you need to share one image across multiple tests.
 
 ### SCTF vs ITF Docker — When to Use Which
 
 | | `docker` plugin | `sctf_docker()` plugin |
 |---|---|---|
-| **Image source** | Pre-built (`--docker-image=ubuntu:24.04`) | Built from your Bazel deps via `sctf_image()` |
+| **Image source** | Pre-built (`--docker-image=ubuntu:24.04`) | Built from your Bazel deps via `sctf_docker()` |
 | **Test fixture** | `target` — a `DockerTarget` with exec/ssh capabilities | `docker_sandbox` — an `Environment` with process lifecycle tracking |
 | **Use case** | *"I have a container; run tests against it"* (integration testing) | *"Package my software into a container and test it"* (component testing) |
 
@@ -561,6 +562,26 @@ def test_my_binary(docker_sandbox):
     assert handle.exit_code == 0
 ```
 
+**Single test, single image** — use `name` to create the image inline (recommended for one-off tests):
+
+```starlark
+# BUILD
+load("@score_itf//:defs.bzl", "py_itf_test")
+load("@score_itf//score/itf/plugins:plugins.bzl", "sctf_docker")
+
+py_itf_test(
+    name = "test_my_component",
+    srcs = ["test_my_component.py"],
+    plugins = [sctf_docker(
+        name = "my_image",
+        deps = [":my_binary_package"],
+    )],
+    size = "large",
+)
+```
+
+**Shared image across tests** — declare with `sctf_image()`, reference with `image` (recommended for shared images):
+
 ```starlark
 # BUILD
 load("@score_itf//:defs.bzl", "py_itf_test", "sctf_image")
@@ -572,20 +593,26 @@ sctf_image(
 )
 
 py_itf_test(
-    name = "test_my_component",
-    srcs = ["test_my_component.py"],
+    name = "test_a",
+    srcs = ["test_a.py"],
+    plugins = [sctf_docker(image = "my_image")],
+    size = "large",
+)
+
+py_itf_test(
+    name = "test_b",
+    srcs = ["test_b.py"],
     plugins = [sctf_docker(image = "my_image")],
     size = "large",
 )
 ```
 
-The `sctf_image()` macro automatically:
+When using `name`, the `sctf_docker()` macro automatically:
 1. Collects shared libraries from your `deps`
 2. Packages them into a `pkg_tar` archive
 3. Builds an OCI image via `oci_image` + `oci_tarball`
 4. Generates a self-extracting bootstrap script that runs `docker load`
-
-The `sctf_docker()` plugin then wires the image into `py_itf_test` by injecting the correct `--docker-image` and `--docker-image-bootstrap` args.
+5. Wires the image into `py_itf_test` by injecting the correct `--docker-image` and `--docker-image-bootstrap` args
 
 ### SCTF Environment API
 
