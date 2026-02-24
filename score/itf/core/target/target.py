@@ -11,15 +11,24 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-from typing import Set, Optional, Any, Dict
+from abc import ABC, abstractmethod
+from typing import Set, Optional, Tuple
 
 
-class Target:
+class Target(ABC):
     """Base target interface for test implementations.
 
     This class provides a common interface for targets that tests can implement against.
     Targets support a capability-based system that allows tests to query and make
     decisions based on available capabilities.
+
+    Besides capability management, this base class defines a *minimum contract*
+    that every concrete target implementation must provide.
+
+    Required functionality:
+    - exec command (`execute`)
+    - upload/download file (`upload`, `download`)
+    - restart target (`restart`)
 
     Example:
         class MyTarget(Target):
@@ -35,6 +44,8 @@ class Target:
             target.execute('ls -la')
     """
 
+    REQUIRED_CAPABILITIES: Set[str] = {"exec", "file_transfer", "restart"}
+
     def __init__(self, capabilities: Optional[Set[str]] = None):
         """Initialize the target with a set of capabilities.
 
@@ -42,61 +53,69 @@ class Target:
             capabilities: Set of capability identifiers supported by this target.
                          If None, an empty set is used.
         """
-        self._capabilities: Set[str] = capabilities if capabilities is not None else set()
+        self._capabilities: Set[str] = set(capabilities) if capabilities is not None else set()
+        self._capabilities.update(self.REQUIRED_CAPABILITIES)
 
     def has_capability(self, capability: str) -> bool:
-        """Check if the target supports a specific capability.
+        """Check if the target supports a specific capability."""
 
-        Args:
-            capability: The capability identifier to check.
-
-        Returns:
-            True if the capability is supported, False otherwise.
-        """
         return capability in self._capabilities
 
     def has_all_capabilities(self, capabilities: Set[str]) -> bool:
-        """Check if the target supports all of the specified capabilities.
+        """Check if the target supports all of the specified capabilities."""
 
-        Args:
-            capabilities: Set of capability identifiers to check.
-
-        Returns:
-            True if all capabilities are supported, False otherwise.
-        """
         return capabilities.issubset(self._capabilities)
 
     def has_any_capability(self, capabilities: Set[str]) -> bool:
-        """Check if the target supports any of the specified capabilities.
+        """Check if the target supports any of the specified capabilities."""
 
-        Args:
-            capabilities: Set of capability identifiers to check.
-
-        Returns:
-            True if at least one capability is supported, False otherwise.
-        """
         return bool(capabilities.intersection(self._capabilities))
 
     def get_capabilities(self) -> Set[str]:
-        """Get all capabilities supported by this target.
+        """Get all capabilities supported by this target."""
 
-        Returns:
-            Set of all capability identifiers.
-        """
         return self._capabilities.copy()
 
     def add_capability(self, capability: str) -> None:
-        """Add a capability to the target.
+        """Add a capability to the target."""
 
-        Args:
-            capability: The capability identifier to add.
-        """
         self._capabilities.add(capability)
 
     def remove_capability(self, capability: str) -> None:
-        """Remove a capability from the target.
+        """Remove a capability from the target."""
 
-        Args:
-            capability: The capability identifier to remove.
-        """
         self._capabilities.discard(capability)
+
+    @abstractmethod
+    def execute(self, command: str) -> Tuple[int, bytes]:
+        """Execute a command on the target."""
+
+    @abstractmethod
+    def upload(self, local_path: str, remote_path: str) -> None:
+        """Upload a file from the test host to the target."""
+
+    @abstractmethod
+    def download(self, remote_path: str, local_path: str) -> None:
+        """Download a file from the target to the test host."""
+
+    @abstractmethod
+    def restart(self) -> None:
+        """Restart the target environment."""
+
+
+class UnsupportedTarget(Target):
+    """Fallback target used when no concrete target plugin is selected."""
+
+    REQUIRED_CAPABILITIES: Set[str] = set()
+
+    def execute(self, command: str) -> Tuple[int, bytes]:
+        raise NotImplementedError("No target plugin selected: exec is unavailable")
+
+    def upload(self, local_path: str, remote_path: str) -> None:
+        raise NotImplementedError("No target plugin selected: upload is unavailable")
+
+    def download(self, remote_path: str, local_path: str) -> None:
+        raise NotImplementedError("No target plugin selected: download is unavailable")
+
+    def restart(self) -> None:
+        raise NotImplementedError("No target plugin selected: restart is unavailable")

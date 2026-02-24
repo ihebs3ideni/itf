@@ -82,7 +82,7 @@ from score.itf.plugins.core import requires_capabilities
 
 @requires_capabilities("exec")
 def test_docker_command(target):
-    exit_code, output = target.exec_run("ls -la")
+    exit_code, output = target.execute("ls -la")
     assert exit_code == 0
 
 @requires_capabilities("ssh", "sftp")
@@ -120,7 +120,7 @@ def test_basic(target):
 
 ```python
 def test_docker_exec(target):
-    exit_code, output = target.exec_run("uname -a")
+    exit_code, output = target.execute("uname -a")
     assert exit_code == 0
     assert b"Linux" in output
 ```
@@ -190,7 +190,7 @@ from score.itf.plugins.core import requires_capabilities
 @requires_capabilities("exec")
 def test_docker_specific(target):
     # Only runs on targets with 'exec' capability
-    target.exec_run("echo test")
+    target.execute("echo test")
 
 @requires_capabilities("ssh", "sftp")
 def test_network_features(target):

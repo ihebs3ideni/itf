@@ -11,10 +11,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-import pytest
 import functools
+import pytest
 
-from score.itf.core.target import Target
+from score.itf.core.target import Target, UnsupportedTarget
 
 
 def pytest_addoption(parser):
@@ -43,7 +43,7 @@ def target_init():
     Plugins need to implement this fixture to provide the actual target instance.
     The scope of this fixture is determined by the --keep-target command line option.
     """
-    yield Target()
+    yield UnsupportedTarget()
 
 
 @pytest.fixture(scope=determine_target_scope)
@@ -64,7 +64,7 @@ def requires_capabilities(*capabilities):
     Example:
         @requires_capabilities("exec", "ssh")
         def test_remote_command(target):
-            target.exec_run("ls -la")
+            target.execute("ls -la")
     """
 
     def decorator(func):

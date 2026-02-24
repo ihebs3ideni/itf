@@ -12,6 +12,9 @@
 # *******************************************************************************
 import logging
 import subprocess
+import io
+import os
+import tarfile
 import docker as pypi_docker
 import pytest
 
@@ -39,16 +42,52 @@ def pytest_addoption(parser):
     )
 
 
-DOCKER_CAPABILITIES = ["exec"]
-
-
 class DockerTarget(Target):
-    def __init__(self, container, capabilities=DOCKER_CAPABILITIES):
-        super().__init__(capabilities=capabilities)
+    def __init__(self, container):
+        super().__init__()
         self.container = container
 
     def __getattr__(self, name):
         return getattr(self.container, name)
+
+    def execute(self, command: str):
+        return self.container.exec_run(command)
+
+    def upload(self, local_path: str, remote_path: str) -> None:
+        if not os.path.isfile(local_path):
+            raise FileNotFoundError(local_path)
+
+        remote_dir = os.path.dirname(remote_path) or "/"
+        remote_name = os.path.basename(remote_path)
+
+        tar_stream = io.BytesIO()
+        with tarfile.open(fileobj=tar_stream, mode="w") as tar:
+            tar.add(local_path, arcname=remote_name)
+        tar_stream.seek(0)
+
+        ok = self.container.put_archive(remote_dir, tar_stream.getvalue())
+        if not ok:
+            raise RuntimeError(f"Failed to upload '{local_path}' to '{remote_path}'")
+
+    def download(self, remote_path: str, local_path: str) -> None:
+        stream, _ = self.container.get_archive(remote_path)
+        tar_bytes = b"".join(stream)
+
+        os.makedirs(os.path.dirname(local_path) or ".", exist_ok=True)
+        with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:*") as tar:
+            members = tar.getmembers()
+            if not members:
+                raise FileNotFoundError(remote_path)
+
+            member = members[0]
+            extracted = tar.extractfile(member)
+            if extracted is None:
+                raise FileNotFoundError(remote_path)
+            with open(local_path, "wb") as f:
+                f.write(extracted.read())
+
+    def restart(self) -> None:
+        self.container.restart()
 
     def get_ip(self):
         self.container.reload()
@@ -108,9 +147,15 @@ def target_init(request, _docker_configuration):
         docker_image,
         _docker_configuration["command"],
         detach=True,
-        auto_remove=True,
+        auto_remove=False,
         init=_docker_configuration["init"],
         environment=_docker_configuration["environment"],
     )
-    yield DockerTarget(container)
-    container.stop(timeout=1)
+    try:
+        yield DockerTarget(container)
+    finally:
+        try:
+            container.stop(timeout=1)
+        finally:
+            # Ensure restart() doesn't accidentally delete the container mid-test.
+            container.remove(force=True)

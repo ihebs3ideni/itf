@@ -16,6 +16,7 @@ from score.itf.plugins.core import Target
 from score.itf.plugins.qemu.qemu_process import QemuProcess
 
 from score.itf.core.com.ssh import Ssh
+from score.itf.core.com.ssh import execute_command_merged_output
 from score.itf.core.com.sftp import Sftp
 from score.itf.core.com.ping import ping, ping_lost
 
@@ -34,6 +35,33 @@ class QemuTarget(Target):
 
     def restart_process(self):
         self._process.restart()
+
+    def restart(self) -> None:
+        self.restart_process()
+
+    def execute(self, command: str):
+        timeout = 30
+        max_exec_time = 180
+        verbose = True
+
+        with self.ssh(timeout=timeout) as ssh:
+            exit_code, output_lines = execute_command_merged_output(
+                ssh,
+                command,
+                timeout=timeout,
+                max_exec_time=max_exec_time,
+                verbose=verbose,
+            )
+        output = "".join(output_lines).encode()
+        return exit_code, output
+
+    def upload(self, local_path: str, remote_path: str) -> None:
+        with self.sftp() as sftp:
+            sftp.upload(local_path, remote_path)
+
+    def download(self, remote_path: str, local_path: str) -> None:
+        with self.sftp() as sftp:
+            sftp.download(remote_path, local_path)
 
     def ssh(
         self,

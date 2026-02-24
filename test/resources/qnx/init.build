@@ -375,6 +375,13 @@ qnxuser::1000:qnxuser
 sshd::6:sshd
 }
 
+[uid=0 gid=0 perms=0444] /etc/profile = {
+export TERM=qansi
+export PATH=/proc/boot
+export LD_LIBRARY_PATH=/proc/boot
+export MAGIC=/system/etc/magic
+}
+
 [uid=0 gid=0 perms=0400] /var/ssh/ssh_host_rsa_key = {
 -----BEGIN OPENSSH PRIVATE KEY-----
 b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
