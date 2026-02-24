@@ -132,3 +132,18 @@ py_itf_test(
         "manual",
     ],
 )
+
+py_itf_test(
+    name = "test_qemu_config_schema",
+    srcs = [
+        "test_qemu_config_schema.py",
+    ],
+    data = [
+        "//test/resources:qemu_bridge_config",
+        "//test/resources:qemu_port_forwarding_config",
+    ],
+    deps = [
+        "//score/itf/plugins/qemu",
+        "@rules_python//python/runfiles",
+    ],
+)
