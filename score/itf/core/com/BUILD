@@ -29,6 +29,14 @@ py_library(
 )
 
 py_library(
+    name = "tcpdump",
+    srcs = [
+        "__init__.py",
+        "tcpdump.py",
+    ],
+)
+
+py_library(
     name = "ping",
     srcs = [
         "__init__.py",
@@ -43,5 +51,6 @@ py_library(
     deps = [
         ":ping",
         ":ssh",
+        ":tcpdump",
     ],
 )

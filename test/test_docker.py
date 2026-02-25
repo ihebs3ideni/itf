@@ -13,11 +13,14 @@
 import os
 import pytest
 
+import os
+import tempfile
+
 import score.itf
 
 
 def check_command_exec(target, message):
-    exit_code, output = target.execute(f"echo -n {message}")
+    exit_code, output = target.exec(f"echo -n {message}", detach=False)
     return f"{message}" == output.decode()
 
 
@@ -39,45 +42,30 @@ def test_docker_skipped_for_non_existing_capability(target):
     assert False, "This test should have been skipped due to missing capability"
 
 
-def test_target_file_transfer_and_restart(target, tmp_path):
-    local_src = tmp_path / "src.txt"
-    local_dst = tmp_path / "dst.txt"
-    remote_path = "/tmp/itf_upload_test.txt"
+# -- advanced target tests ----------------------------------------------------
 
-    content = "hello from host\n"
-    local_src.write_text(content, encoding="utf-8")
-
-    target.upload(str(local_src), remote_path)
-    exit_code, output = target.execute(f"/bin/sh -c 'cat {remote_path}'")
-    assert exit_code == 0
-    assert output.decode() == content
-
-    target.download(remote_path, str(local_dst))
-    assert local_dst.read_text(encoding="utf-8") == content
+def test_exec_detached(target):
+    """Detached exec returns an exec-id that can be waited on."""
+    exec_id = target.exec(["/bin/sleep", "60"])
+    assert target.is_exec_running(exec_id)
+    target.kill_exec(exec_id)
+    exit_code = target.wait_exec(exec_id, timeout=5)
+    assert not target.is_exec_running(exec_id)
 
 
-def test_restart(target, tmp_path):
-    target.restart()
-    exit_code, output = target.execute("echo -n restarted")
-    assert exit_code == 0
-    assert output == b"restarted"
+def test_copy_round_trip(target):
+    """Copy a file into the container and back out, verify contents."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+        f.write("itf-target-test")
+        host_src = f.name
 
-
-CONTAINER_EXTRA_MNT_PATH = "/extra/mount/directory"
-
-
-@pytest.fixture(scope="session")
-def docker_configuration():
-    return {
-        "volumes": {
-            os.path.dirname(os.path.abspath(__file__)): {
-                "bind": CONTAINER_EXTRA_MNT_PATH,
-                "mode": "rw",
-            }
-        }
-    }
-
-
-def test_extra_mount(target):
-    exit_code, _ = target.execute(f"ls -al {CONTAINER_EXTRA_MNT_PATH}")
-    assert exit_code == 0, "Extra volume not mounted!"
+    try:
+        target.copy_to(host_src, "/tmp/round_trip.txt")
+        out_path = host_src + ".out"
+        target.copy_from("/tmp/round_trip.txt", out_path)
+        with open(out_path) as f:
+            assert f.read() == "itf-target-test"
+    finally:
+        os.unlink(host_src)
+        if os.path.exists(host_src + ".out"):
+            os.unlink(host_src + ".out")

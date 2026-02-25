@@ -78,11 +78,20 @@ pkg_tar(
     ],
 )
 
+pkg_tar(
+    name = "tcpdump-bins-pkg",
+    srcs = [
+        "@score_itf//third_party/tcpdump",
+    ],
+    package_dir = "usr/sbin",
+)
+
 oci_image(
     name = "image",
     base = "@ubuntu_24_04",
     tars = [
         ":dlt-pkg",
+        ":tcpdump-bins-pkg",
     ],
 )
 
