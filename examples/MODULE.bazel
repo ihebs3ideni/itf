@@ -21,7 +21,7 @@ module(
 # Python version
 #
 ###############################################################################
-bazel_dep(name = "rules_python", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "rules_python", version = "1.0.0")
 
 PYTHON_VERSION = "3.12"
 
@@ -38,7 +38,7 @@ use_repo(python)
 # LLVM Toolchains
 #
 ###############################################################################
-bazel_dep(name = "toolchains_llvm", version = "1.2.0", dev_dependency = True)
+bazel_dep(name = "toolchains_llvm", version = "1.2.0")
 
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
 llvm.toolchain(
@@ -55,21 +55,21 @@ register_toolchains("@llvm_toolchain//:all")
 # C++ rules
 #
 ###############################################################################
-bazel_dep(name = "rules_cc", version = "0.1.1", dev_dependency = True)
+bazel_dep(name = "rules_cc", version = "0.1.1")
 
 ###############################################################################
 #
 # Shell dependency
 #
 ###############################################################################
-bazel_dep(name = "rules_shell", version = "0.6.0", dev_dependency = True)
+bazel_dep(name = "rules_shell", version = "0.6.0")
 
 ###############################################################################
 #
 # Container dependencies
 #
 ###############################################################################
-bazel_dep(name = "rules_oci", version = "1.8.0", dev_dependency = True)
+bazel_dep(name = "rules_oci", version = "1.8.0")
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci", dev_dependency = True)
 
@@ -90,22 +90,22 @@ use_repo(oci, "ubuntu_24_04_examples")
 # Packaging dependencies
 #
 ###############################################################################
-bazel_dep(name = "rules_pkg", version = "1.0.1", dev_dependency = True)
+bazel_dep(name = "rules_pkg", version = "1.0.1")
 
 ###############################################################################
 #
 # Google Test dependency
 #
 ###############################################################################
-bazel_dep(name = "googletest", version = "1.15.0", dev_dependency = True)
+bazel_dep(name = "googletest", version = "1.15.0")
 
 ################################################################################
 #
 # Load QNX dependencies
 #
 ################################################################################
-bazel_dep(name = "score_toolchains_qnx", version = "0.0.7", dev_dependency = True)
-bazel_dep(name = "score_bazel_platforms", version = "0.0.3", dev_dependency = True)
+bazel_dep(name = "score_toolchains_qnx", version = "0.0.7")
+bazel_dep(name = "score_bazel_platforms", version = "0.0.3")
 
 toolchains_qnx = use_extension("@score_toolchains_qnx//:extensions.bzl", "toolchains_qnx")
 toolchains_qnx.sdp(
