@@ -272,6 +272,21 @@ def _read_output_with_timeout(stream, logger_in, log, max_exec_time, separate_st
                 continue
 
             if channel.exit_status_ready():
+                # Do not stop immediately on exit status; first ensure there is no
+                # more channel activity pending. This avoids truncating final output
+                # that may still be in-flight after process termination.
+                remaining = deadline - now
+                wait_after_exit = 0 if remaining <= 0 else min(0.1, remaining)
+                ready, _, _ = select.select([channel], [], [], wait_after_exit)
+                has_stdout = channel.recv_ready()
+                has_stderr = separate_stderr and channel.recv_stderr_ready()
+
+                if has_stdout or has_stderr:
+                    continue
+
+                # If select reports readiness but there is no buffered stdout/stderr,
+                # this typically indicates EOF/control-channel readiness, so capture
+                # can be completed safely.
                 break
 
             # Avoid busy-waiting. Paramiko Channel supports fileno() on POSIX, so we can
