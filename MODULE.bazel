@@ -21,7 +21,7 @@ module(
 # Python version
 #
 ###############################################################################
-bazel_dep(name = "rules_python", version = "1.4.1")
+bazel_dep(name = "rules_python", version = "1.4.1", dev_dependency = True)
 
 PYTHON_VERSION = "3.12"
 
@@ -51,7 +51,7 @@ use_repo(pip, "itf_pip")
 # Provides formatting and linting of Bazel files.
 #
 ###############################################################################
-bazel_dep(name = "buildifier_prebuilt", version = "8.2.0.2")
+bazel_dep(name = "buildifier_prebuilt", version = "8.2.0.2", dev_dependency = True)
 
 ###############################################################################
 #
@@ -70,21 +70,21 @@ git_override(
 # C++ rules
 #
 ###############################################################################
-bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "rules_cc", version = "0.1.1", dev_dependency = True)
 
 ###############################################################################
 #
 # Shell dependency
 #
 ###############################################################################
-bazel_dep(name = "rules_shell", version = "0.6.0")
+bazel_dep(name = "rules_shell", version = "0.6.0", dev_dependency = True)
 
 ###############################################################################
 #
 # Container dependencies
 #
 ###############################################################################
-bazel_dep(name = "rules_oci", version = "1.8.0")
+bazel_dep(name = "rules_oci", version = "1.8.0", dev_dependency = True)
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci", dev_dependency = True)
 
@@ -105,22 +105,22 @@ use_repo(oci, "ubuntu_24_04")
 # Packaging dependencies
 #
 ###############################################################################
-bazel_dep(name = "rules_pkg", version = "1.0.1")
+bazel_dep(name = "rules_pkg", version = "1.0.1", dev_dependency = True)
 
 ###############################################################################
 #
 # skylib dependency
 #
 ###############################################################################
-bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0", dev_dependency = True)
 
 ###############################################################################
 #
 # Score custom modules loading
 #
 ###############################################################################
-bazel_dep(name = "score_tooling", version = "1.0.4")
-bazel_dep(name = "score_bazel_platforms", version = "0.0.3")
+bazel_dep(name = "score_tooling", version = "1.0.4", dev_dependency = True)
+bazel_dep(name = "score_bazel_platforms", version = "0.0.3", dev_dependency = True)
 
 ################################################################################
 #
