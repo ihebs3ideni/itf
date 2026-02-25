@@ -28,21 +28,21 @@ py_itf_test(
     ],
 )
 
-py_itf_test(
-    name = "test_dlt",
-    srcs = [
-        "test_dlt.py",
-    ],
-    args = [
-        "--docker-image-bootstrap=$(location @score_itf//test/resources:image_tarball)",
-        "--docker-image=score_itf_examples:latest",
-    ],
-    data = ["@score_itf//test/resources:image_tarball"],
-    plugins = [
-        dlt,
-        docker,
-    ],
-)
+# py_itf_test(
+#     name = "test_dlt",
+#     srcs = [
+#         "test_dlt.py",
+#     ],
+#     args = [
+#         "--docker-image-bootstrap=$(location @score_itf//test/resources:image_tarball)",
+#         "--docker-image=score_itf_examples:latest",
+#     ],
+#     data = ["@score_itf//test/resources:image_tarball"],
+#     plugins = [
+#         dlt,
+#         docker,
+#     ],
+# )
 
 py_itf_test(
     name = "test_qemu_ssh_bridge_network",

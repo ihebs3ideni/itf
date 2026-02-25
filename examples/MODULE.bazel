@@ -71,7 +71,7 @@ bazel_dep(name = "rules_shell", version = "0.6.0")
 ###############################################################################
 bazel_dep(name = "rules_oci", version = "1.8.0")
 
-oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci", dev_dependency = True)
 
 # Declare external images you need to pull, for example:
 oci.pull(
