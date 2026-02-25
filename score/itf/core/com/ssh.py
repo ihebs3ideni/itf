@@ -10,10 +10,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-import os
 import time
 import logging
 import paramiko
+import shlex
+import select
 
 # Reduce the logging level of paramiko, from DEBUG to INFO
 logging.getLogger("paramiko").setLevel(logging.INFO)
@@ -49,10 +50,32 @@ class Ssh:
         self._timeout = timeout
         self._retries = n_retries
         self._retry_interval = retry_interval
-        self._ssh = None
-        self._pkey = paramiko.ECDSAKey.from_private_key_file(pkey_path) if pkey_path else None
         self._username = username
         self._password = password
+        self._ssh = None
+        self._pkey = self._load_private_key(pkey_path) if pkey_path else None
+
+    @staticmethod
+    def _load_private_key(pkey_path: str):
+        key_loaders = [
+            paramiko.RSAKey,
+            paramiko.ECDSAKey,
+            paramiko.Ed25519Key,
+            paramiko.DSSKey,
+        ]
+
+        load_errors = []
+        for key_loader in key_loaders:
+            try:
+                return key_loader.from_private_key_file(pkey_path)
+            except Exception as ex:
+                load_errors.append(f"{key_loader.__name__}: {ex}")
+
+        raise paramiko.SSHException(
+            f"Unsupported or invalid private key file '{pkey_path}'. "
+            f"Tried key types: {', '.join(key.__name__ for key in key_loaders)}. "
+            f"Details: {' | '.join(load_errors)}"
+        )
 
     def __enter__(self):
         self._ssh = paramiko.SSHClient()
@@ -80,48 +103,108 @@ class Ssh:
         else:
             raise Exception(f"SSH connection to {self._target_ip} failed")
 
-        return self._ssh
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._ssh.close()
-        logger.info("Closed SSH connection.")
+        if self._ssh is not None:
+            try:
+                self._ssh.close()
+            finally:
+                logger.info("Closed SSH connection.")
+
+    def get_paramiko_client(self):
+        return self._ssh
+
+    def execute_command_output(
+        self,
+        cmd,
+        timeout=30,
+        max_exec_time=180,
+        logger_in=None,
+        verbose=True,
+        separate_stderr=True,
+    ):
+        """Executes a command on a remote SSH server and captures the output, with both a start timeout and an execution timeout.
+
+        :param cmd: The command to be executed on the remote server.
+        :type cmd: str
+        :param timeout: The maximum time (in seconds) to wait for the command to begin executing. Defaults to 30 seconds.
+        :type timeout: int, optional
+        :param max_exec_time: The maximum time (in seconds) to wait for the command to complete execution. Defaults to 180 seconds.
+        :type max_exec_time: int, optional
+        :param logger_in: The logger object used for logging output. If None, the default logger is used. Defaults to None.
+        :type logger_in: logging.Logger, optional
+        :param verbose: If True, logs the command output. Defaults to True.
+        :type verbose: bool, optional
+        :param separate_stderr: If True, stderr is captured separately. If False, stderr is merged into stdout.
+            Defaults to True.
+        :type separate_stderr: bool, optional
+
+        :return: A tuple containing the exit status, the standard output lines, and the standard error lines.
+            When separate_stderr is False, stderr lines are merged into stdout and the stderr list is empty.
+        :rtype: tuple(int, list[str], list[str])
+        """
+
+        def command_with_etc(cmd: str) -> str:
+            # Source if present, ignore errors, then run the original command
+            inner = f"[ -r /etc/profile ] && . /etc/profile >/dev/null 2>&1; {cmd}"
+            return f"sh -lc {shlex.quote(inner)}"
+
+        cmd_ipn = command_with_etc(cmd)
+        _, stdout, _ = self._ssh.exec_command(cmd_ipn, timeout=timeout)
+
+        stdout_lines, stderr_lines, exception = _read_output_with_timeout(
+            stdout,
+            logger_in,
+            verbose,
+            max_exec_time,
+            separate_stderr=separate_stderr,
+        )
+
+        try:
+            if exception:
+                logger.error(f"Command '{cmd}' did not finish within {max_exec_time} seconds")
+                return -1, stdout_lines, stderr_lines
+            return stdout.channel.recv_exit_status(), stdout_lines, stderr_lines
+        finally:
+            channel = stdout.channel
+            if not channel.closed:
+                channel.close()
+
+    def execute_command(self, cmd, timeout=30, max_exec_time=180, logger_in=None, verbose=True):
+        logger.debug(f"Executing command: {cmd}")
+        logger.debug(f"timeout: {timeout}; max_exec_time: {max_exec_time}; logger_in: {logger_in}; verbose: {verbose};")
+
+        exit_code, stdout_lines, stderr_lines = self.execute_command_output(
+            cmd, timeout, max_exec_time, logger_in, verbose
+        )
+
+        if exit_code != 0:
+            stdout_lines = "\n".join(stdout_lines)
+            stderr_lines = "\n".join(stderr_lines)
+            logger.debug(f"Exit code was {exit_code}.")
+            logger.debug(f"stdout_lines: {stdout_lines}")
+            logger.debug(f"stderr_lines: {stderr_lines}")
+
+        return exit_code
 
 
-def command_with_etc(command):
-    return f"if uname >/dev/null 2>&1; then ({command}); else (if [ -e /etc/profile ]; then (. /etc/profile; {command}); else ({command}); fi;); fi"
+def _iter_channel_lines_from_bytes(
+    data: bytes,
+    partial: str,
+    encoding: str = "utf-8",
+    errors: str = "replace",
+):
+    text = partial + data.decode(encoding, errors=errors)
+    lines = text.splitlines(keepends=True)
+    if lines and not lines[-1].endswith("\n"):
+        partial = lines.pop()
+    else:
+        partial = ""
+    return lines, partial
 
 
-def _read_output(stream_type, stream, logger_in, log):
-    """Logs the output from a given stream and returns the lines of output.
-
-    :param stream_type: The type of stream to read the output from (stdout or stderr).
-    :type stream_type: str
-    :param stream: The stream to read the output from (stdout or stderr).
-    :type stream: paramiko.ChannelFile
-    :param logger_in: The logger object used for logging output. If None, the default logger is used.
-    :type logger_in: logging.Logger, optional
-    :param log: Boolean to know if to log the output or not
-    :type log: bool, optional
-
-    :return: A list of lines read from the stream.
-    :rtype: list[str]
-    """
-
-    if not logger_in and log:
-        logger_in = logging.getLogger()
-
-    lines = []
-    recv_ready_method = stream.channel.recv_ready if stream_type == "stdout" else stream.channel.recv_stderr_ready
-    if recv_ready_method():
-        lines = stream.readlines()
-        if log:
-            for line in lines:
-                logger_in.info(line.strip())
-
-    return lines
-
-
-def _read_output_with_timeout(stream, logger_in, log, max_exec_time):
+def _read_output_with_timeout(stream, logger_in, log, max_exec_time, separate_stderr: bool = False):
     """Logs the output from a given stream and returns the lines of output.
 
     :param stream: The stream to read the output from (should be stdout).
@@ -133,176 +216,84 @@ def _read_output_with_timeout(stream, logger_in, log, max_exec_time):
     :param max_exec_time: The maximum time (in seconds) to wait for the read operations to occur.
     :type max_exec_time: int
 
-    :return: A list of lines read from the stream.
-    :rtype: list[str]
+    :param separate_stderr: If True, also captures stderr separately (via the underlying Channel).
+    :type separate_stderr: bool
+
+    :return: A tuple of (stdout_lines, stderr_lines, exception). If separate_stderr is False,
+        stderr_lines will be an empty list. If no exception occurred, exception will be an empty string.
+    :rtype: tuple(list[str], list[str], Exception | str)
     """
 
     if not logger_in and log:
         logger_in = logging.getLogger()
 
-    stream.channel.settimeout(max_exec_time)
-    start_time = time.time()
-    lines = []
-    try:
-        while not stream.channel.exit_status_ready() or stream.channel.recv_ready():
-            line = stream.readline()
-            lines.append(line)
-            if log:
-                logger_in.info(line.strip())
-            elapsed_time = time.time() - start_time
-            stream.channel.settimeout(max_exec_time - elapsed_time)
-    except Exception as ex:
-        return lines, ex
-    return lines, ""
+    channel = stream.channel
 
-
-def execute_command_merged_output(ssh_connection, cmd, timeout=30, max_exec_time=180, logger_in=None, verbose=True):
-    """Executes a command on a remote SSH server and captures the output, with both a start timeout and an execution timeout.
-
-    :param ssh_connection: The SSH connection object used to execute the command.
-    :type ssh_connection: paramiko.SSHClient
-    :param cmd: The command to be executed on the remote server.
-    :type cmd: str
-    :param timeout: The maximum time (in seconds) to wait for the command to begin executing. Defaults to 30 seconds.
-    :type timeout: int, optional
-    :param max_exec_time: The maximum time (in seconds) to wait for the command to complete execution. Defaults to 60 seconds.
-    :type max_exec_time: int, optional
-    :param logger_in: The logger object used for logging output. If None, the default logger is used. Defaults to None.
-    :type logger_in: logging.Logger, optional
-    :param verbose: If True, logs the command output. Defaults to True.
-    :type verbose: bool, optional
-
-    :return: A tuple containing the exit status, and the merged standard output and standard error lines.
-    :rtype: tuple(int, list[str])
-    """
-
-    cmd_ipn = command_with_etc(cmd)
-    stdin, stdout, stderr = ssh_connection.exec_command(cmd_ipn, timeout=timeout)
-
-    output_lines = []
-    stdout.channel.set_combine_stderr(True)
-    output_lines, exception = _read_output_with_timeout(stdout, logger_in, verbose, max_exec_time)
-    try:
-        found_exception = False
-        if exception:
-            ssh_connection.exec_command(f"pkill -f '{cmd_ipn}'")
-            logger.error(f"Command '{cmd}' took more than {max_exec_time} seconds to run, process was killed.")
-            found_exception = True
-    except Exception as ex:
-        logger.error(f"Exception: '{ex}'")
-        found_exception = True
-    try:
-        rvalue = -1 if found_exception else stdout.channel.recv_exit_status()
-    except Exception:
-        logger.error(f"Could not retrieve exit status of command '{cmd}'.")
-        rvalue = -1
-    finally:
-        if not stdout.channel.closed:
-            stdout.channel.close()
-        if not stderr.channel.closed:
-            stderr.channel.close()
-        if not stdin.channel.closed:
-            stdin.channel.close()
-    return rvalue, output_lines
-
-
-def execute_command_output(ssh_connection, cmd, timeout=30, max_exec_time=180, logger_in=None, verbose=True):
-    """Executes a command on a remote SSH server and captures the output, with both a start timeout and an execution timeout.
-
-    :param ssh_connection: The SSH connection object used to execute the command.
-    :type ssh_connection: paramiko.SSHClient
-    :param cmd: The command to be executed on the remote server.
-    :type cmd: str
-    :param timeout: The maximum time (in seconds) to wait for the command to begin executing. Defaults to 30 seconds.
-    :type timeout: int, optional
-    :param max_exec_time: The maximum time (in seconds) to wait for the command to complete execution. Defaults to 60 seconds.
-    :type max_exec_time: int, optional
-    :param logger_in: The logger object used for logging output. If None, the default logger is used. Defaults to None.
-    :type logger_in: logging.Logger, optional
-    :param verbose: If True, logs the command output. Defaults to True.
-    :type verbose: bool, optional
-
-    :return: A tuple containing the exit status, the standard output lines, and the standard error lines.
-    :rtype: tuple(int, list[str], list[str])
-    """
-
-    cmd_ipn = command_with_etc(cmd)
-    stdin, stdout, stderr = ssh_connection.exec_command(cmd_ipn, timeout=timeout)
+    # Ensure the channel is configured consistently with the requested capture mode.
+    # - separate_stderr=False: merge stderr into stdout
+    # - separate_stderr=True: keep stderr separate
+    channel.set_combine_stderr(not separate_stderr)
 
     start_time = time.time()
+    deadline = start_time + max_exec_time
+    channel.settimeout(0.5)
+
     stdout_lines = []
     stderr_lines = []
-
+    stdout_partial = ""
+    stderr_partial = ""
     try:
-        while not stdout.channel.exit_status_ready():
-            if time.time() - start_time > max_exec_time:
-                stdout_lines.extend(_read_output("stdout", stdout, logger_in, verbose))
-                stderr_lines.extend(_read_output("stderr", stderr, logger_in, verbose))
-                ssh_connection.exec_command(f"pkill -f '{cmd_ipn}'")
-                logger.error(f"Command '{cmd}' took more than {max_exec_time} seconds to run, process was killed.")
-                return -1, stdout_lines, stderr_lines
+        while True:
+            now = time.time()
+            if now > deadline:
+                raise TimeoutError(f"Command did not finish within {max_exec_time} seconds")
 
-            stdout_lines.extend(_read_output("stdout", stdout, logger_in, verbose))
-            stderr_lines.extend(_read_output("stderr", stderr, logger_in, verbose))
-            time.sleep(0.1)
+            did_read = False
 
-        stdout_lines.extend(_read_output("stdout", stdout, logger_in, verbose))
-        stderr_lines.extend(_read_output("stderr", stderr, logger_in, verbose))
+            if channel.recv_ready():
+                data = channel.recv(32768)
+                new_lines, stdout_partial = _iter_channel_lines_from_bytes(data, stdout_partial)
+                stdout_lines.extend(new_lines)
+                if log:
+                    for line in new_lines:
+                        logger_in.info(line.rstrip("\n"))
+                did_read = True
 
-        return stdout.channel.recv_exit_status(), stdout_lines, stderr_lines
+            if separate_stderr and channel.recv_stderr_ready():
+                data = channel.recv_stderr(32768)
+                new_lines, stderr_partial = _iter_channel_lines_from_bytes(data, stderr_partial)
+                stderr_lines.extend(new_lines)
+                if log:
+                    for line in new_lines:
+                        logger_in.info(line.rstrip("\n"))
+                did_read = True
 
-    finally:
-        if not stdout.channel.closed:
-            stdout.channel.close()
-        if not stderr.channel.closed:
-            stderr.channel.close()
-        if not stdin.channel.closed:
-            stdin.channel.close()
+            if did_read:
+                continue
 
+            if channel.exit_status_ready():
+                break
 
-def execute_command(ssh_connection, cmd, timeout=30, max_exec_time=180, logger_in=None, verbose=True):
-    logger.debug(f"Executing command: {cmd}")
-    logger.debug(f"timeout: {timeout}; max_exec_time: {max_exec_time}; logger_in: {logger_in}; verbose: {verbose};")
-    exit_code, stdout_lines, stderr_lines = execute_command_output(
-        ssh_connection, cmd, timeout, max_exec_time, logger_in, verbose
-    )
-    if exit_code != 0:
-        stdout_lines = "\n".join(stdout_lines)
-        stderr_lines = "\n".join(stderr_lines)
-        logger.debug(f"Exit code was {exit_code}.")
-        logger.debug(f"stdout_lines: {stdout_lines}")
-        logger.debug(f"stderr_lines: {stderr_lines}")
+            # Avoid busy-waiting. Paramiko Channel supports fileno() on POSIX, so we can
+            # use select() to wait for activity up to a small slice of the remaining time.
+            remaining = deadline - now
+            if remaining <= 0:
+                continue
+            wait = min(0.5, remaining)
+            try:
+                select.select([channel], [], [], wait)
+            except Exception:
+                # Fallback: channel may not be selectable on some platforms.
+                time.sleep(min(0.05, remaining))
+    except Exception as ex:
+        if stdout_partial:
+            stdout_lines.append(stdout_partial)
+        if stderr_partial:
+            stderr_lines.append(stderr_partial)
+        return stdout_lines, stderr_lines, ex
 
-    return exit_code
-
-
-# pylint: disable=too-many-locals
-def binary_transfer(ssh_connection, binary, destination, buffer_size=4 * 1024, logger_in=None):
-    mega_bytes = 1024 * 1024
-    if not logger_in:
-        logger_in = logging.getLogger()
-    cmd = f"dd of={destination} bs=64k"
-    cmd_ipn = command_with_etc(cmd)
-    stdin, stdout, stderr = ssh_connection.exec_command(cmd_ipn)
-    size = os.stat(binary).st_size
-    transferred = 0
-    peer_address, peer_port = ssh_connection.get_transport().getpeername()
-    logger_in.info(f"Transferring {binary} to {destination} over {peer_address}:{peer_port}")
-    time_start = time.time()
-    with open(binary, "rb") as f:
-        data = f.read(buffer_size)
-        while data != b"":
-            stdin.write(data)
-            transferred += len(data)
-            if transferred % (mega_bytes * 10) == 0:
-                time_end = time.time()
-                mbps = transferred / (time_end - time_start) / 1024 / 1024
-                logger_in.info(f"{transferred // mega_bytes}/{size // mega_bytes} MB transferred, {mbps:.2f} MB/s")
-            data = f.read(buffer_size)
-    stdin.close()
-    exit_status = stdout.channel.recv_exit_status()
-    if exit_status:
-        stderr_lines = "\n".join([line.rstrip() for line in stderr.readlines()])
-        raise RuntimeError(
-            "\n".join([f"Transferring {binary} to {destination} failed", "with stderr output:", stderr_lines])
-        )
+    if stdout_partial:
+        stdout_lines.append(stdout_partial)
+    if stderr_partial:
+        stderr_lines.append(stderr_partial)
+    return stdout_lines, stderr_lines, ""

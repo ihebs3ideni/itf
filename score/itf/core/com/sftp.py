@@ -13,7 +13,8 @@
 import os
 import stat
 import logging
-from score.itf.core.com.ssh import Ssh, execute_command
+
+from score.itf.core.com.ssh import Ssh
 
 # Reduce the logging level of paramiko, from DEBUG to INFO
 logging.getLogger("paramiko").setLevel(logging.INFO)
@@ -58,13 +59,13 @@ class Sftp:
         """
         if self._new_ssh:
             self._ssh = self._ssh.__enter__()
-        self._sftp = self._ssh.open_sftp()
+        self._sftp = self._ssh.get_paramiko_client().open_sftp()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._sftp.close()
         if self._new_ssh:
-            self._ssh.close()
+            self._ssh.__exit__(exc_type, exc_val, exc_tb)
             logger.info("Closed SSH connection.")
 
     def walk(self, remote_path):
@@ -102,7 +103,7 @@ class Sftp:
             logger.error(f"Missing file '{local_path}' while trying to upload")
         remote_dir = os.path.dirname(remote_path)
         assert (
-            execute_command(self._ssh, f"test -d {remote_dir} || mkdir -p {remote_dir}") == 0
+            self._ssh.execute_command(f"test -d {remote_dir} || mkdir -p {remote_dir}") == 0
         ), f"Could not create remote path: {os.path.dirname(remote_path)}"
         self._sftp.put(local_path, remote_path)
 

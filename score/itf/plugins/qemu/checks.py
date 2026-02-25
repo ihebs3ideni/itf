@@ -15,8 +15,6 @@
 
 import logging
 
-from score.itf.core.com.ssh import execute_command
-
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +49,7 @@ def _check_ssh_is_up(target, check_timeout: int = 15, check_n_retries: int = 5):
     :raises AssertionError: If the SSH command fails within the specified time-frame.
     """
     with target.ssh(timeout=check_timeout, n_retries=check_n_retries, retry_interval=2) as ssh:
-        result = execute_command(ssh, "echo Qnx_S-core!")
+        result = ssh.execute_command("echo Qnx_S-core!")
     assert result == 0, "Running SSH command on the target failed"
     logger.info("Check target ssh: OK")
 

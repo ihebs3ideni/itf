@@ -13,7 +13,6 @@
 
 import os
 import score.itf
-from score.itf.core.com.ssh import execute_command
 
 
 def test_ssh_with_default_user(target):
@@ -24,7 +23,7 @@ def test_ssh_with_default_user(target):
 @score.itf.plugins.core.requires_capabilities("ssh")
 def test_ssh_with_qnx_user(target):
     with target.ssh(username="qnxuser") as ssh:
-        exit_code = execute_command(ssh, "echo 'Username:' $USER && uname -a")
+        exit_code = ssh.execute_command("echo 'Username:' $USER && uname -a")
         assert exit_code == 0
 
 
@@ -51,7 +50,7 @@ def test_upload_download(target, tmp_path):
 def _wait_for_target_up(target, *, timeout_s: int = 120) -> None:
     assert target.ping(timeout=timeout_s), "Target did not become pingable in time"
     with target.ssh(timeout=10, n_retries=max(1, int(timeout_s / 2)), retry_interval=2) as ssh:
-        exit_code = execute_command(ssh, "echo -n up")
+        exit_code = ssh.execute_command("echo -n up")
         assert exit_code == 0
 
 
