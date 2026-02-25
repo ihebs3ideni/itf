@@ -17,6 +17,7 @@ ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testi
 
 - **Plugin-Based Architecture**: Modular design with support for Docker, QEMU, DLT, and custom plugins
 - **Target Abstraction**: Unified `Target` interface with capability-based system for different test environments
+- **Docker Target**: Full-featured `target` fixture with exec, file I/O, log capture, tcpdump, and SSH
 - **Flexible Testing**: Write tests once, run across multiple targets (Docker, QEMU, hardware)
 - **Capability System**: Tests can query and adapt based on available target capabilities
 - **Bazel Integration**: Seamless integration with Bazel build system via `py_itf_test` macro
@@ -63,6 +64,20 @@ py_itf_test(
 
 ## Architecture
 
+### Docker Target
+
+The Docker plugin provides a `target` fixture that yields a `DockerTarget` instance.
+`DockerTarget` wraps a Docker container and provides a rich API for executing
+commands, transferring files, capturing logs, running tcpdump, and establishing
+SSH connections.
+
+| Feature | Details |
+|---|---|
+| **Fixture** | `target` |
+| **Scope** | function (or session with `--keep-target`) |
+| **Yields** | `DockerTarget` |
+| **Capabilities** | exec, file I/O, log capture, tcpdump, SSH |
+
 ### Target System
 
 ITF uses a capability-based target system. The `Target` base class provides a common interface that all target implementations extend:
@@ -82,7 +97,7 @@ from score.itf.plugins.core import requires_capabilities
 
 @requires_capabilities("exec")
 def test_docker_command(target):
-    exit_code, output = target.exec_run("ls -la")
+    exit_code, output = target.exec("ls -la", detach=False)
     assert exit_code == 0
 
 @requires_capabilities("ssh", "sftp")
@@ -118,11 +133,27 @@ def test_basic(target):
 
 ### Docker Tests
 
+Docker tests use the `target` fixture, which provides a `DockerTarget` with
+exec, file I/O, log capture, tcpdump, and SSH capabilities:
+
 ```python
 def test_docker_exec(target):
-    exit_code, output = target.exec_run("uname -a")
+    exit_code, output = target.exec("uname -a", detach=False)
     assert exit_code == 0
     assert b"Linux" in output
+```
+
+Detached execution with automatic log capture:
+
+```python
+def test_background_binary(target):
+    # Starts binary in background; stdout/stderr are captured to the test log
+    exec_id = target.exec(["/opt/bin/my_app"], detach=True)
+    assert target.is_exec_running(exec_id)
+
+    # Wait for completion or kill
+    target.kill_exec(exec_id)
+    target.wait_exec(exec_id, timeout=5)
 ```
 
 BUILD file:
@@ -130,7 +161,11 @@ BUILD file:
 py_itf_test(
     name = "test_docker",
     srcs = ["test_docker.py"],
-    args = ["--docker-image=ubuntu:24.04"],
+    args = [
+        "--docker-image-bootstrap=$(location //path:image_tarball)",
+        "--docker-image=my_image:latest",
+    ],
+    data = ["//path:image_tarball"],
     plugins = [docker],
 )
 ```
@@ -190,7 +225,7 @@ from score.itf.plugins.core import requires_capabilities
 @requires_capabilities("exec")
 def test_docker_specific(target):
     # Only runs on targets with 'exec' capability
-    target.exec_run("echo test")
+    target.exec("echo test", detach=False)
 
 @requires_capabilities("ssh", "sftp")
 def test_network_features(target):
@@ -198,6 +233,69 @@ def test_network_features(target):
     with target.ssh() as ssh:
         pass
 ```
+
+## DockerTarget API
+
+The `target` fixture yields a `DockerTarget` instance. Key methods:
+
+| Method | Description |
+|---|---|
+| `exec(cmd, workdir="/", detach=True)` | Run a command inside the container. Returns exec-ID (detach), `(exit_code, output)` (sync), or `(exec_id, generator)` (stream). Detached execs get automatic log capture. |
+| `copy_to(host_path, container_path)` | Copy files from host into the container. |
+| `copy_from(container_path, host_path)` | Copy files out of the container. |
+| `get_ip(network="bridge")` | Get the container's IP address. |
+| `get_gateway(network="bridge")` | Get the network gateway address. |
+| `is_exec_running(exec_id)` | Check if a detached exec is still running. |
+| `wait_exec(exec_id, timeout)` | Block until exec finishes or times out. |
+| `kill_exec(exec_id, signal=9)` | Kill a detached process (works inside Bazel sandbox). |
+| `get_exec_output(exec_id)` | Get the captured output of a detached exec. |
+| `ssh()` | Open an SSH connection to the container. |
+| `tcpdump_handler()` | Return a `DockerTcpDumpHandler` for use with `TcpDumpCapture`. |
+| `stop(timeout=2)` | Stop and remove the container. |
+
+```python
+def test_full_api(target):
+    # Synchronous exec
+    exit_code, output = target.exec(["echo", "hello"], detach=False)
+    assert exit_code == 0
+
+    # Detached exec with log capture + kill
+    exec_id = target.exec(["/bin/sleep", "60"], detach=True)
+    assert target.is_exec_running(exec_id)
+    target.kill_exec(exec_id)
+
+    # File transfer
+    target.copy_to("/tmp/local_file.txt", "/opt/data/file.txt")
+    target.copy_from("/opt/data/result.txt", "/tmp/result.txt")
+
+    # Network info
+    ip = target.get_ip()
+    gateway = target.get_gateway()
+```
+
+### TcpDump Integration
+
+`TcpDumpCapture` is a target-agnostic context manager in `core/com` that
+captures network traffic using tcpdump.  Each target plugin provides a
+`tcpdump_handler()` method that returns the appropriate
+`TcpDumpHandler` implementation:
+
+```python
+from score.itf.core.com.tcpdump import TcpDumpCapture
+
+def test_network_capture(target):
+    with TcpDumpCapture(
+        target.tcpdump_handler(),
+        filter_expr="port 80",
+        interface="eth0",
+    ) as cap:
+        # Run operations that generate network traffic
+        target.exec(["curl", "http://example.com"], detach=False)
+    # cap.host_path points to the pcap on the host
+```
+
+Custom handlers can be implemented for any target type by subclassing
+`TcpDumpHandler` from `score.itf.core.com.tcpdump`.
 
 ## Communication APIs
 
@@ -327,19 +425,19 @@ py_itf_test(
 
 ### Target Lifecycle Management
 
-Control whether targets persist across tests using the `--keep-target` flag:
+Control the target lifecycle with the `--keep-target` flag:
 
 ```bash
-# Keep target running between tests (faster, but shared state)
-bazel test //test:my_test -- --test_arg="--keep-target"
-
-# Default: Create fresh target for each test
+# Default: Create a fresh target for each test (clean state)
 bazel test //test:my_test
+
+# Keep target running between tests (faster, shared state)
+bazel test //test:my_test -- --test_arg="--keep-target"
 ```
 
 ### Custom Docker Configuration
 
-Override Docker settings in tests:
+Override Docker settings for integration tests via `docker_configuration`:
 
 ```python
 import pytest
@@ -349,13 +447,23 @@ def docker_configuration():
     return {
         "environment": {"MY_VAR": "value"},
         "command": "my-custom-command",
-        "ports": {"8080/tcp": 8080},
     }
 
 def test_with_custom_docker(target):
     # Uses custom configuration
     pass
 ```
+
+The `docker_configuration` fixture supports the following keys:
+
+| Key | Description |
+|---|---|
+| `environment` | Dict of environment variables |
+| `command` | Container entrypoint command |
+| `volumes` | Dict of volume mounts (`{host_path: {"bind": path, "mode": "rw"}}`) |
+| `privileged` | Run container in privileged mode |
+| `network_mode` | Docker network mode (e.g., `"host"`) |
+| `shm_size` | Shared memory size (e.g., `"256m"`) |
 ## Running Tests
 
 ### Basic Test Execution
@@ -380,8 +488,11 @@ bazel test //test:test_docker --nocache_test_results
 ### Docker Tests
 
 ```bash
-bazel test //test:test_docker \
-    --test_arg="--docker-image=ubuntu:24.04"
+# Run docker tests
+bazel test //test:test_docker --test_output=all
+
+# Run example tests
+bazel test //examples/itf:test_example_app --test_output=all
 ```
 
 ### QEMU Tests
@@ -504,13 +615,17 @@ py_itf_test(
 ```
 score/itf/
 ├── core/                 # Core ITF functionality
-│   ├── com/              # Communication modules (SSH, SFTP)
+│   ├── com/              # Communication modules (SSH, SFTP, ping, tcpdump)
+│   │   ├── ssh.py        # SSH connection context manager
+│   │   ├── tcpdump.py    # TcpDumpCapture + TcpDumpHandler (abstract)
+│   │   ├── sftp.py       # SFTP file transfer
+│   │   └── ping.py       # Ping utilities
 │   ├── process/          # Process management
-│   ├── target/           # Target base class
+│   ├── target/           # Target base class with capability system
 │   └── utils/            # Utility functions
 ├── plugins/              # Plugin implementations
-│   ├── core.py           # Core plugin with Target and decorators
-│   ├── docker.py         # Docker plugin
+│   ├── core.py           # Core plugin (Target fixture, requires_capabilities)
+│   ├── docker.py         # Docker plugin (DockerTarget, DockerTcpDumpHandler)
 │   ├── dlt/              # DLT plugin
 │   └── qemu/             # QEMU plugin
 └── ...

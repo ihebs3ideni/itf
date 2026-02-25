@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -10,28 +10,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@itf_pip//:requirements.bzl", "requirement")
-load("@rules_python//python:defs.bzl", "py_library")
-
-py_library(
-    name = "core",
-    srcs = ["core.py"],
+alias(
+    name = "tcpdump",
+    actual = "@tcpdump",
     visibility = ["//visibility:public"],
-    deps = [
-        "//score/itf/core/target",
-        requirement("pytest"),
-    ],
 )
 
-py_library(
-    name = "docker",
-    srcs = ["docker.py"],
+alias(
+    name = "libpcap",
+    actual = "@libpcap",
     visibility = ["//visibility:public"],
-    deps = [
-        ":core",
-        "//score/itf/core/target",
-        "//score/itf/core/com",
-        requirement("docker"),
-        requirement("pytest"),
-    ],
 )

@@ -179,6 +179,41 @@ http_archive(
 
 ################################################################################
 #
+# Load tcpdump / libpcap dependencies
+#
+################################################################################
+LIBPCAP_VERSION = "1.10.5"
+
+http_archive(
+    name = "libpcap",
+    build_file = "//third_party/tcpdump:libpcap.BUILD",
+    patch_args = ["-p1"],
+    patch_tool = "patch",
+    patches = [
+        "//third_party/tcpdump:0001-Add-generated-config-and-flex-bison-files-for-libpcap.patch",
+    ],
+    sha256 = "6cd9835338ca334b699b1217e2aee2b873463c76aafd19b8b9d4710554f025ac",
+    strip_prefix = "libpcap-libpcap-%s" % LIBPCAP_VERSION,
+    url = "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-%s.tar.gz" % LIBPCAP_VERSION,
+)
+
+TCPDUMP_VERSION = "4.99.5"
+
+http_archive(
+    name = "tcpdump",
+    build_file = "//third_party/tcpdump:tcpdump.BUILD",
+    patch_args = ["-p1"],
+    patch_tool = "patch",
+    patches = [
+        "//third_party/tcpdump:0001-Add-generated-config-for-tcpdump.patch",
+    ],
+    sha256 = "7f5dde921c3234c06b89543a999a1991fe89ba5e37b91edae3eb96c858c6bc1a",
+    strip_prefix = "tcpdump-tcpdump-%s" % TCPDUMP_VERSION,
+    url = "https://github.com/the-tcpdump-group/tcpdump/archive/refs/tags/tcpdump-%s.tar.gz" % TCPDUMP_VERSION,
+)
+
+################################################################################
+#
 # Load QNX dependencies
 #
 ################################################################################

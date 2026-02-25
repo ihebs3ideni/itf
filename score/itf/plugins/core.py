@@ -64,7 +64,7 @@ def requires_capabilities(*capabilities):
     Example:
         @requires_capabilities("exec", "ssh")
         def test_remote_command(target):
-            target.exec_run("ls -la")
+            target.exec("ls -la", detach=False)
     """
 
     def decorator(func):

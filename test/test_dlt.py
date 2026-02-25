@@ -56,17 +56,17 @@ def get_docker_network_gateway(target):
 
 def send_secret_dlt_message(target):
     for i in range(10):
-        target.exec_run(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"')
+        target.exec(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"', detach=False)
 
-    target.exec_run(f'/bin/sh -c "echo -n This is a secret message | /usr/bin/dlt-adaptor-stdin"')
+    target.exec(f'/bin/sh -c "echo -n This is a secret message | /usr/bin/dlt-adaptor-stdin"', detach=False)
 
     for i in range(10):
-        target.exec_run(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"')
+        target.exec(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"', detach=False)
 
 
 def test_dlt_direct_tcp(target, dlt_config, caplog):
     ipaddress = get_container_ip(target)
-    target.exec_run(f"/usr/bin/dlt-daemon -d")
+    target.exec(f"/usr/bin/dlt-daemon -d", detach=False)
 
     with DltReceive(
         protocol=Protocol.TCP,
@@ -89,7 +89,7 @@ def test_dlt_direct_tcp(target, dlt_config, caplog):
 def test_dlt_multicast_udp(target, dlt_config, caplog):
     ipaddress = get_container_ip(target)
     gateway = get_docker_network_gateway(target)
-    target.exec_run(f"/usr/bin/dlt-daemon -d")
+    target.exec(f"/usr/bin/dlt-daemon -d", detach=False)
 
     with DltReceive(
         protocol=Protocol.UDP,
@@ -113,7 +113,7 @@ def test_dlt_multicast_udp(target, dlt_config, caplog):
 def test_dlt_window_no_stdout(target, dlt_config):
     ipaddress = get_container_ip(target)
     gateway = get_docker_network_gateway(target)
-    target.exec_run(f"/usr/bin/dlt-daemon -d")
+    target.exec(f"/usr/bin/dlt-daemon -d", detach=False)
 
     with DltWindow(
         protocol=Protocol.UDP,
@@ -130,7 +130,7 @@ def test_dlt_window_no_stdout(target, dlt_config):
 def test_dlt_window_stdout(target, dlt_config):
     ipaddress = get_container_ip(target)
     gateway = get_docker_network_gateway(target)
-    target.exec_run(f"/usr/bin/dlt-daemon -d")
+    target.exec(f"/usr/bin/dlt-daemon -d", detach=False)
 
     with DltWindow(
         protocol=Protocol.UDP,
@@ -148,7 +148,7 @@ def test_dlt_window_stdout(target, dlt_config):
 def test_dlt_window_with_filter(target, dlt_config):
     ipaddress = get_container_ip(target)
     gateway = get_docker_network_gateway(target)
-    target.exec_run(f"/usr/bin/dlt-daemon -d")
+    target.exec(f"/usr/bin/dlt-daemon -d", detach=False)
 
     with DltWindow(
         protocol=Protocol.UDP,
@@ -167,7 +167,7 @@ def test_dlt_window_with_filter(target, dlt_config):
 def test_dlt_window_with_record(target, dlt_config):
     ipaddress = get_container_ip(target)
     gateway = get_docker_network_gateway(target)
-    target.exec_run(f"/usr/bin/dlt-daemon -d")
+    target.exec(f"/usr/bin/dlt-daemon -d", detach=False)
 
     with DltWindow(
         protocol=Protocol.UDP,
@@ -184,3 +184,62 @@ def test_dlt_window_with_record(target, dlt_config):
                 break
         else:
             pytest.fail("Expected message not received")
+
+
+# -- target-based DLT tests ---------------------------------------------------
+
+def _send_dlt_messages(target):
+    """Inject DLT messages into the container via dlt-adaptor-stdin."""
+    for i in range(5):
+        target.exec(
+            ["/bin/sh", "-c", f"echo -n padding{i} | /usr/bin/dlt-adaptor-stdin"],
+            detach=False,
+        )
+    target.exec(
+        ["/bin/sh", "-c", "echo -n 'Hello from target' | /usr/bin/dlt-adaptor-stdin"],
+        detach=False,
+    )
+    for i in range(5):
+        target.exec(
+            ["/bin/sh", "-c", f"echo -n padding{i} | /usr/bin/dlt-adaptor-stdin"],
+            detach=False,
+        )
+
+
+def test_dlt_tcp_from_target(target, dlt_config, caplog):
+    """Capture DLT over TCP directly from the target container."""
+    container_ip = target.get_ip()
+    target.exec(["/usr/bin/dlt-daemon", "-d"], detach=False)
+
+    with DltReceive(
+        protocol=Protocol.TCP,
+        target_ip=container_ip,
+        print_to_stdout=True,
+        logger_name="target_dlt",
+        binary_path=dlt_config.dlt_receive_path,
+    ):
+        _send_dlt_messages(target)
+
+    for record in caplog.records:
+        if record.name == "target_dlt":
+            if "Hello from target" in record.getMessage():
+                break
+    else:
+        pytest.fail("Expected DLT message 'Hello from target' was not received via TCP")
+
+
+def test_dlt_window_from_target(target, dlt_config):
+    """Use DltWindow to capture and query DLT messages from the target."""
+    gateway = target.get_gateway()
+    target.exec(["/usr/bin/dlt-daemon", "-d"], detach=False)
+
+    with DltWindow(
+        protocol=Protocol.UDP,
+        host_ip=gateway,
+        multicast_ips=["224.0.0.1"],
+        print_to_stdout=True,
+        binary_path=dlt_config.dlt_receive_path,
+    ) as window:
+        _send_dlt_messages(target)
+        assert len(window.get_logged_output()) > 0
+        assert "Hello from target" in window.get_logged_output()
