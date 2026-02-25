@@ -84,7 +84,7 @@ def py_itf_test(name, srcs, args = [], data = [], data_as_exec = [], plugins = [
                ] +
                plugin_enable_args +
                plugin_args +
-               ["$(location %s)" % x for x in srcs],
+               ["$(locations %s)" % x for x in srcs],
         env = {
             "PYTHONDONOTWRITEBYTECODE": "1",
         },
