@@ -17,6 +17,7 @@ import os
 import tarfile
 import docker as pypi_docker
 import pytest
+import shlex
 
 from score.itf.plugins.core import determine_target_scope
 from score.itf.plugins.core import Target
@@ -51,7 +52,7 @@ class DockerTarget(Target):
         return getattr(self.container, name)
 
     def execute(self, command: str):
-        return self.container.exec_run(command)
+        return self.container.exec_run(f"/bin/sh -c {shlex.quote(command)}")
 
     def upload(self, local_path: str, remote_path: str) -> None:
         if not os.path.isfile(local_path):
