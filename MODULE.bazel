@@ -21,7 +21,7 @@ module(
 # Python version
 #
 ###############################################################################
-bazel_dep(name = "rules_python", version = "1.4.1")
+bazel_dep(name = "rules_python", version = "1.8.5")
 
 PYTHON_VERSION = "3.12"
 
@@ -30,7 +30,6 @@ python.toolchain(
     is_default = True,
     python_version = PYTHON_VERSION,
 )
-use_repo(python)
 
 ###############################################################################
 #
@@ -51,40 +50,35 @@ use_repo(pip, "itf_pip")
 # Provides formatting and linting of Bazel files.
 #
 ###############################################################################
-bazel_dep(name = "buildifier_prebuilt", version = "8.2.0.2")
+bazel_dep(name = "buildifier_prebuilt", version = "8.2.1.2", dev_dependency = True)
 
 ###############################################################################
 #
 # Generic linting and formatting rules
 #
 ###############################################################################
-bazel_dep(name = "aspect_rules_lint", version = "1.0.0-rc9")
-git_override(
-    module_name = "aspect_rules_lint",
-    commit = "b5dfbc12754d6698c36d0aaad46183e730dac85c",
-    remote = "https://github.com/ltekieli/rules_lint.git",
-)
+bazel_dep(name = "aspect_rules_lint", version = "2.2.0", dev_dependency = True)
 
 ###############################################################################
 #
 # C++ rules
 #
 ###############################################################################
-bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "rules_cc", version = "0.2.17")
 
 ###############################################################################
 #
 # Shell dependency
 #
 ###############################################################################
-bazel_dep(name = "rules_shell", version = "0.6.0")
+bazel_dep(name = "rules_shell", version = "0.6.1")
 
 ###############################################################################
 #
 # Container dependencies
 #
 ###############################################################################
-bazel_dep(name = "rules_oci", version = "1.8.0")
+bazel_dep(name = "rules_oci", version = "2.2.7", dev_dependency = True)
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci", dev_dependency = True)
 
@@ -98,14 +92,14 @@ oci.pull(
 )
 
 # For each oci.pull call, repeat the "name" here to expose them as dependencies.
-use_repo(oci, "ubuntu_24_04")
+use_repo(oci, "ubuntu_24_04", "ubuntu_24_04_linux_amd64")
 
 ###############################################################################
 #
 # Packaging dependencies
 #
 ###############################################################################
-bazel_dep(name = "rules_pkg", version = "1.0.1")
+bazel_dep(name = "rules_pkg", version = "1.2.0", dev_dependency = True)
 
 ###############################################################################
 #

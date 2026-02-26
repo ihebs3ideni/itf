@@ -102,9 +102,9 @@ class Sftp:
         if not os.path.exists(local_path):
             logger.error(f"Missing file '{local_path}' while trying to upload")
         remote_dir = os.path.dirname(remote_path)
-        assert (
-            self._ssh.execute_command(f"test -d {remote_dir} || mkdir -p {remote_dir}") == 0
-        ), f"Could not create remote path: {os.path.dirname(remote_path)}"
+        assert self._ssh.execute_command(f"test -d {remote_dir} || mkdir -p {remote_dir}") == 0, (
+            f"Could not create remote path: {os.path.dirname(remote_path)}"
+        )
         self._sftp.put(local_path, remote_path)
 
     def list_dirs_and_files(self, remote_path):

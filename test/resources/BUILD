@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 filegroup(
@@ -86,8 +86,8 @@ oci_image(
     ],
 )
 
-oci_tarball(
-    name = "image_tarball",
+oci_load(
+    name = "image_load",
     image = ":image",
     repo_tags = ["score_itf_examples:latest"],
     visibility = [

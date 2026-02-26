@@ -19,10 +19,10 @@ py_itf_test(
         "test_docker.py",
     ],
     args = [
-        "--docker-image-bootstrap=$(location //examples/docker:image_tarball)",
+        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
         "--docker-image=score_itf_examples:latest",
     ],
-    data = ["//examples/docker:image_tarball"],
+    data = ["//examples/docker:image_load"],
     plugins = [
         docker,
     ],
@@ -62,7 +62,6 @@ py_itf_test(
         dlt,
     ],
     tags = [
-        "local",
         "manual",
     ],
 )
@@ -85,7 +84,6 @@ py_itf_test(
         dlt,
     ],
     tags = [
-        "local",
         "manual",
     ],
 )
