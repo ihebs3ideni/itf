@@ -122,14 +122,18 @@ class QemuTarget(Target):
 @contextmanager
 def qemu_target(test_config):
     """Context manager for QEMU target setup."""
-    with QemuProcess(
-        test_config.qemu_image,
-        test_config.qemu_config.qemu_ram_size,
-        test_config.qemu_config.qemu_num_cores,
-        network_adapters=[adapter.name for adapter in test_config.qemu_config.networks],
-        port_forwarding=test_config.qemu_config.port_forwarding
-        if hasattr(test_config.qemu_config, "port_forwarding")
-        else [],
-    ) if test_config.qemu_image else nullcontext() as qemu_process:
+    with (
+        QemuProcess(
+            test_config.qemu_image,
+            test_config.qemu_config.qemu_ram_size,
+            test_config.qemu_config.qemu_num_cores,
+            network_adapters=[adapter.name for adapter in test_config.qemu_config.networks],
+            port_forwarding=test_config.qemu_config.port_forwarding
+            if hasattr(test_config.qemu_config, "port_forwarding")
+            else [],
+        )
+        if test_config.qemu_image
+        else nullcontext() as qemu_process
+    ):
         target = QemuTarget(qemu_process, test_config.qemu_config)
         yield target
