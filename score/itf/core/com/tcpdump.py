@@ -51,25 +51,30 @@ class TcpDumpHandler(abc.ABC):
     """
 
     @abc.abstractmethod
-    def start(self, cmd: list[str], container_pcap_path: str) -> str:
+    def start(self, cmd: list[str]) -> str:
         """Start tcpdump with *cmd* on the target.
 
-        Args:
-            cmd: The full tcpdump command line (list of strings).
-            container_pcap_path: Path on the target where tcpdump writes.
-
-        Returns:
-            An opaque handle (e.g. exec-ID, PID, SSH channel) that
+        :param cmd: The full tcpdump command line (list of strings).
+            The capture path is already embedded via ``-w``.
+        :returns: An opaque handle (e.g. exec-ID, PID, SSH channel) that
             :meth:`stop` and :meth:`retrieve` can use later.
+        :rtype: str
         """
 
     @abc.abstractmethod
     def stop(self, handle: str) -> None:
-        """Stop the tcpdump process identified by *handle*."""
+        """Stop the tcpdump process identified by *handle*.
+
+        :param handle: The opaque handle returned by :meth:`start`.
+        """
 
     @abc.abstractmethod
-    def retrieve(self, container_pcap_path: str, host_path: str) -> None:
-        """Copy the pcap file from the target to *host_path*."""
+    def retrieve(self, target_pcap_path: str, host_path: str) -> None:
+        """Copy the pcap file from the target to *host_path*.
+
+        :param target_pcap_path: Path to the pcap file on the target.
+        :param host_path: Destination path on the host.
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +88,7 @@ class TcpDumpCapture:
         handle: The opaque handle returned by the handler's ``start()``
             (populated after ``__enter__``).
         host_path: Path on the host where the pcap will be saved.
-        container_path: Path on the target where tcpdump writes.
+        target_path: Path on the target where tcpdump writes.
     """
 
     def __init__(
@@ -93,7 +98,7 @@ class TcpDumpCapture:
         *,
         interface="any",
         filter_expr="",
-        container_pcap_path="/tmp/capture.pcap",
+        target_pcap_path="/tmp/capture.pcap",
         tcpdump_binary="/usr/sbin/tcpdump",
         snapshot_length=0,
         rotate_seconds=None,
@@ -102,25 +107,24 @@ class TcpDumpCapture:
     ):
         """Initialise a capture session (does **not** start tcpdump yet).
 
-        Args:
-            handler: A :class:`TcpDumpHandler` that knows how to run tcpdump
-                on the specific target type.
-            host_output_path: Where to save the pcap on the host.  If ``None``
-                a temporary file is created automatically.
-            interface: Network interface to capture on (default ``"any"``).
-            filter_expr: Optional BPF filter expression (e.g. ``"port 80"``).
-            container_pcap_path: Path on the target for the pcap file.
-            tcpdump_binary: Path to tcpdump on the target.
-            snapshot_length: ``-s`` flag — max bytes per packet (0 = unlimited).
-            rotate_seconds: If set, ``-G <seconds>`` to rotate capture files.
-            max_packets: If set, ``-c <count>`` to stop after N packets.
-            extra_args: Additional CLI flags passed verbatim to tcpdump.
+        :param handler: A :class:`TcpDumpHandler` that knows how to run tcpdump
+            on the specific target type.
+        :param host_output_path: Where to save the pcap on the host.  If ``None``
+            a temporary file is created automatically.
+        :param interface: Network interface to capture on (default ``"any"``).
+        :param filter_expr: Optional BPF filter expression (e.g. ``"port 80"``).
+        :param target_pcap_path: Path on the target for the pcap file.
+        :param tcpdump_binary: Path to tcpdump on the target.
+        :param snapshot_length: ``-s`` flag — max bytes per packet (0 = unlimited).
+        :param rotate_seconds: If set, ``-G <seconds>`` to rotate capture files.
+        :param max_packets: If set, ``-c <count>`` to stop after N packets.
+        :param extra_args: Additional CLI flags passed verbatim to tcpdump.
         """
         self._handler = handler
         self._host_output_path = host_output_path
         self._interface = interface
         self._filter_expr = filter_expr
-        self._container_pcap_path = container_pcap_path
+        self._target_pcap_path = target_pcap_path
         self._tcpdump_binary = tcpdump_binary
         self._snapshot_length = snapshot_length
         self._rotate_seconds = rotate_seconds
@@ -143,9 +147,9 @@ class TcpDumpCapture:
         return self._host_output_path
 
     @property
-    def container_path(self):
+    def target_path(self):
         """Target-side path where tcpdump writes."""
-        return self._container_pcap_path
+        return self._target_pcap_path
 
     # -- context manager protocol --------------------------------------------
 
@@ -154,7 +158,7 @@ class TcpDumpCapture:
         cmd = [
             self._tcpdump_binary,
             "-i", self._interface,
-            "-w", self._container_pcap_path,
+            "-w", self._target_pcap_path,
             "-U",  # packet-buffered output
         ]
         if self._snapshot_length:
@@ -177,14 +181,14 @@ class TcpDumpCapture:
             tmp.close()
             self._tmpfile_created = True
 
-        self._handle = self._handler.start(cmd, self._container_pcap_path)
+        self._handle = self._handler.start(cmd)
         # Give tcpdump a moment to open the interface
         time.sleep(0.5)
 
         logger.info(
             "tcpdump started on interface '%s' → %s",
             self._interface,
-            self._container_pcap_path,
+            self._target_pcap_path,
         )
         return self
 
@@ -194,7 +198,7 @@ class TcpDumpCapture:
 
         try:
             self._handler.retrieve(
-                self._container_pcap_path, self._host_output_path,
+                self._target_pcap_path, self._host_output_path,
             )
             logger.info(
                 "Pcap saved to %s (%d bytes)",

@@ -21,6 +21,7 @@ packet capture with :class:`TcpDumpCapture`.
 import os
 import time
 
+import score.itf.plugins.core
 from score.itf.core.com.tcpdump import TcpDumpCapture
 
 
@@ -47,15 +48,30 @@ def test_example_app_returns_zero(target):
     assert b"RC=0" in output
 
 
+@score.itf.plugins.core.requires_capabilities("tcpdump")
 def test_example_app_udp_traffic_captured(target):
     """Run example-app with --udp-port and --payload, verify the payload appears in the pcap.
 
     UDP is connectionless — the datagram is sent even without a listener,
     so tcpdump will always see it on the wire.
+
+    Demonstrates several :class:`TcpDumpCapture` parameters:
+
+    - ``interface`` — capture only on loopback.
+    - ``target_pcap_path`` — write pcap to a custom path on the target.
+    - ``snapshot_length`` — limit per-packet capture to 256 bytes.
+    - ``extra_args`` — disable checksum verification.
     """
     payload = "ITF_TCPDUMP_TEST_PAYLOAD_42"
 
-    with TcpDumpCapture(target.tcpdump_handler(), filter_expr="udp port 9999") as cap:
+    with TcpDumpCapture(
+        target.tcpdump_handler(),
+        interface="lo",
+        filter_expr="udp port 9999",
+        target_pcap_path="/tmp/example_app_capture.pcap",
+        snapshot_length=256,
+        extra_args=["--dont-verify-checksums"],
+    ) as cap:
         time.sleep(0.3)
 
         # Fire a UDP datagram — no listener required.
@@ -65,6 +81,7 @@ def test_example_app_udp_traffic_captured(target):
         )
         time.sleep(0.5)
 
+    assert cap.target_path == "/tmp/example_app_capture.pcap"
     assert os.path.exists(cap.host_path), "Pcap file was not created"
 
     with open(cap.host_path, "rb") as f:
