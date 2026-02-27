@@ -76,7 +76,7 @@ SSH connections.
 | **Fixture** | `target` |
 | **Scope** | function (or session with `--keep-target`) |
 | **Yields** | `DockerTarget` |
-| **Capabilities** | exec, file I/O, log capture, tcpdump, SSH |
+| **Capabilities** | `exec`, `tcpdump` |
 
 ### Target System
 
@@ -112,7 +112,7 @@ def test_file_transfer(target):
 ITF supports modular plugins that extend functionality:
 
 - **`core`**: Basic functionality that is the entry point for plugin extensions and hooks
-- **`docker`**: Docker container targets with `exec` capability
+- **`docker`**: Docker container targets with `exec` and `tcpdump` capabilities
 - **`qemu`**: QEMU virtual machine targets with `ssh` and `sftp` capabilities
 - **`dlt`**: DLT (Diagnostic Log and Trace) message capture and analysis
 
@@ -232,6 +232,13 @@ def test_network_features(target):
     # Only runs on targets with both 'ssh' and 'sftp'
     with target.ssh() as ssh:
         pass
+
+@requires_capabilities("tcpdump")
+def test_tcpdump_capture(target):
+    # Only runs on targets with 'tcpdump' capability
+    from score.itf.core.com.tcpdump import TcpDumpCapture
+    with TcpDumpCapture(target.tcpdump_handler(), filter_expr="icmp") as cap:
+        target.exec(["ping", "-c1", "127.0.0.1"], detach=False)
 ```
 
 ## DockerTarget API
@@ -250,7 +257,7 @@ The `target` fixture yields a `DockerTarget` instance. Key methods:
 | `kill_exec(exec_id, signal=9)` | Kill a detached process (works inside Bazel sandbox). |
 | `get_exec_output(exec_id)` | Get the captured output of a detached exec. |
 | `ssh()` | Open an SSH connection to the container. |
-| `tcpdump_handler()` | Return a `DockerTcpDumpHandler` for use with `TcpDumpCapture`. |
+| `tcpdump_handler()` | Return a `DockerTcpDumpHandler` for use with `TcpDumpCapture`. Raises `RuntimeError` if the target lacks the `tcpdump` capability. |
 | `stop(timeout=2)` | Stop and remove the container. |
 
 ```python
@@ -278,11 +285,15 @@ def test_full_api(target):
 `TcpDumpCapture` is a target-agnostic context manager in `core/com` that
 captures network traffic using tcpdump.  Each target plugin provides a
 `tcpdump_handler()` method that returns the appropriate
-`TcpDumpHandler` implementation:
+`TcpDumpHandler` implementation (e.g. `DockerTcpDumpHandler` for Docker targets).
+
+#### Basic Usage
 
 ```python
 from score.itf.core.com.tcpdump import TcpDumpCapture
+from score.itf.plugins.core import requires_capabilities
 
+@requires_capabilities("tcpdump")
 def test_network_capture(target):
     with TcpDumpCapture(
         target.tcpdump_handler(),
@@ -294,8 +305,57 @@ def test_network_capture(target):
     # cap.host_path points to the pcap on the host
 ```
 
+#### TcpDumpCapture Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `handler` | *(required)* | A `TcpDumpHandler` returned by `target.tcpdump_handler()`. |
+| `host_output_path` | `None` | Where to save the pcap on the host. If `None`, a temp file is created. |
+| `interface` | `"any"` | Network interface to capture on. |
+| `filter_expr` | `""` | BPF filter expression (e.g. `"port 80"`). |
+| `target_pcap_path` | `"/tmp/capture.pcap"` | Path on the target where tcpdump writes the capture file. |
+| `tcpdump_binary` | `"/usr/sbin/tcpdump"` | Path to the tcpdump binary on the target. |
+| `snapshot_length` | `0` | Max bytes per packet (`-s` flag). `0` means unlimited. |
+| `rotate_seconds` | `None` | If set, rotate capture files every N seconds (`-G`). |
+| `max_packets` | `None` | If set, stop capture after N packets (`-c`). |
+| `extra_args` | `None` | Additional CLI flags passed verbatim to tcpdump (e.g. `["--dont-verify-checksums"]`). |
+
+After the context manager exits, two read-only properties are available:
+
+| Property | Description |
+|---|---|
+| `cap.host_path` | Absolute path to the pcap file on the host. |
+| `cap.target_path` | Path to the pcap file on the target (mirrors `target_pcap_path`). |
+
+#### Advanced Example
+
+```python
+from score.itf.core.com.tcpdump import TcpDumpCapture
+from score.itf.plugins.core import requires_capabilities
+
+@requires_capabilities("tcpdump")
+def test_udp_traffic_captured(target):
+    with TcpDumpCapture(
+        target.tcpdump_handler(),
+        interface="lo",
+        target_pcap_path="/tmp/example_app_capture.pcap",
+        snapshot_length=256,
+        extra_args=["--dont-verify-checksums"],
+    ) as cap:
+        assert cap.target_path == "/tmp/example_app_capture.pcap"
+        target.exec(
+            ["sh", "-c", "echo hello | nc -u -w1 127.0.0.1 5000"],
+            detach=False,
+        )
+    assert os.path.exists(cap.host_path)
+```
+
+#### Custom Handlers
+
 Custom handlers can be implemented for any target type by subclassing
-`TcpDumpHandler` from `score.itf.core.com.tcpdump`.
+`TcpDumpHandler` from `score.itf.core.com.tcpdump`.  The handler must
+implement three methods: `start(cmd)`, `stop(handle)`, and
+`retrieve(target_pcap_path, host_path)`.
 
 ## Communication APIs
 
@@ -625,7 +685,11 @@ score/itf/
 │   └── utils/            # Utility functions
 ├── plugins/              # Plugin implementations
 │   ├── core.py           # Core plugin (Target fixture, requires_capabilities)
-│   ├── docker.py         # Docker plugin (DockerTarget, DockerTcpDumpHandler)
+│   ├── docker/           # Docker plugin
+│   │   ├── __init__.py       # Plugin entry point (CLI options, fixtures)
+│   │   ├── docker_target.py  # DockerTarget class
+│   │   ├── output_reader.py  # OutputReader (detached exec log drain)
+│   │   └── tcpdump_handler.py # DockerTcpDumpHandler
 │   ├── dlt/              # DLT plugin
 │   └── qemu/             # QEMU plugin
 └── ...

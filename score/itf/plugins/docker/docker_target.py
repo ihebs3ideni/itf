@@ -10,37 +10,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Docker pytest plugin for ITF integration tests.
-
-Provides a single ``target`` fixture backed by :class:`DockerTarget` — a rich
-wrapper around a Docker container that offers command execution (synchronous,
-detached, streaming), process management, network inspection, file transfer,
-and background log capture.
+"""DockerTarget — ITF target backed by a Docker container.
 
 Also exports:
 
-- :class:`DockerTcpDumpHandler` — :class:`~score.itf.core.com.tcpdump.TcpDumpHandler`
-  implementation for Docker containers.
 - :func:`get_docker_client` — factory with SDK compatibility patch.
-
-The ``target`` fixture is activated automatically when a test requests it.
-Its scope is determined dynamically by ``determine_target_scope``.
 """
 
 import io
 import logging
 import os
-import subprocess
 import tarfile
-import threading
 import time
 
-import pytest
-
-from score.itf.plugins.core import determine_target_scope
 from score.itf.plugins.core import Target
-from score.itf.core.com.tcpdump import TcpDumpHandler
-
+from score.itf.plugins.docker.output_reader import OutputReader
+from score.itf.plugins.docker.tcpdump_handler import DockerTcpDumpHandler
 
 logger = logging.getLogger(__name__)
 
@@ -86,97 +71,10 @@ def get_docker_client():
 
 
 # ---------------------------------------------------------------------------
-# Background output reader
-# ---------------------------------------------------------------------------
-
-class _OutputReader:
-    """Drains a Docker exec output stream in a background daemon thread.
-
-    Each line of stdout/stderr is forwarded to the Python ``logging`` system so
-    that it appears in pytest's ``live log`` / captured output.
-    """
-
-    def __init__(self, exec_id, output_generator, cmd_label=None):
-        self._exec_id = exec_id[:12]
-        self._label = cmd_label or self._exec_id
-        self._gen = output_generator
-        self._lines: list[str] = []
-        self._thread = threading.Thread(
-            target=self._drain, name=f"exec-log-{self._exec_id}", daemon=True
-        )
-        self._thread.start()
-
-    def _drain(self):
-        try:
-            for stdout_chunk, stderr_chunk in self._gen:
-                for chunk, stream_name in ((stdout_chunk, "stdout"), (stderr_chunk, "stderr")):
-                    if not chunk:
-                        continue
-                    for line in chunk.decode("utf-8", errors="replace").splitlines():
-                        self._lines.append(line)
-                        logger.info("[%s] %s", self._label, line)
-        except Exception:
-            logger.debug("Output reader for %s stopped", self._exec_id, exc_info=True)
-
-    def join(self, timeout=2.0):
-        """Wait for the reader thread to finish (call after exec exits)."""
-        self._thread.join(timeout=timeout)
-
-    @property
-    def output(self):
-        """All captured lines so far."""
-        return list(self._lines)
-
-
-# ---------------------------------------------------------------------------
-# Docker TcpDump handler
-# ---------------------------------------------------------------------------
-
-class DockerTcpDumpHandler(TcpDumpHandler):
-    """TcpDump handler for Docker containers.
-
-    Uses ``exec()`` to start tcpdump, ``kill_exec()`` / ``wait_exec()``
-    to stop it, and ``copy_from()`` to retrieve the pcap.
-    """
-
-    def __init__(self, docker_target):
-        self._target = docker_target
-
-    def start(self, cmd, container_pcap_path):
-        return self._target.exec(cmd, detach=True)
-
-    def stop(self, handle):
-        self._target.kill_exec(handle, signal=15)
-        self._target.wait_exec(handle, timeout=5.0)
-
-    def retrieve(self, container_pcap_path, host_path):
-        self._target.copy_from(container_pcap_path, host_path)
-
-
-# ---------------------------------------------------------------------------
-# CLI options
-# ---------------------------------------------------------------------------
-
-def pytest_addoption(parser):
-    parser.addoption(
-        "--docker-image",
-        action="store",
-        required=True,
-        help="Docker image to run tests against.",
-    )
-    parser.addoption(
-        "--docker-image-bootstrap",
-        action="store",
-        required=False,
-        help="Docker image bootstrap command, that will be executed before referencing the container.",
-    )
-
-
-# ---------------------------------------------------------------------------
 # DockerTarget
 # ---------------------------------------------------------------------------
 
-DOCKER_CAPABILITIES = ["exec"]
+DOCKER_CAPABILITIES = ["exec", "tcpdump"]
 
 
 class DockerTarget(Target):
@@ -201,7 +99,7 @@ class DockerTarget(Target):
         super().__init__(capabilities=capabilities)
         self._client = client
         self._container = container
-        self._output_readers: dict[str, _OutputReader] = {}
+        self._output_readers: dict[str, OutputReader] = {}
 
     def __getattr__(self, name):
         """Delegate attribute access to the underlying Docker container.
@@ -223,7 +121,10 @@ class DockerTarget(Target):
     # ------------------------------------------------------------------
 
     def stop(self, timeout=2):
-        """Stop (and auto-remove if configured) the container."""
+        """Stop (and auto-remove if configured) the container.
+
+        :param timeout: Seconds to wait for the container to stop gracefully.
+        """
         if self._container:
             cid = self._container.short_id
             logger.info("Stopping container %s", cid)
@@ -244,16 +145,14 @@ class DockerTarget(Target):
     def exec(self, cmd, *, workdir="/", environment=None, detach=True, stream=False):
         """Run *cmd* inside the container via ``docker exec``.
 
-        Args:
-            cmd: Command as a list of strings (or a single string).
-            workdir: Working directory inside the container.
-            environment: Extra env vars for this exec invocation.
-            detach: If ``True`` (default), return immediately with an exec-ID
-                string.  If ``False``, block and return ``(exit_code, output)``.
-            stream: If ``True``, return ``(exec_id, output_generator)`` where
-                the generator yields ``(stdout_bytes, stderr_bytes)`` tuples.
-
-        Returns:
+        :param cmd: Command as a list of strings (or a single string).
+        :param workdir: Working directory inside the container.
+        :param environment: Extra env vars for this exec invocation.
+        :param detach: If ``True`` (default), return immediately with an exec-ID
+            string.  If ``False``, block and return ``(exit_code, output)``.
+        :param stream: If ``True``, return ``(exec_id, output_generator)`` where
+            the generator yields ``(stdout_bytes, stderr_bytes)`` tuples.
+        :returns:
             * **detach=True** — The Docker exec-ID (``str``).
             * **detach=False** — A ``(exit_code, output)`` tuple.
             * **stream=True** — A ``(exec_id, generator)`` tuple.
@@ -282,7 +181,7 @@ class DockerTarget(Target):
             eid = resp["Id"]
             output_gen = self._client.api.exec_start(eid, detach=False, stream=True, demux=True)
             cmd_label = os.path.basename(cmd[0]) if isinstance(cmd, list) and cmd else eid[:12]
-            self._output_readers[eid] = _OutputReader(eid, output_gen, cmd_label=cmd_label)
+            self._output_readers[eid] = OutputReader(eid, output_gen, cmd_label=cmd_label)
             logger.debug("Detached exec started: %s", eid[:12])
             return eid
 
@@ -294,11 +193,21 @@ class DockerTarget(Target):
         return result
 
     def exec_inspect(self, exec_id):
-        """Return the raw ``exec_inspect`` dict for *exec_id*."""
+        """Return the raw ``exec_inspect`` dict for *exec_id*.
+
+        :param exec_id: The Docker exec ID.
+        :returns: The exec inspect dictionary.
+        :rtype: dict
+        """
         return self._client.api.exec_inspect(exec_id)
 
     def is_exec_running(self, exec_id):
-        """Return ``True`` if *exec_id* is still running."""
+        """Return ``True`` if *exec_id* is still running.
+
+        :param exec_id: The Docker exec ID.
+        :returns: Whether the exec is still running.
+        :rtype: bool
+        """
         if not exec_id:
             return False
         try:
@@ -309,7 +218,11 @@ class DockerTarget(Target):
     def wait_exec(self, exec_id, timeout=15.0, poll_interval=0.2):
         """Block until *exec_id* finishes or *timeout* expires.
 
-        Returns the exit code, or ``None`` on timeout.
+        :param exec_id: The Docker exec ID to wait for.
+        :param timeout: Maximum seconds to wait.
+        :param poll_interval: Seconds between status checks.
+        :returns: The exit code, or ``None`` on timeout.
+        :rtype: int or None
         """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -323,7 +236,12 @@ class DockerTarget(Target):
         return None
 
     def get_exec_output(self, exec_id):
-        """Return captured output lines for *exec_id*, or ``[]``."""
+        """Return captured output lines for *exec_id*, or ``[]``.
+
+        :param exec_id: The Docker exec ID.
+        :returns: List of captured output lines.
+        :rtype: list[str]
+        """
         reader = self._output_readers.get(exec_id)
         return reader.output if reader else []
 
@@ -333,7 +251,10 @@ class DockerTarget(Target):
         Tries host-side ``os.kill`` first, then falls back to scanning
         ``/proc`` inside the container.
 
-        Returns the exit code, or ``-9`` on failure.
+        :param exec_id: The Docker exec ID to kill.
+        :param signal: Signal number to send (default 9 = SIGKILL).
+        :returns: The exit code, or ``-9`` on failure.
+        :rtype: int
         """
         info = self._client.api.exec_inspect(exec_id)
         pid = info.get("Pid", 0)
@@ -382,12 +303,22 @@ class DockerTarget(Target):
     # ------------------------------------------------------------------
 
     def get_ip(self, network="bridge"):
-        """Return the container's IP address on *network*."""
+        """Return the container's IP address on *network*.
+
+        :param network: Docker network name.
+        :returns: The container's IP address.
+        :rtype: str
+        """
         self.reload()
         return self.attrs["NetworkSettings"]["Networks"][network]["IPAddress"]
 
     def get_gateway(self, network="bridge"):
-        """Return the gateway address for *network*."""
+        """Return the gateway address for *network*.
+
+        :param network: Docker network name.
+        :returns: The gateway IP address.
+        :rtype: str
+        """
         self.reload()
         return self.attrs["NetworkSettings"]["Networks"][network]["Gateway"]
 
@@ -396,7 +327,11 @@ class DockerTarget(Target):
     # ------------------------------------------------------------------
 
     def copy_to(self, host_path, container_path):
-        """Copy a file/directory from the host **into** the container."""
+        """Copy a file/directory from the host **into** the container.
+
+        :param host_path: Path on the host to copy from.
+        :param container_path: Path inside the container to copy to.
+        """
         if not self._container:
             raise RuntimeError("Container is not running.")
         logger.info("Copying %s -> container:%s", host_path, container_path)
@@ -407,7 +342,11 @@ class DockerTarget(Target):
         self._container.put_archive(os.path.dirname(container_path) or "/", tar_stream)
 
     def copy_from(self, container_path, host_path):
-        """Copy a file/directory **out of** the container to the host."""
+        """Copy a file/directory **out of** the container to the host.
+
+        :param container_path: Path inside the container to copy from.
+        :param host_path: Path on the host to copy to.
+        """
         if not self._container:
             raise RuntimeError("Container is not running.")
         logger.info("Copying container:%s -> %s", container_path, host_path)
@@ -432,6 +371,13 @@ class DockerTarget(Target):
     # ------------------------------------------------------------------
 
     def ssh(self, username="score", password="score", port=2222):
+        """Create an SSH connection to the container.
+
+        :param username: SSH username.
+        :param password: SSH password.
+        :param port: SSH port inside the container.
+        :returns: An :class:`~score.itf.core.com.ssh.Ssh` connection.
+        """
         from score.itf.core.com.ssh import Ssh  # lazy import — paramiko optional
         return Ssh(target_ip=self.get_ip(), port=port, username=username, password=password)
 
@@ -448,81 +394,19 @@ class DockerTarget(Target):
 
             with TcpDumpCapture(target.tcpdump_handler(), filter_expr="icmp") as cap:
                 ...
+
+        :returns: A tcpdump handler for this Docker target.
+        :rtype: DockerTcpDumpHandler
+        :raises RuntimeError: If the target does not have the ``tcpdump`` capability.
         """
+        if not self.has_capability("tcpdump"):
+            raise RuntimeError(
+                "Target does not have the 'tcpdump' capability. "
+                "Cannot create a tcpdump handler."
+            )
         return DockerTcpDumpHandler(self)
 
     @property
     def raw(self):
         """The underlying ``docker.models.containers.Container``."""
         return self._container
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope=determine_target_scope)
-def docker_configuration():
-    """Customisation point for the Docker container.
-
-    Override in ``conftest.py`` to set environment, volumes, shm_size, etc.
-
-    Returns:
-        dict: Configuration overrides merged into the defaults.
-    """
-    return {}
-
-
-@pytest.fixture(scope=determine_target_scope)
-def _docker_configuration(docker_configuration):
-    defaults = {
-        "command": "sleep infinity",
-        "init": True,
-        "environment": {},
-    }
-    return {**defaults, **docker_configuration}
-
-
-@pytest.fixture(scope=determine_target_scope)
-def target_init(request, _docker_configuration):
-    print(_docker_configuration)
-
-    docker_image_bootstrap = request.config.getoption("docker_image_bootstrap")
-    docker_image = request.config.getoption("docker_image")
-
-    if docker_image_bootstrap:
-        logger.info("Executing bootstrap command: %s", docker_image_bootstrap)
-        subprocess.run([docker_image_bootstrap], check=True)
-
-    client = get_docker_client()
-
-    kwargs = dict(
-        command=_docker_configuration["command"],
-        detach=True,
-        auto_remove=True,
-        init=_docker_configuration.get("init", True),
-    )
-    if _docker_configuration.get("environment"):
-        kwargs["environment"] = _docker_configuration["environment"]
-    if _docker_configuration.get("volumes"):
-        kwargs["volumes"] = _docker_configuration["volumes"]
-    if _docker_configuration.get("privileged"):
-        kwargs["privileged"] = True
-    if _docker_configuration.get("network_mode"):
-        kwargs["network_mode"] = _docker_configuration["network_mode"]
-    if _docker_configuration.get("shm_size"):
-        kwargs["shm_size"] = _docker_configuration["shm_size"]
-
-    logger.info("Starting container from image %s", docker_image)
-    container = client.containers.run(docker_image, **kwargs)
-    logger.info("Container started: %s", container.short_id)
-
-    yield DockerTarget(client, container)
-
-    # Teardown
-    cid = container.short_id
-    logger.info("Stopping container %s", cid)
-    try:
-        container.stop(timeout=1)
-    except Exception:
-        logger.debug("Container stop failed (may already be removed)", exc_info=True)

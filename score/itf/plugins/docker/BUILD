@@ -10,17 +10,25 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+
 load("@itf_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
 py_library(
-    name = "core",
-    srcs = ["core.py"],
+    name = "docker",
+    srcs = [
+        "__init__.py",
+        "docker_target.py",
+        "output_reader.py",
+        "tcpdump_handler.py",
+    ],
+    imports = ["."],
     visibility = ["//visibility:public"],
     deps = [
+        "//score/itf/core/com",
         "//score/itf/core/target",
+        "//score/itf/plugins:core",
+        requirement("docker"),
         requirement("pytest"),
     ],
 )
-
-
