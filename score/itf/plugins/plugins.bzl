@@ -19,10 +19,12 @@ docker = py_itf_plugin(
         "score.itf.plugins.docker",
     ],
     args = [
+        "--tcpdump-path=$(location @score_itf//third_party/tcpdump)",
     ],
     data = [
     ],
     data_as_exec = [
+        "@score_itf//third_party/tcpdump",
     ],
     tags = [
     ],
