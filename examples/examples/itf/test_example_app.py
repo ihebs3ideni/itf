@@ -65,7 +65,7 @@ def test_example_app_udp_traffic_captured(target):
     payload = "ITF_TCPDUMP_TEST_PAYLOAD_42"
 
     with TcpDumpCapture(
-        target.tcpdump_handler(),
+        target.internal_tcpdump_handler(),
         interface="lo",
         filter_expr="udp port 9999",
         target_pcap_path="/tmp/example_app_capture.pcap",

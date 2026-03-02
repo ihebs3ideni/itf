@@ -25,7 +25,11 @@ import time
 
 from score.itf.plugins.core import Target
 from score.itf.plugins.docker.output_reader import OutputReader
-from score.itf.plugins.docker.tcpdump_handler import InternalTcpDumpHandler
+from score.itf.plugins.docker.tcpdump_handler import (
+    InternalTcpDumpHandler,
+    ExternalTcpDumpHandler,
+    can_capture_on_host,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +81,20 @@ def get_docker_client():
 DOCKER_CAPABILITIES = ["exec", "tcpdump"]
 
 
+def _compute_capabilities(tcpdump_bin: str = ""):
+    """Compute available Docker target capabilities.
+
+    Base capabilities are always available. ``tcpdump_external`` is only
+    added if the hermetic tcpdump can capture on host interfaces.
+
+    :param tcpdump_bin: Path to the hermetic tcpdump binary.
+    """
+    caps = list(DOCKER_CAPABILITIES)
+    if tcpdump_bin and can_capture_on_host(tcpdump_bin):
+        caps.append("tcpdump_external")
+    return caps
+
+
 class DockerTarget(Target):
     """ITF target backed by a Docker container.
 
@@ -95,10 +113,18 @@ class DockerTarget(Target):
     via ``__getattr__`` delegation.
     """
 
-    def __init__(self, client, container, capabilities=DOCKER_CAPABILITIES):
+    def __init__(self, client, container, tcpdump_bin: str = ""):
+        """Initialize a DockerTarget.
+
+        :param client: The Docker client.
+        :param container: The Docker container.
+        :param tcpdump_bin: Path to the hermetic tcpdump binary (optional).
+        """
+        capabilities = _compute_capabilities(tcpdump_bin)
         super().__init__(capabilities=capabilities)
         self._client = client
         self._container = container
+        self._tcpdump_bin = tcpdump_bin
         self._output_readers: dict[str, OutputReader] = {}
 
     def __getattr__(self, name):
@@ -409,8 +435,32 @@ class DockerTarget(Target):
             )
         return InternalTcpDumpHandler(self)
 
-    # Backwards compatibility alias
-    tcpdump_handler = internal_tcpdump_handler
+    def external_tcpdump_handler(self):
+        """Return a handler that captures traffic on the host's veth interface.
+
+        Captures traffic entering/leaving the container (container ↔ external).
+        Does NOT see loopback or internal container traffic.
+        Does NOT require tcpdump in the container (uses hermetic host binary).
+
+        Use with :class:`~score.itf.core.com.tcpdump.TcpDumpCapture`::
+
+            from score.itf.core.com.tcpdump import TcpDumpCapture
+
+            @requires_capabilities("tcpdump_external")
+            def test_external_traffic(target):
+                with TcpDumpCapture(target.external_tcpdump_handler()) as cap:
+                    target.exec(["curl", "http://example.com"], detach=False)
+
+        :returns: An external tcpdump handler.
+        :rtype: ExternalTcpDumpHandler
+        :raises RuntimeError: If the target lacks the ``tcpdump`` capability.
+        """
+        if not self.has_capability("tcpdump"):
+            raise RuntimeError(
+                "Target does not have the 'tcpdump' capability. "
+                "Cannot create a tcpdump handler."
+            )
+        return ExternalTcpDumpHandler(self, self._tcpdump_bin)
 
     @property
     def raw(self):

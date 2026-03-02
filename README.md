@@ -76,7 +76,9 @@ SSH connections.
 | **Fixture** | `target` |
 | **Scope** | function (or session with `--keep-target`) |
 | **Yields** | `DockerTarget` |
-| **Capabilities** | `exec`, `tcpdump` |
+| **Capabilities** | `exec`, `tcpdump`, `tcpdump_external`* |
+
+\* `tcpdump_external` is only available when the hermetic tcpdump binary has `CAP_NET_RAW` (see [Privilege Requirements](#privilege-requirements-for-external-capture)).
 
 ### Target System
 
@@ -241,30 +243,6 @@ def test_tcpdump_capture(target):
         target.exec(["ping", "-c1", "127.0.0.1"], detach=False)
 ```
 
-### Capability Hints
-
-Plugins can register helpful hints that are shown when a capability is missing.
-This helps users understand how to enable the missing capability:
-
-```python
-from score.itf.plugins.core import register_capability_hint
-
-register_capability_hint(
-    "tcpdump_external",
-    "Requires --spawn_strategy=local and CAP_NET_RAW on the hermetic tcpdump binary. "
-    "Either run as root or set capabilities with: "
-    "sudo setcap cap_net_admin,cap_net_raw=eip bazel-bin/third_party/tcpdump/tcpdump"
-)
-```
-
-When a test is skipped due to missing capabilities with registered hints:
-```
-SKIPPED: Target missing required capabilities: ('tcpdump_external',)
-
-Hints:
-  - Requires --spawn_strategy=local and CAP_NET_RAW on the hermetic tcpdump binary...
-```
-
 ## DockerTarget API
 
 The `target` fixture yields a `DockerTarget` instance. Key methods:
@@ -281,7 +259,8 @@ The `target` fixture yields a `DockerTarget` instance. Key methods:
 | `kill_exec(exec_id, signal=9)` | Kill a detached process (works inside Bazel sandbox). |
 | `get_exec_output(exec_id)` | Get the captured output of a detached exec. |
 | `ssh()` | Open an SSH connection to the container. |
-| `tcpdump_handler()` | Return a `DockerTcpDumpHandler` for use with `TcpDumpCapture`. Raises `RuntimeError` if the target lacks the `tcpdump` capability. |
+| `internal_tcpdump_handler()` | Return an `InternalTcpDumpHandler` for capturing inside the container. |
+| `external_tcpdump_handler()` | Return an `ExternalTcpDumpHandler` for capturing on host veth. Requires `tcpdump_external` capability. |
 | `stop(timeout=2)` | Stop and remove the container. |
 
 ```python
@@ -307,9 +286,73 @@ def test_full_api(target):
 ### TcpDump Integration
 
 `TcpDumpCapture` is a target-agnostic context manager in `core/com` that
-captures network traffic using tcpdump.  Each target plugin provides a
-`tcpdump_handler()` method that returns the appropriate
-`TcpDumpHandler` implementation (e.g. `DockerTcpDumpHandler` for Docker targets).
+captures network traffic using tcpdump. Docker targets provide two capture modes:
+
+| Handler | Method | Captures | Requires |
+|---------|--------|----------|----------|
+| **Internal** | `target.internal_tcpdump_handler()` | Loopback, container-internal traffic | tcpdump in container image |
+| **External** | `target.external_tcpdump_handler()` | Container ↔ external traffic | `CAP_NET_RAW` on hermetic binary |
+
+#### Internal Handler (Default)
+
+Runs tcpdump **inside** the container. Captures loopback (127.0.0.1) and
+internal traffic. Works in all environments.
+
+```python
+from score.itf.core.com.tcpdump import TcpDumpCapture
+from score.itf.plugins.core import requires_capabilities
+
+@requires_capabilities("tcpdump")
+def test_internal_capture(target):
+    with TcpDumpCapture(
+        target.internal_tcpdump_handler(),
+        filter_expr="port 80",
+    ) as cap:
+        target.exec(["curl", "http://127.0.0.1:80"], detach=False)
+```
+
+#### External Handler
+
+Runs tcpdump on the **host's veth interface** linked to the container.
+Captures traffic entering/leaving the container but **cannot** see loopback.
+
+```python
+@requires_capabilities("tcpdump_external")
+def test_external_capture(target):
+    with TcpDumpCapture(
+        target.external_tcpdump_handler(),
+        filter_expr="port 80",
+    ) as cap:
+        target.exec(["curl", "http://example.com"], detach=False)
+```
+
+#### Privilege Requirements for External Capture
+
+The external handler uses the hermetic tcpdump binary on the host, which
+requires `CAP_NET_RAW` capability. The `tcpdump_external` capability is
+**only available** when this check passes.
+
+> **Important:** External capture requires `--spawn_strategy=local` because
+> Bazel's linux-sandbox strips file capabilities (xattrs) when copying files
+> into the sandbox. Even with `setcap` or running as root, sandbox mode will
+> fail the capability check.
+
+| Environment | External Tests |
+|-------------|----------------|
+| `bazel test` (sandbox) | **Skipped** — sandbox strips capabilities |
+| `bazel test --spawn_strategy=local` | **Skipped** — hermetic binary lacks CAP_NET_RAW |
+| `sudo bazel test --spawn_strategy=local` | **Run** — root bypasses capability checks |
+| After `setcap` + `--spawn_strategy=local` | **Run** — binary has required capability |
+
+To enable external capture without root:
+
+```bash
+# Set capabilities on the hermetic tcpdump (must redo after rebuild)
+sudo setcap cap_net_admin,cap_net_raw=eip bazel-bin/third_party/tcpdump/tcpdump
+
+# Run tests with local spawn (sandbox strips xattrs)
+bazel test //test:test_tcpdump --spawn_strategy=local
+```
 
 #### Basic Usage
 
@@ -320,7 +363,7 @@ from score.itf.plugins.core import requires_capabilities
 @requires_capabilities("tcpdump")
 def test_network_capture(target):
     with TcpDumpCapture(
-        target.tcpdump_handler(),
+        target.internal_tcpdump_handler(),
         filter_expr="port 80",
         interface="eth0",
     ) as cap:
@@ -333,7 +376,7 @@ def test_network_capture(target):
 
 | Parameter | Default | Description |
 |---|---|---|
-| `handler` | *(required)* | A `TcpDumpHandler` returned by `target.tcpdump_handler()`. |
+| `handler` | *(required)* | A `TcpDumpHandler` returned by `target.internal_tcpdump_handler()` or `target.external_tcpdump_handler()`. |
 | `host_output_path` | `None` | Where to save the pcap on the host. If `None`, a temp file is created. |
 | `interface` | `"any"` | Network interface to capture on. |
 | `filter_expr` | `""` | BPF filter expression (e.g. `"port 80"`). |
@@ -360,7 +403,7 @@ from score.itf.plugins.core import requires_capabilities
 @requires_capabilities("tcpdump")
 def test_udp_traffic_captured(target):
     with TcpDumpCapture(
-        target.tcpdump_handler(),
+        target.internal_tcpdump_handler(),
         interface="lo",
         target_pcap_path="/tmp/example_app_capture.pcap",
         snapshot_length=256,

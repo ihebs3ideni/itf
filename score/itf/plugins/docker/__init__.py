@@ -26,10 +26,22 @@ import subprocess
 
 import pytest
 
-from score.itf.plugins.core import determine_target_scope
+from score.itf.plugins.core import determine_target_scope, register_capability_hint
 from score.itf.plugins.docker.docker_target import DockerTarget, get_docker_client
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Capability hints
+# ---------------------------------------------------------------------------
+
+register_capability_hint(
+    "tcpdump_external",
+    "Requires --spawn_strategy=local and CAP_NET_RAW on the hermetic tcpdump binary. "
+    "Either run as root (sudo bazel test --spawn_strategy=local) or set capabilities "
+    "with: sudo setcap cap_net_admin,cap_net_raw=eip bazel-bin/third_party/tcpdump/tcpdump"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +60,12 @@ def pytest_addoption(parser):
         action="store",
         required=False,
         help="Docker image bootstrap command, that will be executed before referencing the container.",
+    )
+    parser.addoption(
+        "--tcpdump-path",
+        action="store",
+        default="",
+        help="Path to hermetically built tcpdump binary for external capture.",
     )
 
 
@@ -111,7 +129,8 @@ def target_init(request, _docker_configuration):
     container = client.containers.run(docker_image, **kwargs)
     logger.info("Container started: %s", container.short_id)
 
-    yield DockerTarget(client, container)
+    tcpdump_bin = request.config.getoption("tcpdump_path", default="")
+    yield DockerTarget(client, container, tcpdump_bin=tcpdump_bin)
 
     # Teardown
     cid = container.short_id
