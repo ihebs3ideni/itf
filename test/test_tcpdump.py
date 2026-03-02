@@ -174,18 +174,5 @@ def test_tcpdump_extra_args(target):
     os.unlink(cap.host_path)
 
 
-@score.itf.plugins.core.requires_capabilities("tcpdump")
-def test_tcpdump_explicit_binary_path(target):
-    """tcpdump_binary overrides the default binary path on the target."""
-    with TcpDumpCapture(
-        target.tcpdump_handler(),
-        tcpdump_binary="/usr/sbin/tcpdump",
-        filter_expr="icmp",
-    ) as cap:
-        target.exec(
-            ["ping", "-c", "2", "-i", "0.2", "127.0.0.1"], detach=False
-        )
-
-    assert os.path.exists(cap.host_path)
-    assert os.path.getsize(cap.host_path) > 0
-    os.unlink(cap.host_path)
+# Test removed: tcpdump_binary parameter no longer exists.
+# The handler now decides which binary to use (strategy pattern).

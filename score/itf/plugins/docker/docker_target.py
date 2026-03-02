@@ -25,7 +25,7 @@ import time
 
 from score.itf.plugins.core import Target
 from score.itf.plugins.docker.output_reader import OutputReader
-from score.itf.plugins.docker.tcpdump_handler import DockerTcpDumpHandler
+from score.itf.plugins.docker.tcpdump_handler import InternalTcpDumpHandler
 
 logger = logging.getLogger(__name__)
 
@@ -385,26 +385,32 @@ class DockerTarget(Target):
     # TcpDump
     # ------------------------------------------------------------------
 
-    def tcpdump_handler(self):
-        """Return a :class:`DockerTcpDumpHandler` bound to this target.
+    def internal_tcpdump_handler(self):
+        """Return a handler that captures traffic **inside** the container.
+
+        Captures loopback (127.0.0.1) traffic, internal IPC, Unix sockets, etc.
+        Requires tcpdump installed in the container image.
 
         Use with :class:`~score.itf.core.com.tcpdump.TcpDumpCapture`::
 
             from score.itf.core.com.tcpdump import TcpDumpCapture
 
-            with TcpDumpCapture(target.tcpdump_handler(), filter_expr="icmp") as cap:
-                ...
+            with TcpDumpCapture(target.internal_tcpdump_handler()) as cap:
+                target.exec(["curl", "http://127.0.0.1:8080"], detach=False)
 
-        :returns: A tcpdump handler for this Docker target.
-        :rtype: DockerTcpDumpHandler
-        :raises RuntimeError: If the target does not have the ``tcpdump`` capability.
+        :returns: An internal tcpdump handler.
+        :rtype: InternalTcpDumpHandler
+        :raises RuntimeError: If the target lacks the ``tcpdump`` capability.
         """
         if not self.has_capability("tcpdump"):
             raise RuntimeError(
                 "Target does not have the 'tcpdump' capability. "
                 "Cannot create a tcpdump handler."
             )
-        return DockerTcpDumpHandler(self)
+        return InternalTcpDumpHandler(self)
+
+    # Backwards compatibility alias
+    tcpdump_handler = internal_tcpdump_handler
 
     @property
     def raw(self):
