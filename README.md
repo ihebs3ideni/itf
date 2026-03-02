@@ -237,8 +237,32 @@ def test_network_features(target):
 def test_tcpdump_capture(target):
     # Only runs on targets with 'tcpdump' capability
     from score.itf.core.com.tcpdump import TcpDumpCapture
-    with TcpDumpCapture(target.tcpdump_handler(), filter_expr="icmp") as cap:
+    with TcpDumpCapture(target.internal_tcpdump_handler(), filter_expr="icmp") as cap:
         target.exec(["ping", "-c1", "127.0.0.1"], detach=False)
+```
+
+### Capability Hints
+
+Plugins can register helpful hints that are shown when a capability is missing.
+This helps users understand how to enable the missing capability:
+
+```python
+from score.itf.plugins.core import register_capability_hint
+
+register_capability_hint(
+    "tcpdump_external",
+    "Requires --spawn_strategy=local and CAP_NET_RAW on the hermetic tcpdump binary. "
+    "Either run as root or set capabilities with: "
+    "sudo setcap cap_net_admin,cap_net_raw=eip bazel-bin/third_party/tcpdump/tcpdump"
+)
+```
+
+When a test is skipped due to missing capabilities with registered hints:
+```
+SKIPPED: Target missing required capabilities: ('tcpdump_external',)
+
+Hints:
+  - Requires --spawn_strategy=local and CAP_NET_RAW on the hermetic tcpdump binary...
 ```
 
 ## DockerTarget API

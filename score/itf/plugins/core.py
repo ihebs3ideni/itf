@@ -55,6 +55,38 @@ def target(target_init):
     yield target_init
 
 
+# ---------------------------------------------------------------------------
+# Capability hints registry
+# ---------------------------------------------------------------------------
+# Plugins can register hints that are shown when a capability is missing.
+
+_capability_hints: dict[str, str] = {}
+
+
+def register_capability_hint(capability: str, hint: str) -> None:
+    """Register a hint message for a capability.
+
+    When a test is skipped due to missing capabilities, the hints for
+    those capabilities are included in the skip message.
+
+    Args:
+        capability: The capability identifier.
+        hint: A helpful message explaining how to enable this capability.
+
+    Example:
+        register_capability_hint(
+            "tcpdump_external",
+            "Requires --spawn_strategy=local and CAP_NET_RAW on tcpdump binary"
+        )
+    """
+    _capability_hints[capability] = hint
+
+
+def get_capability_hint(capability: str) -> str | None:
+    """Get the hint for a capability, if registered."""
+    return _capability_hints.get(capability)
+
+
 def requires_capabilities(*capabilities):
     """Decorator to skip tests if target doesn't have all required capabilities.
 
@@ -78,7 +110,12 @@ def requires_capabilities(*capabilities):
                         break
 
             if target and not target.has_all_capabilities(set(capabilities)):
-                pytest.skip(f"Target missing required capabilities: {capabilities}")
+                missing = set(capabilities) - set(target.get_capabilities())
+                hints = [_capability_hints[c] for c in missing if c in _capability_hints]
+                msg = f"Target missing required capabilities: {capabilities}"
+                if hints:
+                    msg += "\n\nHints:\n" + "\n".join(f"  - {h}" for h in hints)
+                pytest.skip(msg)
 
             return func(*args, **kwargs)
 
