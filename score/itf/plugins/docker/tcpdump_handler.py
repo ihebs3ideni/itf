@@ -12,19 +12,25 @@
 # *******************************************************************************
 """TcpDump handler implementation for Docker targets.
 
-Uses ``exec()`` to start tcpdump inside the container, ``kill_exec()`` /
-``wait_exec()`` to stop it, and ``copy_from()`` to retrieve the pcap.
+Runs tcpdump **inside** the container using ``exec()``.
+Captures loopback traffic, internal IPC over sockets, etc.
 """
 
 from score.itf.core.com.tcpdump import TcpDumpHandler
 
 
-class DockerTcpDumpHandler(TcpDumpHandler):
-    """TcpDump handler for Docker containers.
+class InternalTcpDumpHandler(TcpDumpHandler):
+    """TcpDump handler that runs tcpdump **inside** the container.
 
-    Uses ``exec()`` to start tcpdump, ``kill_exec()`` / ``wait_exec()``
-    to stop it, and ``copy_from()`` to retrieve the pcap.
+    Captures:
+      - Loopback traffic (127.0.0.1)
+      - Internal container network traffic
+      - Any traffic visible from the container's network namespace
+
+    Requires tcpdump to be installed in the container image.
     """
+
+    TCPDUMP_BINARY = "/usr/sbin/tcpdump"
 
     def __init__(self, docker_target):
         """Initialize the handler.
@@ -33,13 +39,51 @@ class DockerTcpDumpHandler(TcpDumpHandler):
         """
         self._target = docker_target
 
-    def start(self, cmd):
-        """Start tcpdump with *cmd* on the container.
+    def _build_command(
+        self,
+        output_path: str,
+        interface: str,
+        filter_expr: str,
+        snapshot_length: int,
+        max_packets: int | None,
+        extra_args: list[str] | None,
+    ) -> list[str]:
+        """Build the tcpdump command line."""
+        cmd = [
+            self.TCPDUMP_BINARY,
+            "-i", interface,
+            "-w", output_path,
+            "-U",  # packet-buffered output
+        ]
+        if snapshot_length:
+            cmd += ["-s", str(snapshot_length)]
+        if max_packets:
+            cmd += ["-c", str(max_packets)]
+        if extra_args:
+            cmd.extend(extra_args)
+        if filter_expr:
+            cmd.extend(filter_expr.split())
+        return cmd
 
-        :param cmd: The full tcpdump command line (list of strings).
+    def start(
+        self,
+        output_path: str,
+        *,
+        interface: str = "any",
+        filter_expr: str = "",
+        snapshot_length: int = 0,
+        max_packets: int | None = None,
+        extra_args: list[str] | None = None,
+    ) -> str:
+        """Start tcpdump inside the container.
+
         :returns: The Docker exec ID.
         :rtype: str
         """
+        cmd = self._build_command(
+            output_path, interface, filter_expr,
+            snapshot_length, max_packets, extra_args,
+        )
         return self._target.exec(cmd, detach=True)
 
     def stop(self, handle):
@@ -57,3 +101,7 @@ class DockerTcpDumpHandler(TcpDumpHandler):
         :param host_path: Destination path on the host.
         """
         self._target.copy_from(target_pcap_path, host_path)
+
+
+# Backwards compatibility alias
+DockerTcpDumpHandler = InternalTcpDumpHandler
