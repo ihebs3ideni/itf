@@ -14,15 +14,17 @@
 load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 
 docker = py_itf_plugin(
-    py_library = "@score_itf//score/itf/plugins:docker",
+    py_library = "@score_itf//score/itf/plugins/docker",
     enabled_plugins = [
         "score.itf.plugins.docker",
     ],
     args = [
+        "--tcpdump-path=$(location @score_itf//third_party/tcpdump)",
     ],
     data = [
     ],
     data_as_exec = [
+        "@score_itf//third_party/tcpdump",
     ],
     tags = [
     ],
@@ -34,10 +36,12 @@ qemu = py_itf_plugin(
         "score.itf.plugins.qemu",
     ],
     args = [
+        "--tcpdump-path=$(location @score_itf//third_party/tcpdump)",
     ],
     data = [
     ],
     data_as_exec = [
+        "@score_itf//third_party/tcpdump",
     ],
     tags = [
     ],

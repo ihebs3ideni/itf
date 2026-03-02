@@ -17,6 +17,7 @@ ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testi
 
 - **Plugin-Based Architecture**: Modular design with support for Docker, QEMU, DLT, and custom plugins
 - **Target Abstraction**: Unified `Target` interface with capability-based system for different test environments
+- **Docker Target**: Full-featured `target` fixture with exec, file I/O, log capture, tcpdump, and SSH
 - **Flexible Testing**: Write tests once, run across multiple targets (Docker, QEMU, hardware)
 - **Capability System**: Tests can query and adapt based on available target capabilities
 - **Bazel Integration**: Seamless integration with Bazel build system via `py_itf_test` macro
@@ -63,6 +64,22 @@ py_itf_test(
 
 ## Architecture
 
+### Docker Target
+
+The Docker plugin provides a `target` fixture that yields a `DockerTarget` instance.
+`DockerTarget` wraps a Docker container and provides a rich API for executing
+commands, transferring files, capturing logs, running tcpdump, and establishing
+SSH connections.
+
+| Feature | Details |
+|---|---|
+| **Fixture** | `target` |
+| **Scope** | function (or session with `--keep-target`) |
+| **Yields** | `DockerTarget` |
+| **Capabilities** | `exec`, `tcpdump`, `tcpdump_external`* |
+
+\* `tcpdump_external` is only available when the hermetic tcpdump binary has `CAP_NET_RAW` (see [Privilege Requirements](#privilege-requirements-for-external-capture)).
+
 ### Target System
 
 ITF uses a capability-based target system. The `Target` base class provides a common interface that all target implementations extend:
@@ -82,7 +99,7 @@ from score.itf.plugins.core import requires_capabilities
 
 @requires_capabilities("exec")
 def test_docker_command(target):
-    exit_code, output = target.exec_run("ls -la")
+    exit_code, output = target.exec("ls -la", detach=False)
     assert exit_code == 0
 
 @requires_capabilities("ssh", "sftp")
@@ -97,7 +114,7 @@ def test_file_transfer(target):
 ITF supports modular plugins that extend functionality:
 
 - **`core`**: Basic functionality that is the entry point for plugin extensions and hooks
-- **`docker`**: Docker container targets with `exec` capability
+- **`docker`**: Docker container targets with `exec` and `tcpdump` capabilities
 - **`qemu`**: QEMU virtual machine targets with `ssh` and `sftp` capabilities
 - **`dlt`**: DLT (Diagnostic Log and Trace) message capture and analysis
 
@@ -118,11 +135,27 @@ def test_basic(target):
 
 ### Docker Tests
 
+Docker tests use the `target` fixture, which provides a `DockerTarget` with
+exec, file I/O, log capture, tcpdump, and SSH capabilities:
+
 ```python
 def test_docker_exec(target):
-    exit_code, output = target.exec_run("uname -a")
+    exit_code, output = target.exec("uname -a", detach=False)
     assert exit_code == 0
     assert b"Linux" in output
+```
+
+Detached execution with automatic log capture:
+
+```python
+def test_background_binary(target):
+    # Starts binary in background; stdout/stderr are captured to the test log
+    exec_id = target.exec(["/opt/bin/my_app"], detach=True)
+    assert target.is_exec_running(exec_id)
+
+    # Wait for completion or kill
+    target.kill_exec(exec_id)
+    target.wait_exec(exec_id, timeout=5)
 ```
 
 BUILD file:
@@ -130,7 +163,11 @@ BUILD file:
 py_itf_test(
     name = "test_docker",
     srcs = ["test_docker.py"],
-    args = ["--docker-image=ubuntu:24.04"],
+    args = [
+        "--docker-image-bootstrap=$(location //path:image_tarball)",
+        "--docker-image=my_image:latest",
+    ],
+    data = ["//path:image_tarball"],
     plugins = [docker],
 )
 ```
@@ -190,14 +227,202 @@ from score.itf.plugins.core import requires_capabilities
 @requires_capabilities("exec")
 def test_docker_specific(target):
     # Only runs on targets with 'exec' capability
-    target.exec_run("echo test")
+    target.exec("echo test", detach=False)
 
 @requires_capabilities("ssh", "sftp")
 def test_network_features(target):
     # Only runs on targets with both 'ssh' and 'sftp'
     with target.ssh() as ssh:
         pass
+
+@requires_capabilities("tcpdump")
+def test_tcpdump_capture(target):
+    # Only runs on targets with 'tcpdump' capability
+    from score.itf.core.com.tcpdump import TcpDumpCapture
+    with TcpDumpCapture(target.internal_tcpdump_handler(), filter_expr="icmp") as cap:
+        target.exec(["ping", "-c1", "127.0.0.1"], detach=False)
 ```
+
+## DockerTarget API
+
+The `target` fixture yields a `DockerTarget` instance. Key methods:
+
+| Method | Description |
+|---|---|
+| `exec(cmd, workdir="/", detach=True)` | Run a command inside the container. Returns exec-ID (detach), `(exit_code, output)` (sync), or `(exec_id, generator)` (stream). Detached execs get automatic log capture. |
+| `copy_to(host_path, container_path)` | Copy files from host into the container. |
+| `copy_from(container_path, host_path)` | Copy files out of the container. |
+| `get_ip(network="bridge")` | Get the container's IP address. |
+| `get_gateway(network="bridge")` | Get the network gateway address. |
+| `is_exec_running(exec_id)` | Check if a detached exec is still running. |
+| `wait_exec(exec_id, timeout)` | Block until exec finishes or times out. |
+| `kill_exec(exec_id, signal=9)` | Kill a detached process (works inside Bazel sandbox). |
+| `get_exec_output(exec_id)` | Get the captured output of a detached exec. |
+| `ssh()` | Open an SSH connection to the container. |
+| `internal_tcpdump_handler()` | Return an `InternalTcpDumpHandler` for capturing inside the container. |
+| `external_tcpdump_handler()` | Return an `ExternalTcpDumpHandler` for capturing on host veth. Requires `tcpdump_external` capability. |
+| `stop(timeout=2)` | Stop and remove the container. |
+
+```python
+def test_full_api(target):
+    # Synchronous exec
+    exit_code, output = target.exec(["echo", "hello"], detach=False)
+    assert exit_code == 0
+
+    # Detached exec with log capture + kill
+    exec_id = target.exec(["/bin/sleep", "60"], detach=True)
+    assert target.is_exec_running(exec_id)
+    target.kill_exec(exec_id)
+
+    # File transfer
+    target.copy_to("/tmp/local_file.txt", "/opt/data/file.txt")
+    target.copy_from("/opt/data/result.txt", "/tmp/result.txt")
+
+    # Network info
+    ip = target.get_ip()
+    gateway = target.get_gateway()
+```
+
+### TcpDump Integration
+
+`TcpDumpCapture` is a target-agnostic context manager in `core/com` that
+captures network traffic using tcpdump. Docker targets provide two capture modes:
+
+| Handler | Method | Captures | Requires |
+|---------|--------|----------|----------|
+| **Internal** | `target.internal_tcpdump_handler()` | Loopback, container-internal traffic | tcpdump in container image |
+| **External** | `target.external_tcpdump_handler()` | Container ↔ external traffic | `CAP_NET_RAW` on hermetic binary |
+
+#### Internal Handler (Default)
+
+Runs tcpdump **inside** the container. Captures loopback (127.0.0.1) and
+internal traffic. Works in all environments.
+
+```python
+from score.itf.core.com.tcpdump import TcpDumpCapture
+from score.itf.plugins.core import requires_capabilities
+
+@requires_capabilities("tcpdump")
+def test_internal_capture(target):
+    with TcpDumpCapture(
+        target.internal_tcpdump_handler(),
+        filter_expr="port 80",
+    ) as cap:
+        target.exec(["curl", "http://127.0.0.1:80"], detach=False)
+```
+
+#### External Handler
+
+Runs tcpdump on the **host's veth interface** linked to the container.
+Captures traffic entering/leaving the container but **cannot** see loopback.
+
+```python
+@requires_capabilities("tcpdump_external")
+def test_external_capture(target):
+    with TcpDumpCapture(
+        target.external_tcpdump_handler(),
+        filter_expr="port 80",
+    ) as cap:
+        target.exec(["curl", "http://example.com"], detach=False)
+```
+
+#### Privilege Requirements for External Capture
+
+The external handler uses the hermetic tcpdump binary on the host, which
+requires `CAP_NET_RAW` capability. The `tcpdump_external` capability is
+**only available** when this check passes.
+
+> **Important:** External capture requires `--spawn_strategy=local` because
+> Bazel's linux-sandbox strips file capabilities (xattrs) when copying files
+> into the sandbox. Even with `setcap` or running as root, sandbox mode will
+> fail the capability check.
+
+| Environment | External Tests |
+|-------------|----------------|
+| `bazel test` (sandbox) | **Skipped** — sandbox strips capabilities |
+| `bazel test --spawn_strategy=local` | **Skipped** — hermetic binary lacks CAP_NET_RAW |
+| `sudo bazel test --spawn_strategy=local` | **Run** — root bypasses capability checks |
+| After `setcap` + `--spawn_strategy=local` | **Run** — binary has required capability |
+
+To enable external capture without root:
+
+```bash
+# Set capabilities on the hermetic tcpdump (must redo after rebuild)
+sudo setcap cap_net_admin,cap_net_raw=eip bazel-bin/third_party/tcpdump/tcpdump
+
+# Run tests with local spawn (sandbox strips xattrs)
+bazel test //test:test_tcpdump --spawn_strategy=local
+```
+
+#### Basic Usage
+
+```python
+from score.itf.core.com.tcpdump import TcpDumpCapture
+from score.itf.plugins.core import requires_capabilities
+
+@requires_capabilities("tcpdump")
+def test_network_capture(target):
+    with TcpDumpCapture(
+        target.internal_tcpdump_handler(),
+        filter_expr="port 80",
+        interface="eth0",
+    ) as cap:
+        # Run operations that generate network traffic
+        target.exec(["curl", "http://example.com"], detach=False)
+    # cap.host_path points to the pcap on the host
+```
+
+#### TcpDumpCapture Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `handler` | *(required)* | A `TcpDumpHandler` returned by `target.internal_tcpdump_handler()` or `target.external_tcpdump_handler()`. |
+| `host_output_path` | `None` | Where to save the pcap on the host. If `None`, a temp file is created. |
+| `interface` | `"any"` | Network interface to capture on. |
+| `filter_expr` | `""` | BPF filter expression (e.g. `"port 80"`). |
+| `target_pcap_path` | `"/tmp/capture.pcap"` | Path on the target where tcpdump writes the capture file. |
+| `tcpdump_binary` | `"/usr/sbin/tcpdump"` | Path to the tcpdump binary on the target. |
+| `snapshot_length` | `0` | Max bytes per packet (`-s` flag). `0` means unlimited. |
+| `rotate_seconds` | `None` | If set, rotate capture files every N seconds (`-G`). |
+| `max_packets` | `None` | If set, stop capture after N packets (`-c`). |
+| `extra_args` | `None` | Additional CLI flags passed verbatim to tcpdump (e.g. `["--dont-verify-checksums"]`). |
+
+After the context manager exits, two read-only properties are available:
+
+| Property | Description |
+|---|---|
+| `cap.host_path` | Absolute path to the pcap file on the host. |
+| `cap.target_path` | Path to the pcap file on the target (mirrors `target_pcap_path`). |
+
+#### Advanced Example
+
+```python
+from score.itf.core.com.tcpdump import TcpDumpCapture
+from score.itf.plugins.core import requires_capabilities
+
+@requires_capabilities("tcpdump")
+def test_udp_traffic_captured(target):
+    with TcpDumpCapture(
+        target.internal_tcpdump_handler(),
+        interface="lo",
+        target_pcap_path="/tmp/example_app_capture.pcap",
+        snapshot_length=256,
+        extra_args=["--dont-verify-checksums"],
+    ) as cap:
+        assert cap.target_path == "/tmp/example_app_capture.pcap"
+        target.exec(
+            ["sh", "-c", "echo hello | nc -u -w1 127.0.0.1 5000"],
+            detach=False,
+        )
+    assert os.path.exists(cap.host_path)
+```
+
+#### Custom Handlers
+
+Custom handlers can be implemented for any target type by subclassing
+`TcpDumpHandler` from `score.itf.core.com.tcpdump`.  The handler must
+implement three methods: `start(cmd)`, `stop(handle)`, and
+`retrieve(target_pcap_path, host_path)`.
 
 ## Communication APIs
 
@@ -327,19 +552,19 @@ py_itf_test(
 
 ### Target Lifecycle Management
 
-Control whether targets persist across tests using the `--keep-target` flag:
+Control the target lifecycle with the `--keep-target` flag:
 
 ```bash
-# Keep target running between tests (faster, but shared state)
-bazel test //test:my_test -- --test_arg="--keep-target"
-
-# Default: Create fresh target for each test
+# Default: Create a fresh target for each test (clean state)
 bazel test //test:my_test
+
+# Keep target running between tests (faster, shared state)
+bazel test //test:my_test -- --test_arg="--keep-target"
 ```
 
 ### Custom Docker Configuration
 
-Override Docker settings in tests:
+Override Docker settings for integration tests via `docker_configuration`:
 
 ```python
 import pytest
@@ -349,13 +574,23 @@ def docker_configuration():
     return {
         "environment": {"MY_VAR": "value"},
         "command": "my-custom-command",
-        "ports": {"8080/tcp": 8080},
     }
 
 def test_with_custom_docker(target):
     # Uses custom configuration
     pass
 ```
+
+The `docker_configuration` fixture supports the following keys:
+
+| Key | Description |
+|---|---|
+| `environment` | Dict of environment variables |
+| `command` | Container entrypoint command |
+| `volumes` | Dict of volume mounts (`{host_path: {"bind": path, "mode": "rw"}}`) |
+| `privileged` | Run container in privileged mode |
+| `network_mode` | Docker network mode (e.g., `"host"`) |
+| `shm_size` | Shared memory size (e.g., `"256m"`) |
 ## Running Tests
 
 ### Basic Test Execution
@@ -380,8 +615,11 @@ bazel test //test:test_docker --nocache_test_results
 ### Docker Tests
 
 ```bash
-bazel test //test:test_docker \
-    --test_arg="--docker-image=ubuntu:24.04"
+# Run docker tests
+bazel test //test:test_docker --test_output=all
+
+# Run example tests
+bazel test //examples/itf:test_example_app --test_output=all
 ```
 
 ### QEMU Tests
@@ -504,13 +742,21 @@ py_itf_test(
 ```
 score/itf/
 ├── core/                 # Core ITF functionality
-│   ├── com/              # Communication modules (SSH, SFTP)
+│   ├── com/              # Communication modules (SSH, SFTP, ping, tcpdump)
+│   │   ├── ssh.py        # SSH connection context manager
+│   │   ├── tcpdump.py    # TcpDumpCapture + TcpDumpHandler (abstract)
+│   │   ├── sftp.py       # SFTP file transfer
+│   │   └── ping.py       # Ping utilities
 │   ├── process/          # Process management
-│   ├── target/           # Target base class
+│   ├── target/           # Target base class with capability system
 │   └── utils/            # Utility functions
 ├── plugins/              # Plugin implementations
-│   ├── core.py           # Core plugin with Target and decorators
-│   ├── docker.py         # Docker plugin
+│   ├── core.py           # Core plugin (Target fixture, requires_capabilities)
+│   ├── docker/           # Docker plugin
+│   │   ├── __init__.py       # Plugin entry point (CLI options, fixtures)
+│   │   ├── docker_target.py  # DockerTarget class
+│   │   ├── output_reader.py  # OutputReader (detached exec log drain)
+│   │   └── tcpdump_handler.py # DockerTcpDumpHandler
 │   ├── dlt/              # DLT plugin
 │   └── qemu/             # QEMU plugin
 └── ...

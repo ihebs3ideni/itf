@@ -10,29 +10,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
-load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-
-pkg_tar(
-    name = "tcpdump-bins-pkg",
-    srcs = [
-        "@score_itf//third_party/tcpdump",
-    ],
-    package_dir = "usr/sbin",
+alias(
+    name = "tcpdump",
+    actual = "@tcpdump",
+    visibility = ["//visibility:public"],
 )
 
-oci_image(
-    name = "image",
-    base = "@ubuntu_24_04_examples",
-    tars = [
-        "//examples/cpp:example-app-pkg",
-        ":tcpdump-bins-pkg",
-    ],
-)
-
-oci_tarball(
-    name = "image_tarball",
-    image = ":image",
-    repo_tags = ["score_itf_examples:latest"],
-    visibility = ["//examples/itf:__pkg__"],
+alias(
+    name = "libpcap",
+    actual = "@libpcap",
+    visibility = ["//visibility:public"],
 )

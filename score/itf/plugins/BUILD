@@ -23,14 +23,4 @@ py_library(
     ],
 )
 
-py_library(
-    name = "docker",
-    srcs = ["docker.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":core",
-        "//score/itf/core/target",
-        requirement("docker"),
-        requirement("pytest"),
-    ],
-)
+
