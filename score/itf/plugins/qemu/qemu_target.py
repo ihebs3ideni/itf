@@ -14,26 +14,65 @@ from contextlib import contextmanager, nullcontext
 
 from score.itf.plugins.core import Target
 from score.itf.plugins.qemu.qemu_process import QemuProcess
+from score.itf.plugins.qemu.serial_console import SerialProcess
 
 from score.itf.core.com.ssh import Ssh
 from score.itf.core.com.sftp import Sftp
 from score.itf.core.com.ping import ping, ping_lost
 
 
-QEMU_CAPABILITIES = ["ssh", "sftp"]
+QEMU_BASE_CAPABILITIES = ["ssh", "sftp"]
 
 
 class QemuTarget(Target):
-    def __init__(self, process, config):
-        super().__init__(capabilities=QEMU_CAPABILITIES)
+    def __init__(self, process, config, enable_serial_exec=False):
+        capabilities = QEMU_BASE_CAPABILITIES.copy()
+        if enable_serial_exec:
+            capabilities.append("exec")
+        super().__init__(capabilities=capabilities)
         self._process = process
         self._config = config
+        self._enable_serial_exec = enable_serial_exec
 
     def kill_process(self):
         self._process.stop()
 
     def restart_process(self):
         self._process.restart()
+
+    def exec(self, command: str, env: dict = None, cwd: str = None, timeout: float = 30.0):
+        """Execute a command on the QEMU target using serial channels.
+
+        This method is available when serial channels are enabled. It provides
+        direct command execution without requiring SSH.
+
+        :param str command: The command to execute.
+        :param dict env: Optional environment variables.
+        :param str cwd: Optional working directory.
+        :param float timeout: Command timeout in seconds. Default 30s.
+        :return: SerialProcess handle for monitoring the command.
+        :rtype: SerialProcess
+        :raises RuntimeError: If serial channels are not available.
+        """
+        if not self._enable_serial_exec:
+            raise RuntimeError(
+                "exec() requires serial channels to be enabled. "
+                "Set 'enable_serial_channels: true' in QEMU config."
+            )
+        
+        channel_pool = self._process.channel_pool
+        if not channel_pool:
+            raise RuntimeError("Serial channel pool is not available.")
+        
+        # Build full command with optional env and cwd
+        full_command = command
+        if cwd:
+            full_command = f"cd {cwd} && {full_command}"
+        if env:
+            env_str = " ".join(f"{k}={v}" for k, v in env.items())
+            full_command = f"{env_str} {full_command}"
+        
+        return SerialProcess(channel_pool, full_command, timeout=timeout)
 
     def ssh(
         self,
@@ -96,14 +135,23 @@ class QemuTarget(Target):
 @contextmanager
 def qemu_target(test_config):
     """Context manager for QEMU target setup."""
+    # Get serial channel config with defaults
+    qemu_cfg = test_config.qemu_config
+    enable_serial = getattr(qemu_cfg, "enable_serial_channels", False)
+    num_serial = getattr(qemu_cfg, "num_serial_channels", None)
+    guest_device_prefix = getattr(qemu_cfg, "guest_device_prefix", "/dev/ttyS")
+    
     with QemuProcess(
         test_config.qemu_image,
-        test_config.qemu_config.qemu_ram_size,
-        test_config.qemu_config.qemu_num_cores,
-        network_adapters=[adapter.name for adapter in test_config.qemu_config.networks],
-        port_forwarding=test_config.qemu_config.port_forwarding
-        if hasattr(test_config.qemu_config, "port_forwarding")
+        qemu_cfg.qemu_ram_size,
+        qemu_cfg.qemu_num_cores,
+        network_adapters=[adapter.name for adapter in qemu_cfg.networks],
+        port_forwarding=qemu_cfg.port_forwarding
+        if hasattr(qemu_cfg, "port_forwarding")
         else [],
+        enable_serial_channels=enable_serial,
+        num_serial_channels=num_serial,
+        guest_device_prefix=guest_device_prefix,
     ) if test_config.qemu_image else nullcontext() as qemu_process:
-        target = QemuTarget(qemu_process, test_config.qemu_config)
+        target = QemuTarget(qemu_process, qemu_cfg, enable_serial_exec=enable_serial)
         yield target

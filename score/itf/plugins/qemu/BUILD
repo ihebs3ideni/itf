@@ -23,6 +23,7 @@ py_library(
         "qemu.py",
         "qemu_process.py",
         "qemu_target.py",
+        "serial_console.py",
     ],
     imports = ["."],
     visibility = ["//visibility:public"],
