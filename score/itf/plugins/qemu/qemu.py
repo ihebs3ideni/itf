@@ -16,6 +16,12 @@ import sys
 import subprocess
 import logging
 
+from score.itf.plugins.qemu.serial_console import (
+    create_serial_channels,
+    cleanup_serial_channels,
+    SerialChannelPool,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +29,9 @@ class Qemu:
     """
     This class shall be used to start an qemu instance based on pre-configured Qemu parameters.
     """
+
+    # Default number of extra serial channels for concurrent process output
+    DEFAULT_NUM_SERIAL_CHANNELS = 3
 
     def __init__(
         self,
@@ -32,6 +41,9 @@ class Qemu:
         cpu="Cascadelake-Server-v5",
         network_adapters=[],
         port_forwarding=[],
+        enable_serial_channels=False,
+        num_serial_channels=None,
+        guest_device_prefix="/dev/ser",
     ):
         """Create a QEMU instance with the specified parameters.
 
@@ -41,6 +53,12 @@ class Qemu:
         :param str cpu: The CPU model to emulate.
          Default is Cascadelake-Server-v5 used to emulate modern Intel CPU features.
          For older Ubuntu versions change that to host in case of errors.
+        :param bool enable_serial_channels: Enable extra serial channels for process output.
+         When enabled, allows running commands via serial console without SSH.
+        :param int num_serial_channels: Number of extra serial channels (default 3).
+         Limited by QEMU's emulated UARTs (COM2-COM4).
+        :param str guest_device_prefix: Device path prefix in guest.
+         Use "/dev/ser" for QNX, "/dev/ttyS" for Linux.
         """
         self.__qemu_path = "/usr/bin/qemu-system-x86_64"
         self.__path_to_image = path_to_image
@@ -49,6 +67,24 @@ class Qemu:
         self.__cpu = cpu
         self.__network_adapters = network_adapters
         self.__port_forwarding = port_forwarding
+
+        # Serial channel configuration
+        self.__enable_serial_channels = enable_serial_channels
+        self.__num_serial_channels = num_serial_channels or self.DEFAULT_NUM_SERIAL_CHANNELS
+        self.__guest_device_prefix = guest_device_prefix
+        self.__serial_channels = []
+        self.__serial_args = []
+        self.__serial_tmpdir = None
+        self.channel_pool = None
+
+        # Create serial channels if enabled
+        if self.__enable_serial_channels:
+            self.__serial_channels, self.__serial_args, self.__serial_tmpdir = (
+                create_serial_channels(
+                    num_channels=self.__num_serial_channels,
+                    guest_device_prefix=self.__guest_device_prefix,
+                )
+            )
 
         self.__check_qemu_is_installed()
         self.__find_available_kvm_support()
@@ -68,9 +104,26 @@ class Qemu:
         if subprocess_params:
             subprocess_args.update(subprocess_params)
         self._subprocess = subprocess.Popen(**subprocess_args)
+        
+        # Connect to serial channels after QEMU starts
+        if self.__enable_serial_channels and self.__serial_channels:
+            logger.info("Connecting to serial channels...")
+            for ch in self.__serial_channels:
+                ch.connect()
+            self.channel_pool = SerialChannelPool(self.__serial_channels)
+            logger.info(f"Serial channel pool ready with {self.channel_pool.total_count} channels")
+        
         return self._subprocess
 
     def stop(self):
+        # Clean up serial channels first
+        if self.channel_pool:
+            self.channel_pool.close_all()
+            self.channel_pool = None
+        if self.__serial_tmpdir:
+            cleanup_serial_channels(self.__serial_tmpdir)
+            self.__serial_tmpdir = None
+            
         if self._subprocess.poll() is None:
             self._subprocess.terminate()
             self._subprocess.wait(2)
@@ -129,9 +182,14 @@ class Qemu:
                 "-device",
                 "virtio-rng-pci,rng=rng0",  # Provide hardware random number generation
             ]
+            + self.__serial_device_args()
             + self.__network_devices_args()
             + self.__port_forwarding_args()
         )
+
+    def __serial_device_args(self):
+        """Return QEMU arguments for serial channels."""
+        return self.__serial_args if self.__enable_serial_channels else []
 
     def __network_devices_args(self):
         def get_netdev_args(adapter, id):

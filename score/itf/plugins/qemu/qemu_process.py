@@ -20,18 +20,32 @@ logger = logging.getLogger(__name__)
 
 
 class QemuProcess:
-    def __init__(self, path_to_qemu_image, available_ram, available_cores, network_adapters=[], port_forwarding=[]):
+    def __init__(
+        self,
+        path_to_qemu_image,
+        available_ram,
+        available_cores,
+        network_adapters=[],
+        port_forwarding=[],
+        enable_serial_channels=False,
+        num_serial_channels=None,
+        guest_device_prefix="/dev/ttyS",
+    ):
         self._path_to_qemu_image = path_to_qemu_image
         self._available_ram = available_ram
         self._available_cores = available_cores
         self._network_adapters = network_adapters
         self._port_forwarding = port_forwarding
+        self._enable_serial_channels = enable_serial_channels
         self._qemu = Qemu(
             self._path_to_qemu_image,
             self._available_ram,
             self._available_cores,
             network_adapters=self._network_adapters,
             port_forwarding=self._port_forwarding,
+            enable_serial_channels=enable_serial_channels,
+            num_serial_channels=num_serial_channels,
+            guest_device_prefix=guest_device_prefix,
         )
         self._console = None
 
@@ -65,3 +79,8 @@ class QemuProcess:
     @property
     def console(self):
         return self._console
+
+    @property
+    def channel_pool(self):
+        """Get the serial channel pool for running processes."""
+        return self._qemu.channel_pool if self._enable_serial_channels else None

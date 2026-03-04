@@ -27,6 +27,10 @@ Required top-level keys:
 
 Optional top-level keys:
     - `port_forwarding` (array of objects with `host_port` and `guest_port`)
+    - `enable_serial_channels` (bool, default false) - Enable serial exec mode
+    - `num_serial_channels` (int 1..10, default 3) - Number of serial channels
+    - `guest_device_prefix` (string) - Device path prefix in guest OS
+      Use "/dev/ser" for QNX, "/dev/ttyS" for Linux (default)
 
 Each entry in `networks` must contain:
     - `name` (string)
@@ -67,6 +71,24 @@ Example: port-forwarding networking
                     "guest_port": 22
                 }
             ]
+        }
+
+Example: with serial channels enabled (for exec mode)
+
+        {
+            "networks": [
+                {
+                    "name": "tap0",
+                    "ip_address": "169.254.158.190",
+                    "gateway": "169.254.21.88"
+                }
+            ],
+            "ssh_port": 22,
+            "qemu_num_cores": 2,
+            "qemu_ram_size": "1G",
+            "enable_serial_channels": true,
+            "num_serial_channels": 3,
+            "guest_device_prefix": "/dev/ttyS"
         }
 """
 
@@ -117,6 +139,22 @@ class QemuConfigModel(BaseModel):
     qemu_num_cores: int = Field(ge=1)
     qemu_ram_size: str = Field(pattern=_RAM_SIZE_PATTERN)
     port_forwarding: list[PortForwarding] = Field(default_factory=list)
+    
+    # Serial channel options for exec mode (alternative to SSH)
+    enable_serial_channels: bool = Field(
+        default=False,
+        description="Enable serial channels for direct command execution without SSH"
+    )
+    num_serial_channels: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Number of serial channels for concurrent process execution"
+    )
+    guest_device_prefix: str = Field(
+        default="/dev/ttyS",
+        description="Device path prefix in guest. Use '/dev/ser' for QNX, '/dev/ttyS' for Linux"
+    )
 
 
 def load_configuration(config_file: str) -> QemuConfigModel:

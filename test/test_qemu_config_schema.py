@@ -27,6 +27,7 @@ def test_sample_qemu_configs_validate() -> None:
     for filename in [
         "qemu_bridge_config.json",
         "qemu_port_forwarding_config.json",
+        "qemu_serial_config.json",
     ]:
         load_configuration(_resource_path(filename))
 

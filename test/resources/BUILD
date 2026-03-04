@@ -52,6 +52,17 @@ filegroup(
     ],
 )
 
+filegroup(
+    name = "qemu_serial_config",
+    srcs = [
+        "qemu_serial_config.json",
+    ],
+    visibility = [
+        "//test:__pkg__",
+        "//visibility:public",
+    ],
+)
+
 pkg_tar(
     name = "dlt-bins-pkg",
     srcs = [
