@@ -219,7 +219,12 @@ class TcpDumpCapture:
                 os.path.getsize(self._host_output_path),
             )
         except Exception:
-            logger.warning("Failed to retrieve pcap from target", exc_info=True)
+            if exc_type is not None:
+                # Already have an exception in progress, just log
+                logger.warning("Failed to retrieve pcap from target", exc_info=True)
+            else:
+                # No exception in progress, re-raise to fail the test
+                raise
 
     # -- helpers -------------------------------------------------------------
 

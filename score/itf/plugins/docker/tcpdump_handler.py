@@ -171,8 +171,15 @@ class InternalTcpDumpHandler(TcpDumpHandler):
 
         :param target_pcap_path: Path to the pcap file inside the container.
         :param host_path: Destination path on the host.
+        :raises RuntimeError: If the pcap file cannot be retrieved.
         """
-        self._target.copy_from(target_pcap_path, host_path)
+        try:
+            self._target.copy_from(target_pcap_path, host_path)
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not retrieve pcap from container path {target_pcap_path}: {e} "
+                "(tcpdump may have failed to start or no packets captured)"
+            ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -322,11 +329,17 @@ class ExternalTcpDumpHandler(TcpDumpHandler):
         :param host_path: The host path where the pcap should be saved.
         """
         # External handler wrote to _host_pcap_path directly on host
-        if self._host_pcap_path:
-            if self._host_pcap_path != host_path:
-                logger.debug("Copying pcap from %s to %s", self._host_pcap_path, host_path)
-                shutil.copy2(self._host_pcap_path, host_path)
-            else:
-                logger.debug("Pcap already at %s", host_path)
+        if not self._host_pcap_path:
+            raise RuntimeError("No pcap path recorded")
+
+        if not os.path.exists(self._host_pcap_path):
+            raise FileNotFoundError(
+                f"Pcap file not found at {self._host_pcap_path} "
+                "(tcpdump may have failed to start)"
+            )
+
+        if self._host_pcap_path != host_path:
+            logger.debug("Copying pcap from %s to %s", self._host_pcap_path, host_path)
+            shutil.copy2(self._host_pcap_path, host_path)
         else:
-            logger.warning("No pcap path recorded")
+            logger.debug("Pcap already at %s", host_path)

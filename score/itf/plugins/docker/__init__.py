@@ -39,8 +39,11 @@ logger = logging.getLogger(__name__)
 register_capability_hint(
     "tcpdump_external",
     "Requires --spawn_strategy=local and CAP_NET_RAW on the hermetic tcpdump binary. "
-    "Either run as root (sudo bazel test --spawn_strategy=local) or set capabilities "
-    "with: sudo setcap cap_net_admin,cap_net_raw=eip bazel-bin/third_party/tcpdump/tcpdump"
+    "The binary is built in the exec configuration, so capabilities must be set on the "
+    "actual binary (not the bazel-bin symlink). Find and set capabilities with:\n"
+    "  sudo chmod u+w $(readlink -f bazel-bin/external/+_repo_rules+tcpdump/tcpdump) && "
+    "sudo setcap cap_net_admin,cap_net_raw=eip $(readlink -f bazel-bin/external/+_repo_rules+tcpdump/tcpdump)\n"
+    "Note: capabilities must be re-applied after 'bazel clean' or when the binary is rebuilt."
 )
 
 
