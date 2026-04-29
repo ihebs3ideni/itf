@@ -107,12 +107,12 @@ py_itf_test(
         "test_tcpdump.py",
     ],
     args = [
-        "--docker-image-bootstrap=$(location //test/resources:image_tarball)",
+        "--docker-image-bootstrap=$(location //test/resources:image_load)",
         "--docker-image=score_itf_examples:latest",
     ],
-    data = ["//test/resources:image_tarball"],
+    data = ["//test/resources:image_load"],
     plugins = [
-        docker,
+        "//score/itf/plugins:docker_plugin",
     ],
 )
 

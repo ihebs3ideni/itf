@@ -23,3 +23,47 @@ py_library(
         requirement("pytest"),
     ],
 )
+
+# ---- ITF plugin targets (used by py_itf_test symbolic macro) ----
+
+py_itf_plugin(
+    name = "docker_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.docker",
+    ],
+    py_library = "//score/itf/plugins/docker",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
+    name = "qemu_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.qemu",
+    ],
+    py_library = "//score/itf/plugins/qemu",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
+    name = "dlt_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.dlt",
+    ],
+    plugin_args = [
+        "--dlt-receive-path=$(location @score_itf//third_party/dlt:dlt-receive)",
+    ],
+    plugin_data_as_exec = [
+        "@score_itf//third_party/dlt:dlt-receive",
+    ],
+    py_library = "//score/itf/plugins/dlt",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
+    name = "attribute_plugin",
+    enabled_plugins = [
+        "attribute_plugin",
+    ],
+    py_library = "@score_tooling//python_basics/score_pytest:attribute_plugin",
+    visibility = ["//visibility:public"],
+)

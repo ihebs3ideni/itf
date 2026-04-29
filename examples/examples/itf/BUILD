@@ -94,11 +94,11 @@ py_itf_test(
         "test_example_app.py",
     ],
     args = [
-        "--docker-image-bootstrap=$(location //examples/docker:image_tarball)",
+        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
         "--docker-image=score_itf_examples:latest",
     ],
-    data = ["//examples/docker:image_tarball"],
+    data = ["//examples/docker:image_load"],
     plugins = [
-        docker,
+        "@score_itf//score/itf/plugins:docker_plugin",
     ],
 )
