@@ -86,3 +86,19 @@ py_itf_test(
         "manual",
     ],
 )
+
+# --- Component test: C++ example-app inside a Docker container ---
+py_itf_test(
+    name = "test_example_app",
+    srcs = [
+        "test_example_app.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
+        "--docker-image=score_itf_examples:latest",
+    ],
+    data = ["//examples/docker:image_load"],
+    plugins = [
+        "@score_itf//score/itf/plugins:docker_plugin",
+    ],
+)

@@ -102,6 +102,21 @@ py_itf_test(
 )
 
 py_itf_test(
+    name = "test_tcpdump",
+    srcs = [
+        "test_tcpdump.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location //test/resources:image_load)",
+        "--docker-image=score_itf_examples:latest",
+    ],
+    data = ["//test/resources:image_load"],
+    plugins = [
+        "//score/itf/plugins:docker_plugin",
+    ],
+)
+
+py_itf_test(
     name = "test_qemu_bridge_network",
     srcs = [
         "test_async_exec.py",

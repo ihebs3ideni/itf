@@ -24,18 +24,6 @@ py_library(
     ],
 )
 
-py_library(
-    name = "docker",
-    srcs = ["docker.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":core",
-        "//score/itf/core/target",
-        requirement("docker"),
-        requirement("pytest"),
-    ],
-)
-
 # ---- ITF plugin targets (used by py_itf_test symbolic macro) ----
 
 py_itf_plugin(
@@ -43,7 +31,7 @@ py_itf_plugin(
     enabled_plugins = [
         "score.itf.plugins.docker",
     ],
-    py_library = ":docker",
+    py_library = "//score/itf/plugins/docker",
     visibility = ["//visibility:public"],
 )
 

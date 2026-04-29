@@ -15,42 +15,20 @@ load("@itf_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
 py_library(
-    name = "ssh",
+    name = "docker",
     srcs = [
         "__init__.py",
-        "sftp.py",
-        "ssh.py",
-        "ssh_command.py",
+        "docker_target.py",
+        "output_reader.py",
+        "tcpdump_handler.py",
     ],
+    imports = ["."],
     visibility = ["//visibility:public"],
     deps = [
-        requirement("paramiko"),
-    ],
-)
-
-py_library(
-    name = "tcpdump",
-    srcs = [
-        "__init__.py",
-        "tcpdump.py",
-    ],
-)
-
-py_library(
-    name = "ping",
-    srcs = [
-        "__init__.py",
-        "ping.py",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-py_library(
-    name = "com",
-    visibility = ["//visibility:public"],
-    deps = [
-        ":ping",
-        ":ssh",
-        ":tcpdump",
+        "//score/itf/core/com",
+        "//score/itf/core/target",
+        "//score/itf/plugins:core",
+        requirement("docker"),
+        requirement("pytest"),
     ],
 )

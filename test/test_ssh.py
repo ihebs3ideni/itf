@@ -28,7 +28,7 @@ def docker_configuration():
 
 
 def check_command_exec(target, message):
-    exit_code, output = target.execute(f"echo -n {message}")
+    exit_code, output = target.exec(f"echo -n {message}", detach=False)
     return f"{message}" == output.decode()
 
 
