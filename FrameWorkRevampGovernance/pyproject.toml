@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctf-governance"
+version = "0.1.0"
+description = "Ecosystem governance and integration checks for the CTF composition engine."
+requires-python = ">=3.10"
+dependencies = [
+    # The engine. Governance depends on CTF; CTF never depends on governance.
+    "ctf",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+# Dump the composed ecosystem catalog and report governance findings.
+ctf-catalog = "ctf_governance.cli:main"
+
+[project.entry-points.pytest11]
+# Governance dogfoods the ecosystem: it is itself a CTF plugin.
+ctf_governance = "ctf_governance.plugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+addopts = "-ra"
