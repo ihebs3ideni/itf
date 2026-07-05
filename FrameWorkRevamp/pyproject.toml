@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctf"
+version = "0.1.0"
+description = "Composable Test Ecosystem: a pytest-hosted, deterministic composition engine."
+requires-python = ">=3.10"
+dependencies = ["pluggy>=1.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Register under the module's import path so an explicit
+# ``pytest_plugins = ["ctf.pytest_plugin"]`` bootstrap resolves to the SAME
+# plugin name and pluggy treats it as already-registered (no double-register
+# collision).
+[project.entry-points.pytest11]
+"ctf.pytest_plugin" = "ctf.pytest_plugin"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+addopts = "-ra"

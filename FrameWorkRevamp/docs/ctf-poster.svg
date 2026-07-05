@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1754" viewBox="0 0 1240 1754" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <!-- gradients -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="0.5" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#ec4899"/>
+    </linearGradient>
+    <linearGradient id="whatG" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="whenG" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="ladderG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#334155"/>
+      <stop offset="0.25" stop-color="#0e7490"/>
+      <stop offset="0.5" stop-color="#0d9488"/>
+      <stop offset="0.75" stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#22c55e"/>
+    </linearGradient>
+    <linearGradient id="govG" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14b8a6"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#cbd5e1"/>
+    </marker>
+    <marker id="arrowW" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect width="1240" height="1754" fill="url(#bg)"/>
+  <g opacity="0.06" fill="#ffffff">
+    <circle cx="120" cy="140" r="3"/><circle cx="1120" cy="90" r="3"/>
+    <circle cx="980" cy="220" r="2"/><circle cx="240" cy="60" r="2"/>
+    <circle cx="1180" cy="400" r="2"/><circle cx="60" cy="520" r="2"/>
+  </g>
+
+  <!-- ===================== HERO ===================== -->
+  <rect x="40" y="40" width="1160" height="188" rx="28" fill="url(#hero)" filter="url(#soft)"/>
+  <text x="72" y="120" font-size="66" font-weight="800" fill="#ffffff" letter-spacing="1">CTF</text>
+  <text x="196" y="120" font-size="34" font-weight="700" fill="#ffffff" opacity="0.95">the Composition Test Framework</text>
+  <text x="74" y="164" font-size="20" fill="#f1f5f9" opacity="0.95">Tests declare the <tspan font-weight="700">capabilities</tspan> they need — the engine assembles the target that provides them.</text>
+  <text x="74" y="196" font-size="19" fill="#e0e7ff" opacity="0.9">mock · subprocess · container · real hardware — <tspan font-weight="700" fill="#fff">without the test changing.</tspan></text>
+  <g transform="translate(1012,86)">
+    <rect x="0" y="0" width="150" height="46" rx="23" fill="#ffffff" opacity="0.18"/>
+    <text x="75" y="30" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">contract-based</text>
+  </g>
+  <g transform="translate(1012,142)">
+    <rect x="0" y="0" width="150" height="46" rx="23" fill="#ffffff" opacity="0.18"/>
+    <text x="75" y="30" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">pytest-native</text>
+  </g>
+
+  <!-- ===================== TWO PLANES ===================== -->
+  <text x="40" y="286" font-size="26" font-weight="800" fill="#e2e8f0">Two planes, cleanly separated</text>
+  <text x="40" y="314" font-size="17" fill="#94a3b8">Most frameworks tangle these together. CTF keeps them orthogonal and lets them meet in exactly one place.</text>
+
+  <!-- WHAT plane -->
+  <rect x="40" y="332" width="562" height="252" rx="22" fill="#0b1220" stroke="#1e3a5f" stroke-width="1.5" filter="url(#soft)"/>
+  <rect x="40" y="332" width="562" height="52" rx="22" fill="url(#whatG)"/>
+  <rect x="40" y="360" width="562" height="24" fill="#0b1220"/>
+  <rect x="40" y="332" width="562" height="52" rx="22" fill="url(#whatG)"/>
+  <text x="64" y="366" font-size="22" font-weight="800" fill="#ffffff">WHAT — Composition plane</text>
+
+
+  <!-- WHAT pipeline nodes -->
+  <g font-size="15" font-weight="700" fill="#e2e8f0" text-anchor="middle">
+    <g>
+      <rect x="66" y="410" width="118" height="52" rx="12" fill="#0ea5e9" opacity="0.18" stroke="#0ea5e9"/>
+      <text x="125" y="434">Registry</text><text x="125" y="452" font-size="11" fill="#93c5fd">single source</text>
+    </g>
+    <g>
+      <rect x="200" y="410" width="118" height="52" rx="12" fill="#0ea5e9" opacity="0.18" stroke="#0ea5e9"/>
+      <text x="259" y="434">Resolver</text><text x="259" y="452" font-size="11" fill="#93c5fd">topo plan</text>
+    </g>
+    <g>
+      <rect x="334" y="410" width="118" height="52" rx="12" fill="#2563eb" opacity="0.22" stroke="#3b82f6"/>
+      <text x="393" y="434">Assembly</text><text x="393" y="452" font-size="11" fill="#93c5fd">cache · teardown</text>
+    </g>
+    <g>
+      <rect x="468" y="410" width="112" height="52" rx="12" fill="#6366f1" opacity="0.25" stroke="#818cf8"/>
+      <text x="524" y="434">DUT</text><text x="524" y="452" font-size="11" fill="#c7d2fe">the view</text>
+    </g>
+  </g>
+  <g stroke="#38bdf8" stroke-width="2.2" fill="none" marker-end="url(#arrowW)">
+    <path d="M184,436 L198,436"/>
+    <path d="M318,436 L332,436"/>
+    <path d="M452,436 L466,436"/>
+  </g>
+  <text x="66" y="502" font-size="14" fill="#94a3b8">Primitive:</text>
+  <text x="140" y="502" font-size="14" font-weight="700" fill="#7dd3fc">Provider  /  Descriptor</text>
+  <rect x="66" y="516" width="514" height="52" rx="10" fill="#111a2e" stroke="#1e293b"/>
+  <text x="80" y="538" font-size="13.5" font-family="'Consolas',monospace" fill="#7dd3fc">@provides("ctf/cap/exec")  @requires("ctf/target")</text>
+  <text x="80" y="558" font-size="13.5" font-family="'Consolas',monospace" fill="#a5b4fc">def exec_capability(target): return _Exec(target)</text>
+
+  <!-- WHEN plane -->
+  <rect x="638" y="332" width="562" height="252" rx="22" fill="#0b1220" stroke="#5a3a12" stroke-width="1.5" filter="url(#soft)"/>
+  <rect x="638" y="332" width="562" height="52" rx="22" fill="url(#whenG)"/>
+  <rect x="638" y="360" width="562" height="24" fill="#0b1220"/>
+  <rect x="638" y="332" width="562" height="52" rx="22" fill="url(#whenG)"/>
+  <text x="662" y="366" font-size="22" font-weight="800" fill="#ffffff">WHEN — Lifecycle plane</text>
+
+
+  <text x="662" y="410" font-size="14" fill="#94a3b8">Steps on extension points, ridden on pytest's own hooks. Policies:</text>
+  <g font-size="14" font-weight="700" text-anchor="middle">
+    <g><rect x="662" y="424" width="150" height="40" rx="10" fill="#f59e0b" opacity="0.2" stroke="#f59e0b"/><text x="737" y="449" fill="#fcd34d">FANOUT</text></g>
+    <g><rect x="824" y="424" width="150" height="40" rx="10" fill="#f59e0b" opacity="0.2" stroke="#f59e0b"/><text x="899" y="449" fill="#fcd34d">FIRST</text></g>
+    <g><rect x="986" y="424" width="190" height="40" rx="10" fill="#ef4444" opacity="0.2" stroke="#ef4444"/><text x="1081" y="449" fill="#fca5a5">UNIQUE</text></g>
+  </g>
+  <g font-size="12.5" font-family="'Consolas',monospace" fill="#cbd5e1">
+    <text x="662" y="492">sessionstart      → ctf_provision (UNIQUE) + ctf_session_setup</text>
+    <text x="662" y="512">runtest_setup     → ctf_before_test</text>
+    <text x="662" y="532">runtest_teardown  → ctf_after_test        (reverse)</text>
+    <text x="662" y="552">sessionfinish     → ctf_session_teardown   (reverse)</text>
+  </g>
+
+  <!-- meeting point -->
+  <rect x="330" y="596" width="580" height="40" rx="20" fill="#1e293b" stroke="#475569"/>
+  <text x="620" y="622" text-anchor="middle" font-size="14.5" fill="#e2e8f0">the planes meet where a step calls  <tspan font-family="'Consolas',monospace" fill="#7dd3fc">require(contract)</tspan></text>
+  <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M524,570 C524,586 560,600 600,608"/>
+    <path d="M900,570 C900,588 780,600 700,608"/>
+  </g>
+
+  <!-- ===================== READINESS LADDER ===================== -->
+  <text x="40" y="694" font-size="26" font-weight="800" fill="#e2e8f0">The readiness ladder</text>
+  <text x="40" y="722" font-size="17" fill="#94a3b8">Engine-fixed, domain-free. Rule: an earlier-phase provider may not require a later-phase contract.</text>
+
+  <g>
+    <rect x="40" y="740" width="1160" height="96" rx="18" fill="#0b1220" stroke="#1e293b"/>
+    <rect x="56" y="762" width="1128" height="20" rx="10" fill="url(#ladderG)"/>
+    <g font-size="16" font-weight="800" text-anchor="middle" fill="#ffffff">
+      <g><circle cx="150" cy="772" r="16" fill="#334155" stroke="#fff" stroke-width="2"/><text x="150" y="822">DECLARED</text><text x="150" y="750" font-size="12" fill="#cbd5e1">facts</text></g>
+      <g><circle cx="390" cy="772" r="16" fill="#0e7490" stroke="#fff" stroke-width="2"/><text x="390" y="822">ACQUIRED</text><text x="390" y="750" font-size="12" fill="#cbd5e1">exists</text></g>
+      <g><circle cx="620" cy="772" r="16" fill="#0d9488" stroke="#fff" stroke-width="2"/><text x="620" y="822">CONNECTED</text><text x="620" y="750" font-size="12" fill="#cbd5e1">reachable</text></g>
+      <g><circle cx="850" cy="772" r="16" fill="#16a34a" stroke="#fff" stroke-width="2"/><text x="850" y="822">PROVISIONED</text><text x="850" y="750" font-size="12" fill="#cbd5e1">credentialed</text></g>
+      <g><circle cx="1084" cy="772" r="16" fill="#22c55e" stroke="#fff" stroke-width="2"/><text x="1084" y="822">READY</text><text x="1084" y="750" font-size="12" fill="#cbd5e1">test-facing</text></g>
+    </g>
+  </g>
+  <text x="40" y="864" font-size="14" fill="#64748b">Single session timeline — <tspan fill="#94a3b8">no scope axis.</tspan> Every resource lives for the run; per-test freshness is a pytest fixture.</text>
+
+  <!-- ===================== RUN MODES + SPINE ===================== -->
+  <text x="40" y="912" font-size="26" font-weight="800" fill="#e2e8f0">Spine, anchor &amp; run modes</text>
+
+  <rect x="40" y="932" width="562" height="196" rx="20" fill="#0b1220" stroke="#1e293b" filter="url(#soft)"/>
+  <text x="64" y="968" font-size="19" font-weight="800" fill="#c7d2fe">Anchor = <tspan font-family="'Consolas',monospace" fill="#a5b4fc">ctf/target</tspan></text>
+  <text x="64" y="994" font-size="15" fill="#94a3b8">The spine = the @requires closure rooted at the anchor.</text>
+  <text x="64" y="1016" font-size="15" fill="#94a3b8">It MUST resolve. Everything outside is <tspan fill="#e2e8f0" font-weight="700">additive</tspan>.</text>
+  <!-- mini graph -->
+  <g>
+    <circle cx="130" cy="1072" r="20" fill="#6366f1" stroke="#c7d2fe" stroke-width="2"/>
+    <text x="130" y="1077" font-size="11" text-anchor="middle" fill="#fff" font-weight="700">target</text>
+    <circle cx="250" cy="1050" r="16" fill="#0ea5e9" opacity="0.8"/><text x="250" y="1054" font-size="10" text-anchor="middle" fill="#fff">exec</text>
+    <circle cx="250" cy="1096" r="16" fill="#0ea5e9" opacity="0.8"/><text x="250" y="1100" font-size="10" text-anchor="middle" fill="#fff">files</text>
+    <circle cx="380" cy="1050" r="16" fill="#f472b6" opacity="0.85"/><text x="380" y="1054" font-size="10" text-anchor="middle" fill="#fff">echo</text>
+    <circle cx="380" cy="1096" r="16" fill="#94a3b8" opacity="0.5" stroke="#94a3b8" stroke-dasharray="3 3"/><text x="380" y="1100" font-size="9" text-anchor="middle" fill="#e2e8f0">ping✕</text>
+    <g stroke="#64748b" stroke-width="1.8" fill="none">
+      <path d="M150,1066 L234,1054"/><path d="M150,1078 L234,1092"/>
+      <path d="M266,1050 L364,1050"/>
+    </g>
+    <text x="470" y="1058" font-size="12" fill="#22c55e">spine + additive</text>
+    <text x="470" y="1092" font-size="12" fill="#94a3b8">ping unresolved → skip</text>
+  </g>
+
+  <rect x="638" y="932" width="562" height="196" rx="20" fill="#0b1220" stroke="#1e293b" filter="url(#soft)"/>
+  <text x="662" y="968" font-size="19" font-weight="800" fill="#e2e8f0">RunMode</text>
+  <!-- table -->
+  <g font-size="14.5">
+    <rect x="662" y="984" width="514" height="34" fill="#111a2e"/>
+    <text x="676" y="1006" fill="#94a3b8" font-weight="700">mode</text>
+    <text x="836" y="1006" fill="#94a3b8" font-weight="700">spine unmet</text>
+    <text x="1010" y="1006" fill="#94a3b8" font-weight="700">additive unmet</text>
+
+    <text x="676" y="1046" fill="#fca5a5" font-weight="800">STRICT</text>
+    <text x="836" y="1046" fill="#e2e8f0">abort</text>
+    <text x="1010" y="1046" fill="#e2e8f0">abort</text>
+
+    <line x1="662" y1="1060" x2="1176" y2="1060" stroke="#1e293b"/>
+    <text x="676" y="1090" fill="#86efac" font-weight="800">LOOSE</text>
+    <text x="748" y="1090" fill="#64748b" font-size="11">default</text>
+    <text x="836" y="1090" fill="#e2e8f0">abort</text>
+    <text x="1010" y="1090" fill="#fcd34d">skip test ✓</text>
+  </g>
+  <text x="662" y="1120" font-size="12" fill="#64748b">No anchor ⇒ no spine ⇒ LOOSE = STRICT. <tspan fill="#94a3b8">Availability is a graph fact — never self-gating.</tspan></text>
+
+  <!-- ===================== CAPABILITY TAXONOMY ===================== -->
+  <text x="40" y="1176" font-size="26" font-weight="800" fill="#e2e8f0">Four capability shapes</text>
+
+  <g>
+    <rect x="40" y="1196" width="278" height="120" rx="16" fill="#0b1220" stroke="#0ea5e9" stroke-opacity="0.5" filter="url(#soft)"/>
+    <text x="60" y="1228" font-size="16" font-weight="800" fill="#7dd3fc">1 · Target-owned</text>
+    <text x="60" y="1256" font-size="13.5" fill="#cbd5e1">@requires(ctf/target)</text>
+    <text x="60" y="1288" font-size="13" fill="#94a3b8">exec · files · restart ·</text>
+    <text x="60" y="1306" font-size="13" fill="#94a3b8">network</text>
+  </g>
+  <g>
+    <rect x="334" y="1196" width="278" height="120" rx="16" fill="#0b1220" stroke="#f59e0b" stroke-opacity="0.5" filter="url(#soft)"/>
+    <text x="354" y="1228" font-size="16" font-weight="800" fill="#fcd34d">2 · Env-provided</text>
+    <text x="354" y="1256" font-size="13.5" fill="#cbd5e1">@requires(host infra)</text>
+    <text x="354" y="1288" font-size="13" fill="#94a3b8">ping = host/process +</text>
+    <text x="354" y="1306" font-size="13" fill="#94a3b8">target's network</text>
+  </g>
+  <g>
+    <rect x="628" y="1196" width="278" height="120" rx="16" fill="#0b1220" stroke="#a78bfa" stroke-opacity="0.6" filter="url(#soft)"/>
+    <text x="648" y="1228" font-size="16" font-weight="800" fill="#c4b5fd">3 · Cap-requires-cap</text>
+    <text x="648" y="1256" font-size="13.5" fill="#cbd5e1">derived from another</text>
+    <text x="648" y="1288" font-size="13" fill="#94a3b8">echo → exec ·</text>
+    <text x="648" y="1306" font-size="13" fill="#94a3b8">ssh → endpoint+token</text>
+  </g>
+  <g>
+    <rect x="922" y="1196" width="278" height="120" rx="16" fill="#0b1220" stroke="#22c55e" stroke-opacity="0.6" filter="url(#soft)"/>
+    <text x="942" y="1228" font-size="16" font-weight="800" fill="#86efac">4 · Conditional</text>
+    <text x="942" y="1256" font-size="13.5" fill="#cbd5e1">present on some targets</text>
+    <text x="942" y="1288" font-size="13" fill="#94a3b8">absent → skip;</text>
+    <text x="942" y="1306" font-size="13" fill="#94a3b8">docker → runs</text>
+  </g>
+
+  <!-- ===================== RE-ENTRANCY + LAYERS ===================== -->
+  <rect x="40" y="1344" width="562" height="196" rx="20" fill="#0b1220" stroke="#1e293b" filter="url(#soft)"/>
+  <text x="64" y="1380" font-size="20" font-weight="800" fill="#f9a8d4">Re-entrancy — HW breaks</text>
+  <text x="64" y="1406" font-size="14.5" fill="#94a3b8">Assembly is a re-drivable state machine, not a one-shot.</text>
+  <g font-size="13" font-family="'Consolas',monospace">
+    <rect x="64" y="1420" width="514" height="30" rx="8" fill="#111a2e"/>
+    <text x="78" y="1440" fill="#7dd3fc">advance_through_phases(up_to="READY")</text>
+    <rect x="64" y="1456" width="514" height="30" rx="8" fill="#111a2e"/>
+    <text x="78" y="1476" fill="#fcd34d">reapply("PROVISIONED", cascade=False)</text>
+    <rect x="64" y="1492" width="514" height="30" rx="8" fill="#111a2e"/>
+    <text x="78" y="1512" fill="#fca5a5">reapply("ACQUIRED", cascade=True)  # reflash</text>
+  </g>
+
+  <rect x="638" y="1344" width="562" height="196" rx="20" fill="#0b1220" stroke="#1e293b" filter="url(#soft)"/>
+  <text x="662" y="1380" font-size="20" font-weight="800" fill="#e2e8f0">Layered architecture</text>
+  <g font-size="14">
+    <g><rect x="662" y="1394" width="514" height="26" rx="7" fill="#334155"/><text x="676" y="1412" fill="#e2e8f0"><tspan font-weight="800">0 · PYTEST</tspan>  the execution host</text></g>
+    <g><rect x="662" y="1424" width="514" height="26" rx="7" fill="#f97316" opacity="0.85"/><text x="676" y="1442" fill="#fff"><tspan font-weight="800">1 · ADAPTER</tspan>  thin: hooks ⇄ CTF points</text></g>
+    <g><rect x="662" y="1454" width="514" height="26" rx="7" fill="#2563eb" opacity="0.85"/><text x="676" y="1472" fill="#fff"><tspan font-weight="800">2 · KERNEL</tspan>  pytest-free · composes pre-test</text></g>
+    <g><rect x="662" y="1484" width="514" height="26" rx="7" fill="#8b5cf6" opacity="0.85"/><text x="676" y="1502" fill="#fff"><tspan font-weight="800">3 · PLUGINS</tspan>  targets · caps · scenarios</text></g>
+    <g><rect x="662" y="1514" width="514" height="22" rx="7" fill="#64748b" opacity="0.6"/><text x="676" y="1530" fill="#e2e8f0"><tspan font-weight="800">4 · PRODUCT</tspan>  the system under test</text></g>
+  </g>
+
+  <!-- ===================== GOVERNANCE ===================== -->
+  <rect x="40" y="1560" width="1160" height="130" rx="22" fill="url(#govG)" opacity="0.16" stroke="#14b8a6" stroke-opacity="0.5" filter="url(#soft)"/>
+  <text x="64" y="1600" font-size="22" font-weight="800" fill="#5eead4">Governance — keeping the freedom honest</text>
+  <text x="64" y="1628" font-size="15" fill="#cbd5e1">A separate, one-way-dependent auditor inspects an assembled ecosystem <tspan font-weight="700" fill="#fff">without executing it</tspan>.</text>
+  <g font-size="14" font-weight="700" text-anchor="middle">
+    <g><rect x="64" y="1644" width="210" height="34" rx="17" fill="#0f766e" opacity="0.55" stroke="#2dd4bf"/><text x="169" y="1666" fill="#ccfbf1">namespacing</text></g>
+    <g><rect x="286" y="1644" width="210" height="34" rx="17" fill="#0f766e" opacity="0.55" stroke="#2dd4bf"/><text x="391" y="1666" fill="#ccfbf1">catalog / discovery</text></g>
+    <g><rect x="508" y="1644" width="230" height="34" rx="17" fill="#0f766e" opacity="0.55" stroke="#2dd4bf"/><text x="623" y="1666" fill="#ccfbf1">duplicate · unresolved</text></g>
+    <g><rect x="750" y="1644" width="210" height="34" rx="17" fill="#0f766e" opacity="0.55" stroke="#2dd4bf"/><text x="855" y="1666" fill="#ccfbf1">UNIQUE collisions</text></g>
+    <g><rect x="972" y="1644" width="204" height="34" rx="17" fill="#134e4a" stroke="#5eead4"/><text x="1074" y="1666" fill="#99f6e4">CI gate ✓</text></g>
+  </g>
+
+  <!-- footer -->
+  <text x="620" y="1726" text-anchor="middle" font-size="14" fill="#475569">core 77 ✓ · governance 30 ✓ · integration · scenario · ssh_demo · docker — all green   |   contracts in, targets out</text>
+</svg>

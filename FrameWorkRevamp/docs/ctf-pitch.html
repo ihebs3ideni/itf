@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CTF — Contract Test Framework · Idea Pitch</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg2: #111a33;
+    --ink: #e8ecf6;
+    --muted: #9aa6c4;
+    --line: #26314f;
+    --what: #4f8cff;   /* composition / WHAT plane */
+    --whatd: #1f3a6b;
+    --when: #ffb347;   /* lifecycle / WHEN plane */
+    --whend: #7a4e12;
+    --good: #43d19e;
+    --bad: #ff6b6b;
+    --gooddim: #123a30;
+    --baddim: #3a1414;
+    --code: #cfe3ff;
+    --accent: #b48cff;
+    --card: #16203c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  code, .mono { font-family: "Consolas", "SF Mono", "JetBrains Mono", ui-monospace, monospace; }
+
+  #deck { height: 100vh; width: 100vw; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 4.2vh 5.5vw 8vh;
+    animation: fade .35s ease;
+    overflow: auto;
+  }
+  .slide.active { display: flex; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+
+  h1 { font-size: clamp(28px, 4.6vw, 62px); line-height: 1.05; letter-spacing: -0.5px; }
+  h2 { font-size: clamp(22px, 3.2vw, 42px); line-height: 1.1; letter-spacing: -0.3px; margin-bottom: 2.4vh; }
+  h2 .k { color: var(--accent); }
+  h3 { font-size: clamp(16px, 1.8vw, 24px); margin-bottom: 8px; }
+  p, li { font-size: clamp(14px, 1.55vw, 20px); line-height: 1.5; color: var(--ink); }
+  .muted { color: var(--muted); }
+  .kicker { text-transform: uppercase; letter-spacing: 3px; font-size: 13px; color: var(--accent); margin-bottom: 1.6vh; font-weight: 700; }
+
+  .grid { display: grid; gap: 20px; }
+  .cols-2 { grid-template-columns: 1fr 1fr; }
+  .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .fill { flex: 1; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 22px;
+  }
+  .card.good { border-color: #1f6b52; background: linear-gradient(180deg, var(--gooddim), var(--card)); }
+  .card.bad  { border-color: #6b2020; background: linear-gradient(180deg, var(--baddim), var(--card)); }
+  .card.what { border-color: var(--whatd); }
+  .card.when { border-color: var(--whend); }
+
+  ul { list-style: none; }
+  ul li { position: relative; padding-left: 26px; margin: 10px 0; }
+  ul li::before { content: "▸"; position: absolute; left: 4px; color: var(--accent); }
+  ul.bad li::before  { content: "✕"; color: var(--bad); }
+  ul.good li::before { content: "✓"; color: var(--good); }
+  .tight li { margin: 6px 0; }
+
+  pre {
+    background: #0a0f1f;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    overflow: auto;
+    font-size: clamp(12px, 1.25vw, 16px);
+    line-height: 1.5;
+    color: var(--code);
+  }
+  pre .c { color: #5f7196; }          /* comment */
+  pre .s { color: #9ff0c8; }          /* string / contract */
+  pre .k { color: #ff9ec7; }          /* keyword */
+  pre .d { color: #ffd479; }          /* decorator */
+  pre .n { color: #cfe3ff; }          /* normal ident */
+  pre .hl { background: #16264a; display: inline-block; border-radius: 4px; padding: 0 4px; }
+
+  .pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; border: 1px solid var(--line); }
+  .pill.what { color: var(--what); border-color: var(--whatd); background: #10203f; }
+  .pill.when { color: var(--when); border-color: var(--whend); background: #2a1f0c; }
+  .pill.good { color: var(--good); border-color: #1f6b52; background: var(--gooddim); }
+
+  .big { font-size: clamp(20px, 2.4vw, 32px); font-weight: 700; }
+  .accent { color: var(--accent); }
+  .whatc { color: var(--what); }
+  .whenc { color: var(--when); }
+  .goodc { color: var(--good); }
+  .badc  { color: var(--bad); }
+
+  .flow { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+  .node { flex: 1; min-width: 120px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 12px; text-align: center; }
+  .node .t { font-weight: 700; font-size: clamp(13px,1.4vw,17px); }
+  .node .s { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .arrow { align-self: center; color: var(--accent); font-size: 22px; }
+
+  .ladder { display: flex; gap: 10px; }
+  .rung { flex: 1; border-radius: 12px; padding: 14px 10px; text-align: center; border: 1px solid var(--line); font-weight: 700; font-size: clamp(12px,1.3vw,16px); }
+
+  table { width: 100%; border-collapse: collapse; font-size: clamp(13px,1.4vw,18px); }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+  tr:last-child td { border-bottom: none; }
+
+  .center { justify-content: center; }
+  .title-wrap { max-width: 1100px; }
+  .lead { font-size: clamp(16px, 2vw, 26px); color: var(--muted); margin-top: 2.4vh; line-height: 1.5; }
+
+  /* chrome */
+  #bar { position: fixed; left: 0; bottom: 0; height: 5px; background: linear-gradient(90deg, var(--what), var(--accent), var(--when)); transition: width .35s ease; z-index: 20; }
+  #hud { position: fixed; right: 18px; bottom: 16px; font-size: 12px; color: var(--muted); z-index: 20; display: flex; gap: 14px; align-items: center; }
+  #hud kbd { background: #1b2646; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; font-family: inherit; }
+  .brand { position: fixed; left: 20px; bottom: 14px; font-size: 12px; letter-spacing: 2px; color: var(--muted); z-index: 20; text-transform: uppercase; }
+  .snum { position: fixed; right: 20px; top: 16px; font-size: 12px; color: var(--muted); z-index: 20; }
+  .nav { position: fixed; inset: 0; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
+  .nav button { pointer-events: auto; background: transparent; border: none; color: transparent; width: 12vw; cursor: pointer; }
+
+  .quote { font-size: clamp(18px, 2.3vw, 30px); line-height: 1.4; border-left: 4px solid var(--accent); padding-left: 22px; color: var(--ink); }
+  .sub { color: var(--muted); font-size: clamp(13px,1.4vw,18px); }
+  .tag { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .split { display:grid; grid-template-columns: 1.1fr 1fr; gap: 22px; align-items: start; }
+  .stack > * + * { margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide active center">
+    <div class="title-wrap">
+      <div class="kicker">Integration Test Framework · Idea Pitch</div>
+      <h1>CTF — the <span class="accent">Contract</span> Test Framework</h1>
+      <p class="lead">Stop wiring tests to machines. Declare <span class="whatc">what</span> a test needs as a
+      contract, describe <span class="whenc">when</span> things come alive as a graph — and let the framework
+      compose the environment deterministically for any target.</p>
+      <div style="margin-top:4vh; display:flex; gap:12px; flex-wrap:wrap;">
+        <span class="pill what">WHAT · composition plane</span>
+        <span class="pill when">WHEN · lifecycle plane</span>
+        <span class="pill good">contracts = the only coupling</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · THE PROBLEM -->
+  <section class="slide">
+    <div class="kicker">Act I · The pain</div>
+    <h2>Traditional test frameworks wire tests to <span class="k">machines</span>, not to <span class="k">needs</span></h2>
+    <div class="grid cols-2 fill">
+      <div class="card bad">
+        <h3 class="badc">What a test actually says today</h3>
+        <pre><span class="c"># "an SSH test" — but look what it really hardcodes</span>
+<span class="k">def</span> <span class="n">test_reboot</span>():
+    ssh = <span class="n">SSHClient</span>(<span class="s">"10.0.0.5"</span>, port=<span class="n">22</span>)   <span class="c"># which box</span>
+    ssh.<span class="n">deploy_token</span>(<span class="s">"token-42"</span>)          <span class="c"># how it's auth'd</span>
+    ssh.<span class="n">connect</span>()                          <span class="c"># the transport</span>
+    ssh.<span class="n">run</span>(<span class="s">"reboot"</span>)                       <span class="c"># the only real intent</span></pre>
+        <p class="sub" style="margin-top:12px">One line of intent, four lines of environment. The test <em>is</em> the wiring.</p>
+      </div>
+      <div class="card">
+        <h3>So every test inherits the setup's assumptions</h3>
+        <ul class="bad tight">
+          <li>Change the transport (UART instead of SSH) → rewrite every test</li>
+          <li>New target with the same capability → fork the suite</li>
+          <li>Auth differs per lab → conditionals leak into tests</li>
+          <li>Bring-up order (power → net → creds) → hand-orchestrated in fixtures</li>
+          <li>“Does this box support X?” → scattered <span class="mono">if</span> guards</li>
+        </ul>
+        <p class="sub">The intent — <em>“reboot the target”</em> — is buried under a specific machine on a specific day.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · WHERE ECOSYSTEMS BREAK -->
+  <section class="slide">
+    <div class="kicker">Act I · Why it doesn't scale</div>
+    <h2>Ecosystems break on four <span class="k">unfounded assumptions</span></h2>
+    <div class="grid cols-2 fill">
+      <div class="card bad">
+        <h3 class="badc">1 · “The test knows the target”</h3>
+        <p class="sub">Handles, IPs, and transports are baked into test code, so tests aren't portable — they're re-implemented per bench.</p>
+      </div>
+      <div class="card bad">
+        <h3 class="badc">2 · “Capabilities imply a backend”</h3>
+        <p class="sub"><em>exec</em> silently means SSH. The moment a target execs over a serial console, the abstraction collapses.</p>
+      </div>
+      <div class="card bad">
+        <h3 class="badc">3 · “Setup order is a script”</h3>
+        <p class="sub">Deploy-token-before-connect lives in imperative fixtures. Reorder one dependency and it silently breaks.</p>
+      </div>
+      <div class="card bad">
+        <h3 class="badc">4 · “Plugins may inspect each other”</h3>
+        <p class="sub">Plugin A imports plugin B to check “is it there?”. Now they ship together forever — the ecosystem is one repo pretending to be many.</p>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:2.4vh">Each is a <span class="badc">coupling</span> the framework never forced you to break — so nobody did.</p>
+  </section>
+
+  <!-- 3b · PROBLEMS TRACE TO ONE ORIENTATION -->
+  <section class="slide">
+    <div class="kicker">Act I · The root cause</div>
+    <h2>None of these are bugs — they're the <span class="k">orientation</span></h2>
+    <div class="split fill">
+      <div class="stack">
+        <div class="card bad">
+          <h3 class="badc">The framework points at machines</h3>
+          <p class="sub">Every primitive it hands you — a client, a fixture, a connection — is <em>a thing on a bench</em>. So the natural way to write a test is to name that thing. The tool makes coupling the path of least resistance.</p>
+        </div>
+        <div class="card bad">
+          <h3 class="badc">It has no word for “a need”</h3>
+          <p class="sub">There's no first-class way to say “I need exec, I don't care how.” Intent gets encoded as a concrete transport, and every test silently over-specifies.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <h3>Change the mental model, and the symptoms dissolve</h3>
+          <table>
+            <tr><th>Symptom</th><th>Root orientation</th></tr>
+            <tr><td>tests aren't portable</td><td class="mono">tests name machines</td></tr>
+            <tr><td>backend swap = rewrite</td><td class="mono">capability ≡ transport</td></tr>
+            <tr><td>fragile setup order</td><td class="mono">order is imperative</td></tr>
+            <tr><td>plugins ship together</td><td class="mono">coupling by import</td></tr>
+          </table>
+        </div>
+        <p class="lead">Fix the orientation once — point tests at <span class="whatc">needs</span>, not machines — and all four fall out together.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · THE SHIFT -->
+  <section class="slide center">
+    <div class="title-wrap">
+    <div class="kicker">Act II · The concept</div>
+      <h2 style="margin-bottom:3vh">The fix is one inversion:</h2>
+      <p class="quote">A test declares the <span class="whatc">capability it needs</span> — a string contract.<br/>
+      The framework <span class="accent">resolves</span> who provides it, in what order, for <em>this</em> target.<br/>
+      Tests never name a machine, a transport, or a boot sequence again.</p>
+      <div class="grid cols-3" style="margin-top:4vh">
+        <div class="card good"><h3 class="goodc">Decouple by contract</h3><p class="sub">A string is the entire public API and the only cross-plugin link.</p></div>
+        <div class="card good"><h3 class="goodc">Compose by graph</h3><p class="sub">Dependencies resolve topologically; order is a consequence, not a script.</p></div>
+        <div class="card good"><h3 class="goodc">Choose by composition</h3><p class="sub">Which backend? Decided when you assemble the run — never at call time.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4b · THE ECOSYSTEM -->
+  <section class="slide">
+    <div class="kicker">Act II · The concept</div>
+    <h2>An ecosystem that's <span class="k">collaborative, composable, reusable</span></h2>
+    <div class="grid cols-3 fill">
+      <div class="card good">
+        <h3 class="goodc">Collaborative</h3>
+        <p class="sub">Independent teams and vendors publish plugins from their own repos. They agree on <b>names</b> — contract strings — the way web services agree on URLs. No shared codebase, no import graph.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Composable</h3>
+        <p class="sub">A run is <em>assembled</em>, not coded: drop in the plugins you want and the graph wires them into a valid environment — or tells you exactly what's missing.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Reusable</h3>
+        <p class="sub">A plugin is written once against a contract and works on every target that satisfies it — mock, container, or silicon — with zero edits.</p>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:2vh">The unit of sharing isn't a library or a base class — it's a <span class="accent">named capability</span>. That single choice is what makes the other three possible.</p>
+  </section>
+
+  <!-- 5 · TWO PLANES -->
+  <section class="slide">
+    <div class="kicker">Act II · The concept</div>
+    <h2>Two planes that meet at one line</h2>
+    <div class="split fill">
+      <div class="stack">
+        <div class="card what">
+          <span class="pill what">WHAT · composition · <b>nouns</b></span>
+          <h3 style="margin-top:12px">What is the target made of?</h3>
+          <p class="sub"><span class="mono">collect → resolve → realize → DUT</span></p>
+          <p class="sub">Primitive: a <b>Provider</b> / <b>Descriptor</b>. One live provider per string (SSOT). A pure graph, realized <em>eagerly</em>, ordered by <span class="mono">@requires</span>.</p>
+        </div>
+        <div class="card when">
+          <span class="pill when">WHEN · lifecycle · <b>verbs</b></span>
+          <h3 style="margin-top:12px">What is <em>done</em> to it, and when?</h3>
+          <p class="sub"><span class="mono">pluggy hooks</span> that only <span class="mono">require</span> — never <span class="mono">provide</span>.</p>
+          <p class="sub">Primitive: an <b>action</b> (provision, sanity-check, before/after test). Fanout, side-effecting, fired <em>after</em> the graph is fully realized.</p>
+        </div>
+      </div>
+      <div class="card center" style="display:flex; flex-direction:column; justify-content:center;">
+        <h3 class="accent" style="text-align:center">They meet here</h3>
+        <pre style="margin-top:14px"><span class="d">@hookimpl</span>
+<span class="k">def</span> <span class="n">ctf_provision</span>(<span class="n">ctx</span>):        <span class="c"># a VERB — no provide</span>
+    ctx.<span class="hl">require</span>(<span class="s">"ctf/cap/exec"</span>).<span class="n">execute</span>(<span class="s">"seed.sh"</span>)</pre>
+        <p class="sub" style="margin-top:14px; text-align:center">A lifecycle action asks the composition plane for an <em>already-built</em> capability by <b>contract string</b>. That single <span class="mono">require</span> is the whole seam — and it's a warm cache hit.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5a · TWO KINDS OF CITIZEN -->
+  <section class="slide">
+    <div class="kicker">Act II · The concept</div>
+    <h2>Every contribution is a <span class="k">noun</span> or a <span class="k">verb</span> — never both</h2>
+    <div class="split fill">
+      <div class="stack">
+        <div class="card what">
+          <h3 class="whatc">Producer — a noun</h3>
+          <p class="sub">Answers <em>“what is X?”</em>. Resolves to a value someone can <span class="mono">require</span>. Exactly <b>one</b> per string (SSOT), realized lazily, ordered by its edges.</p>
+          <pre><span class="d">@provides</span>(<span class="s">"ctf/sec/token"</span>)      <span class="c"># yields a value</span>
+<span class="d">@requires</span>(<span class="s">"ctf/sec/token_request"</span>)
+<span class="k">def</span> <span class="n">deploy_token</span>(<span class="n">req</span>):
+    deploy(<span class="n">req</span>); <span class="k">yield</span> <span class="n">Credential</span>(<span class="n">req</span>)</pre>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card when">
+          <h3 class="whenc">Action — a verb</h3>
+          <p class="sub">Answers <em>“do X”</em>. Returns nothing; only side-effects. <b>Many</b> allowed (fanout), require-only, fired after the graph is ready.</p>
+          <pre><span class="d">@hookimpl</span>
+<span class="k">def</span> <span class="n">ctf_provision</span>(<span class="n">ctx</span>):       <span class="c"># returns nothing</span>
+    ctx.<span class="hl">require</span>(<span class="s">"ctf/cap/exec"</span>).<span class="n">push</span>(<span class="s">"seed.db"</span>)</pre>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:2vh">The test for <em>anything</em> you register: <b>does someone <span class="mono">require</span> your result?</b> Yes → noun (SSOT binds you). No → verb (multiply freely). SSOT governs nouns; it was never a rule about verbs.</p>
+  </section>
+
+  <!-- 5b · THE PILLARS -->
+  <section class="slide">
+    <div class="kicker">Act III · What guides every decision</div>
+    <h2>Five pillars — each with a <span class="k">design approach</span> and a choice it forces</h2>
+    <div class="grid cols-2 fill">
+      <div class="card what"><h3 class="whatc">1 · Decouple by contract</h3><p class="sub">Sharing is a <b>string</b>, never an import. <span class="tag">choice · identity, not shape</span></p></div>
+      <div class="card when"><h3 class="whenc">2 · Order is a derived tier</h3><p class="sub">Phase is the <b>computed</b> topological layer. <span class="tag">choice · derived tiers, no phase tags</span></p></div>
+      <div class="card good"><h3 class="goodc">3 · One truth per contract</h3><p class="sub">Exactly <b>one</b> live provider, picked at compose time. <span class="tag">choice · single source of truth</span></p></div>
+      <div class="card"><h3 class="accent">4 · Reuse by target-blindness</h3><p class="sub">Plugins name facts, never a target. <span class="tag">choice · descriptors + requires</span></p></div>
+      <div class="card"><h3 class="accent">5 · Availability is a graph fact</h3><p class="sub">“Can this run?” is resolved, never guessed. <span class="tag">choice · loose mode, no self-inspection</span></p></div>
+      <div class="card good center" style="display:flex;flex-direction:column;justify-content:center"><p class="big goodc">The next five slides take each pillar one at a time.</p></div>
+    </div>
+  </section>
+
+  <!-- 6 · CONTRACTS -->
+  <section class="slide">
+    <div class="kicker">Act III · Pillar 1</div>
+    <h2>A contract is a <span class="k">string</span> — identity, not shape</h2>
+    <div class="split fill">
+      <div class="stack">
+        <pre><span class="d">@provides</span>(<span class="s">"ctf/cap/exec"</span>)          <span class="c"># I produce this</span>
+<span class="d">@requires</span>(<span class="s">"ctf/net/ssh_endpoint"</span>)   <span class="c"># given this</span>
+<span class="k">def</span> <span class="n">ssh_exec</span>(<span class="n">endpoint</span>):
+    <span class="k">return</span> <span class="n">SshExec</span>(<span class="n">endpoint</span>)</pre>
+        <ul class="good tight">
+          <li><b>Identity</b> — “which thing do I mean?” The registry keys on it.</li>
+          <li><b>Zero coupling</b> — no shared import; repos agree on a name, like an HTTP path.</li>
+          <li><b>Uniform</b> — capabilities <em>and</em> facts (endpoints, tokens) are all just strings.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Why not a Protocol / interface?</h3>
+        <ul class="bad tight">
+          <li>Shapes <em>collide</em> — <span class="mono">restart()</span> and <span class="mono">poweroff()</span> are both <span class="mono">()→None</span></li>
+          <li>To “require an interface” every repo must <b>import the class</b> → the coupling returns</li>
+          <li>Facts have no methods — a tuple <span class="mono">(host, port)</span> can't be a Protocol</li>
+          <li>You'd have to <em>instantiate</em> to match a shape — but the graph is planned <em>before</em> anything runs</li>
+        </ul>
+        <p class="sub">Protocols stay optional <em>shape</em> docs for mypy — never the resolution key.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · THE LADDER / TIERS -->
+  <section class="slide">
+    <div class="kicker">Act III · Pillar 2</div>
+    <h2>A phase is a <span class="k">derived tier</span> — not a label you write</h2>
+    <div class="ladder fill" style="max-height:22vh">
+      <div class="rung" style="border-color:#3a2a5f;color:#c9b3ff">TIER 0<br/><span class="sub">the target &amp; its facts</span></div>
+      <div class="arrow">›</div>
+      <div class="rung" style="border-color:#2a3a6f;color:#9fc0ff">TIER 1<br/><span class="sub">acquired / booted</span></div>
+      <div class="arrow">›</div>
+      <div class="rung" style="border-color:#1f5a6f;color:#8fe0ff">TIER 2<br/><span class="sub">reachable</span></div>
+      <div class="arrow">›</div>
+      <div class="rung" style="border-color:#1f6b52;color:#8ff0c8">TIER 3<br/><span class="sub">credentialed</span></div>
+      <div class="arrow">›</div>
+      <div class="rung" style="border-color:#1f6b3a;color:#a8f0a0">TIER 4<br/><span class="sub">capabilities live</span></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:2.4vh">
+      <div class="card">
+        <h3>The tier law</h3>
+        <p>A contribution may require <b>only lower tiers</b>. So two things in the <em>same</em> tier can't see each other — <span class="accent">peer coupling isn't forbidden, it's impossible</span>. “Depend only on the target” is just “the target is tier 0.”</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Tiers are derived, never declared</h3>
+        <p class="sub">No <span class="mono">phase=</span> on any provider. Each <span class="mono">@requires</span> edge <em>places</em> a node in its tier; the ladder is the toposort, rendered. If order matters, an edge exists — and the dependent thing is a higher tier <em>by construction</em>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · SINGLE SOURCE OF TRUTH / BACKENDS -->
+  <section class="slide">
+    <div class="kicker">Act III · Pillar 3</div>
+    <h2>One contract → <span class="k">exactly one</span> live provider</h2>
+    <div class="split fill">
+      <div class="stack">
+        <p><span class="mono">ctf/cap/exec</span> already has four backends:</p>
+        <div class="flow">
+          <div class="node"><div class="t">mock</div><div class="s">in-memory</div></div>
+          <div class="node"><div class="t">subprocess</div><div class="s">local shell</div></div>
+          <div class="node"><div class="t">docker</div><div class="s">container</div></div>
+          <div class="node"><div class="t">ssh</div><div class="s">over network</div></div>
+        </div>
+        <p class="sub">All <span class="mono">@provides("ctf/cap/exec")</span>. The <b>composition</b> registers exactly one. Two live at once →
+        <span class="badc mono">DuplicateProviderError</span>, by design.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">“Which backend?” is never a runtime guess</h3>
+        <ul class="good tight">
+          <li><b>By knob</b> — <span class="mono">--ctf-target=docker</span> registers the docker exec</li>
+          <li><b>By graph</b> — the backend whose transport fact exists resolves; the rest are simply <em>unavailable</em></li>
+          <li><b>By name</b> — if a console is <em>not</em> substitutable for SSH, it's a different contract (<span class="mono">ctf/console/exec</span>)</li>
+        </ul>
+        <p class="sub">The test asks <span class="mono">require("ctf/cap/exec")</span> and never learns which one it got.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8b · PILLAR 4 — REUSE -->
+  <section class="slide">
+    <div class="kicker">Act III · Pillar 4</div>
+    <h2>Reuse comes from <span class="k">target-blindness</span></h2>
+    <div class="split fill">
+      <div class="stack">
+        <pre><span class="c"># a plugin NEVER names a target —</span>
+<span class="c"># it names the FACTS it consumes</span>
+<span class="d">@provides</span>(<span class="s">"ctf/cap/exec"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/net/ssh_endpoint"</span>)  <span class="c"># a fact</span>
+<span class="k">def</span> <span class="n">ssh_exec</span>(<span class="n">endpoint</span>):
+    <span class="k">return</span> <span class="n">SshExec</span>(<span class="n">endpoint</span>)</pre>
+        <p class="sub"><b>Design approach:</b> targets <em>publish</em> facts (descriptors); capabilities <em>consume</em> them. The two never reference each other — only a shared string.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Why it's reusable everywhere</h3>
+        <ul class="good tight">
+          <li>The same <span class="mono">ssh_exec</span> serves a sealed box, an open box, a container — any target that publishes an <span class="mono">ssh_endpoint</span></li>
+          <li>Co-located by file ≠ coupled by contract — a target and its plugin can ship from different repos</li>
+          <li>Add a new target: publish the fact, reuse every capability unchanged</li>
+        </ul>
+        <p class="sub"><b>Choice it forces:</b> no <span class="mono">import target</span>, no target-specific handles — only descriptors and <span class="mono">@requires</span>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8c · PILLAR 5 — AVAILABILITY -->
+  <section class="slide">
+    <div class="kicker">Act III · Pillar 5</div>
+    <h2>Availability is a <span class="k">graph fact</span>, never a self-check</h2>
+    <div class="split fill">
+      <div class="stack">
+        <div class="card bad">
+          <h3 class="badc">The old way — plugins inspect each other</h3>
+          <pre><span class="k">if</span> <span class="n">has_plugin</span>(<span class="s">"token"</span>):        <span class="c"># import + guard</span>
+    endpoint = <span class="n">authed</span>()
+<span class="k">else</span>:
+    endpoint = <span class="n">anon</span>()</pre>
+          <p class="sub">Guards scatter, plugins import each other, and “is X here?” is answered at runtime, differently in every plugin.</p>
+        </div>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">The CTF way — the graph answers it once</h3>
+        <ul class="good tight">
+          <li>A capability resolves <b>iff</b> its required facts exist in the registry</li>
+          <li>Missing dependency in <b>LOOSE</b> mode → recorded <span class="mono">unavailable</span>; the test simply <b>skips</b></li>
+          <li>No plugin ever calls <span class="mono">registry.has()</span> to gate itself</li>
+        </ul>
+        <p class="sub"><b>Design approach:</b> presence is a property of the resolved graph, computed centrally. <b>Choice it forces:</b> loose-mode resolution + honest skips instead of scattered <span class="mono">if</span> guards.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · THE PIPELINE -->
+  <section class="slide">
+    <div class="kicker">Act IV · What it looks like to use</div>
+    <h2>From trigger to teardown — a single deterministic pass</h2>
+    <div class="fill stack" style="justify-content:center">
+      <div class="flow">
+        <div class="node what"><div class="t">pluggy collects</div><div class="s">@hookimpl → flat bag</div></div>
+        <div class="arrow">→</div>
+        <div class="node what"><div class="t">engine resolves</div><div class="s">SSOT · tiers · toposort</div></div>
+        <div class="arrow">→</div>
+        <div class="node when"><div class="t">realize eagerly</div><div class="s">tier 0 → 4, fail-fast</div></div>
+        <div class="arrow">→</div>
+        <div class="node when"><div class="t">DUT exposed</div><div class="s">dut.require(contract)</div></div>
+      </div>
+      <div class="flow">
+        <div class="node"><div class="t">test body</div><div class="s">uses capability, oblivious</div></div>
+        <div class="arrow">→</div>
+        <div class="node when"><div class="t">teardown</div><div class="s">reverse order, automatic</div></div>
+        <div class="arrow">→</div>
+        <div class="node good"><div class="t">session ends</div><div class="s">every finalizer run</div></div>
+      </div>
+      <p class="sub" style="text-align:center">Pluggy <em>collects</em>; the engine <em>resolves &amp; realizes</em> the graph eagerly; lifecycle hooks then <em>act</em> on a ready world. Teardown is just the realization, reversed.</p>
+    </div>
+  </section>
+
+  <!-- 10a · ARCHITECTURE — BIG PICTURE -->
+  <section class="slide">
+    <div class="kicker">Act V · Architecture — zoom 0 · the whole system</div>
+    <h2>Five layers, nested — each wraps the one <span class="k">beneath</span> it</h2>
+    <div class="split fill" style="align-items:center">
+      <div style="display:flex; justify-content:center; align-items:center;">
+        <svg viewBox="0 0 460 460" style="width:100%; max-width:44vh; height:auto;">
+          <defs>
+            <radialGradient id="onion" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#141d38"/>
+              <stop offset="100%" stop-color="#0c1226"/>
+            </radialGradient>
+          </defs>
+          <!-- rings: outer -> inner -->
+          <circle cx="230" cy="230" r="228" fill="url(#onion)" stroke="#3a2a5f" stroke-width="2"/>
+          <circle cx="230" cy="230" r="182" fill="#101a33" stroke="#1f3a6b" stroke-width="2"/>
+          <circle cx="230" cy="230" r="138" fill="#0e1b28" stroke="#1f5a6f" stroke-width="2"/>
+          <circle cx="230" cy="230" r="94"  fill="#221a0a" stroke="#7a4e12" stroke-width="2"/>
+          <circle cx="230" cy="230" r="50"  fill="#111a33" stroke="#2a3a6f" stroke-width="2"/>
+          <!-- ring labels (top of each band) -->
+          <text x="230" y="26"  text-anchor="middle" fill="#c9b3ff" font-family="Consolas,monospace" font-size="15" font-weight="700">L4 · PRODUCT</text>
+          <text x="230" y="70"  text-anchor="middle" fill="#8fb4ff" font-family="Consolas,monospace" font-size="15" font-weight="700">L3 · PLUGINS</text>
+          <text x="230" y="114" text-anchor="middle" fill="#8fe0ff" font-family="Consolas,monospace" font-size="15" font-weight="700">L2 · ENGINE</text>
+          <text x="230" y="158" text-anchor="middle" fill="#ffcf87" font-family="Consolas,monospace" font-size="15" font-weight="700">L1 · KERNEL</text>
+          <text x="230" y="236" text-anchor="middle" fill="#9fc0ff" font-family="Consolas,monospace" font-size="14" font-weight="700">L0</text>
+          <text x="230" y="252" text-anchor="middle" fill="#9fc0ff" font-family="Consolas,monospace" font-size="12">PYTEST</text>
+          <!-- the arrow crossing all rings = contracts -->
+          <line x1="230" y1="280" x2="230" y2="452" stroke="#b48cff" stroke-width="2.5" stroke-dasharray="5 5"/>
+          <text x="244" y="330" fill="#b48cff" font-family="Consolas,monospace" font-size="12" transform="rotate(0 244 330)">contracts</text>
+        </svg>
+      </div>
+      <div class="stack">
+        <div class="card" style="border-color:#3a2a5f; padding:12px 16px;"><b class="accent">L4 · PRODUCT</b> <span class="sub">— your repo, the integrator: composes plugins by name, asks by string.</span></div>
+        <div class="card what" style="padding:12px 16px;"><b class="whatc">L3 · ECOSYSTEM PLUGINS</b> <span class="sub">— many repos, share only strings. No plugin imports another.</span></div>
+        <div class="card" style="border-color:#1f5a6f; padding:12px 16px;"><b style="color:#8fe0ff">L2 · ENGINE</b> <span class="sub">— pure, domain-free: contracts · registry · resolver · tiers · realize · dut.</span></div>
+        <div class="card when" style="padding:12px 16px;"><b class="whenc">L1 · CTF KERNEL</b> <span class="sub">— the pytest plugin: Kernel · hookspecs · get_dut().</span></div>
+        <div class="card" style="border-color:#2a3a6f; padding:12px 16px;"><b style="color:#9fc0ff">L0 · PYTEST</b> <span class="sub">— the runner &amp; the one session timeline everything sits on.</span></div>
+        <p class="sub">Each ring depends only <em>inward</em>; nothing inner knows the ring outside it. The dashed line is the only thing that pierces every layer — the <span class="accent">contract string</span>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10b · ARCHITECTURE — COMPOSITION PLANE -->
+  <section class="slide">
+    <div class="kicker">Act V · Architecture — zoom 1 · the <span style="color:var(--what)">WHAT</span> plane</div>
+    <h2>Composition — <span class="k">registry → resolver → assembly → DUT</span></h2>
+    <div class="flow fill" style="max-height:26vh">
+      <div class="node what"><div class="t">Registry</div><div class="s">contract → one provider / descriptor</div></div>
+      <div class="arrow">→</div>
+      <div class="node what"><div class="t">GraphResolver</div><div class="s">plan(contract): topological, side-effect-free</div></div>
+      <div class="arrow">→</div>
+      <div class="node when"><div class="t">Assembly</div><div class="s">session cache · tier walk · teardown stack</div></div>
+      <div class="arrow">→</div>
+      <div class="node when"><div class="t">DUT</div><div class="s">require · available · provides</div></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:2vh">
+      <div class="card what">
+        <h3 class="whatc">Pure &amp; deterministic (Registry + Resolver)</h3>
+        <ul class="good tight">
+          <li>Single-source-of-truth: one live provider per contract string</li>
+          <li>A fixed registry ⇒ a fixed plan — no side effects, trivially testable</li>
+          <li>Missing dependency ⇒ recorded <em>unavailable</em> (LOOSE) or raised (STRICT)</li>
+        </ul>
+      </div>
+      <div class="card when">
+        <h3 class="whenc">Stateful &amp; ordered (Assembly + DUT)</h3>
+        <ul class="good tight">
+          <li>Assembly instantiates lazily, caches for the session, records finalizers</li>
+          <li>Realizes tiers 0→READY eagerly; tears down in reverse</li>
+          <li>DUT is the read-only view a test/fixture sees: <span class="mono">require("...")</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10c · ARCHITECTURE — LIFECYCLE PLANE -->
+  <section class="slide">
+    <div class="kicker">Act V · Architecture — zoom 2 · the <span style="color:var(--when)">WHEN</span> plane</div>
+    <h2>Lifecycle — pluggy <span class="k">collects</span>, the engine <span class="k">resolves</span></h2>
+    <div class="split fill">
+      <div class="stack">
+        <table>
+          <tr><th>hook</th><th>kind</th><th>fires</th></tr>
+          <tr><td class="mono">ctf_register_providers</td><td>nouns</td><td>collect</td></tr>
+          <tr><td class="mono">ctf_register_facts</td><td>facts</td><td>collect</td></tr>
+          <tr><td class="mono">ctf_provision</td><td>verbs · deploy</td><td>post-READY · fanout</td></tr>
+          <tr><td class="mono">ctf_sanity_checks</td><td>verbs · gate</td><td>post-READY · fanout</td></tr>
+          <tr><td class="mono">ctf_before_test</td><td>verbs</td><td>around each test</td></tr>
+          <tr><td class="mono">ctf_after_test</td><td>verbs</td><td>reverse</td></tr>
+        </table>
+        <p class="sub">Split by <b>kind of citizen</b> — never by phase. Phase is derived by the engine, not chosen by a hook.</p>
+      </div>
+      <div class="card when">
+        <h3 class="whenc">Hooks <em>require</em>, never <em>provide</em></h3>
+        <pre><span class="d">@hookimpl</span>
+<span class="k">def</span> <span class="n">ctf_provision</span>(<span class="n">ctx</span>):        <span class="c"># a verb: act, return nothing</span>
+    link = <span class="n">ctx</span>.<span class="hl">require</span>(<span class="s">"ctf/net/link"</span>)   <span class="c"># warm — already built</span>
+    push_config(link, <span class="s">"app.yaml"</span>)</pre>
+        <ul class="good tight">
+          <li><b>collect</b> — pluggy gathers a flat bag of declarations; orders nothing</li>
+          <li><b>resolve</b> — the engine builds the graph, enforces SSOT, toposorts into tiers</li>
+          <li><b>realize</b> — eager, fail-fast; by the time any hook fires the cache is warm</li>
+          <li>Because a hook can't <span class="mono">provide</span>, load-bearing order can never hide in a hook — it's always a graph edge</li>
+        </ul>
+        <p class="sub">Pluggy is a <b>collection bus, not a scheduler</b>. Discovery is pluggy's; ordering, resolution &amp; execution are the graph's — so the runner is swappable.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 · SCENARIO INTRO -->
+  <section class="slide center">
+    <div class="title-wrap">
+      <div class="kicker">Act VI · Put it to work</div>
+      <h1>One capability. <span class="accent">Two very different targets.</span> <br/>Zero test changes.</h1>
+      <p class="lead">Scenario: run a command over SSH. <b>Target A</b> is a sealed box whose access needs a deployed key.
+      <b>Target B</b> is an open box that needs none. Watch the environment reshape itself while the test stays still.</p>
+    </div>
+  </section>
+
+  <!-- 11 · SCENARIO — the target declares facts -->
+  <section class="slide">
+    <div class="kicker">Act VI · Step 1 — targets declare facts</div>
+    <h2>Targets publish <span class="k">facts + a linked endpoint</span>, nothing else</h2>
+    <div class="grid cols-2 fill">
+      <div class="card what">
+        <h3 class="whatc">Target A — sealed (needs a key)</h3>
+        <pre><span class="n">TOKEN</span> = <span class="s">"ctf/sec/token"</span>
+<span class="d">@provides</span>(<span class="s">"ctf/net/ssh_endpoint"</span>)
+<span class="d">@requires</span>(<span class="n">TOKEN</span>)                <span class="c"># the LINK</span>
+<span class="k">def</span> <span class="n">endpoint</span>(<span class="n">credential</span>):
+    <span class="k">return</span> (<span class="s">"10.0.0.5"</span>, <span class="n">22</span>, <span class="n">credential</span>)
+
+<span class="c"># fact: which key this box needs</span>
+add(<span class="n">Descriptor</span>(<span class="s">"ctf/sec/token_request"</span>, <span class="s">"token-42"</span>))</pre>
+        <p class="sub">Access is <b>gated</b>: the endpoint can't integrate until the key deploys.</p>
+      </div>
+      <div class="card what">
+        <h3 class="whatc">Target B — open (needs nothing)</h3>
+        <pre><span class="d">@provides</span>(<span class="s">"ctf/net/ssh_endpoint"</span>)
+<span class="c"># no @requires -> resolves standalone</span>
+<span class="k">def</span> <span class="n">endpoint</span>():
+    <span class="k">return</span> (<span class="s">"10.0.0.9"</span>, <span class="n">22</span>, <span class="k">None</span>)</pre>
+        <p class="sub">“Don't declare the requirement, and it resolves without the dependency.” The credential slot is simply <span class="mono">None</span>.</p>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:2vh">Neither target imports the SSH plugin, the token plugin, or each other. The only link is the <span class="accent">contract string</span>.</p>
+  </section>
+
+  <!-- 12 · SCENARIO — capability & credential are reusable -->
+  <section class="slide">
+    <div class="kicker">Act VI · Step 2 — reusable plugins</div>
+    <h2>One SSH plugin. One key deployer. <span class="k">Both target-blind</span>.</h2>
+    <div class="grid cols-2 fill">
+      <div class="card">
+        <h3>SSH exec — needs only an endpoint</h3>
+        <pre><span class="d">@provides</span>(<span class="s">"ctf/cap/exec"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/net/ssh_endpoint"</span>)
+<span class="k">def</span> <span class="n">ssh_exec</span>(<span class="n">endpoint</span>):
+    host, port, cred = <span class="n">endpoint</span>
+    <span class="k">return</span> <span class="n">SshExec</span>(host, port, cred)</pre>
+        <p class="sub">Knows nothing about tokens. Whether a key was required is the <em>target's</em> business — carried inside the endpoint value.</p>
+      </div>
+      <div class="card">
+        <h3>Key deployer — keyed on a fact</h3>
+        <pre><span class="d">@provides</span>(<span class="s">"ctf/sec/token"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/sec/token_request"</span>)
+<span class="k">def</span> <span class="n">deploy_token</span>(<span class="n">token_id</span>):
+    deploy(<span class="n">token_id</span>)
+    <span class="k">yield</span> <span class="n">Credential</span>(<span class="n">token_id</span>)
+    revoke(<span class="n">token_id</span>)          <span class="c"># reverse-order teardown</span></pre>
+        <p class="sub">Resolves only where a <span class="mono">token_request</span> fact exists. On Target B it's simply <span class="mono">unavailable</span> — no error, nothing needs it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 · SCENARIO — the test consumes -->
+  <section class="slide">
+    <div class="kicker">Act VI · Step 3 — the test consumes</div>
+    <h2>The test asks for a <span class="k">capability</span> and runs. That's all.</h2>
+    <div class="split fill">
+      <div class="stack">
+        <pre><span class="k">def</span> <span class="n">test_exec_over_ssh</span>(<span class="n">shell</span>):
+    code, out = <span class="n">shell</span>.<span class="hl">execute</span>(<span class="s">"echo -n hello"</span>)
+    <span class="k">assert</span> code == <span class="n">0</span>
+    <span class="k">assert</span> out == <span class="s">b"hello"</span>
+
+<span class="c"># shell fixture = dut.require("ctf/cap/exec")</span></pre>
+        <p class="sub">No IP. No transport. No auth. No boot order. The test states its <em>need</em> and consumes the result.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Same test, two realized environments</h3>
+        <table>
+          <tr><th>Target A (sealed)</th><th>Target B (open)</th></tr>
+          <tr>
+            <td class="mono">deploy token-42<br/>→ open ssh as token-42<br/>→ run<br/>→ revoke token-42</td>
+            <td class="mono">open ssh as anonymous<br/>→ run</td>
+          </tr>
+        </table>
+        <p class="sub" style="margin-top:10px">The graph reshaped bring-up. The test never noticed.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13b · PROVISIONING SPLIT -->
+  <section class="slide">
+    <div class="kicker">Act VI · Provisioning — two deploys that look identical</div>
+    <h2>Same verb “<span class="k">deploy</span>”, two different citizens</h2>
+    <div class="grid cols-2 fill">
+      <div class="card what">
+        <h3 class="whatc">Deploy a token → a <b>noun</b></h3>
+        <pre><span class="d">@provides</span>(<span class="s">"ctf/sec/token"</span>)        <span class="c"># yields Credential</span>
+<span class="d">@requires</span>(<span class="s">"ctf/sec/token_request"</span>)
+<span class="k">def</span> <span class="n">deploy_token</span>(<span class="n">req</span>):
+    deploy(<span class="n">req</span>); <span class="k">yield</span> <span class="n">Credential</span>(<span class="n">req</span>); revoke(<span class="n">req</span>)
+
+<span class="c"># ssh_endpoint @requires("ctf/sec/token")</span></pre>
+        <p class="sub"><span class="mono">ssh_endpoint</span> <b>consumes</b> the credential → it's a producer, in the graph. The edge <em>guarantees</em> key-before-endpoint; “ssh fails if no token” is made <b>unrepresentable</b>.</p>
+      </div>
+      <div class="card when">
+        <h3 class="whenc">Deploy seed data → a <b>verb</b></h3>
+        <pre><span class="d">@hookimpl</span>
+<span class="k">def</span> <span class="n">ctf_provision</span>(<span class="n">ctx</span>):          <span class="c"># returns nothing</span>
+    sh = ctx.<span class="hl">require</span>(<span class="s">"ctf/cap/exec"</span>)  <span class="c"># warm</span>
+    sh.<span class="n">push</span>(<span class="s">"seed.db"</span>, <span class="s">"/var/app/"</span>)
+    sh.<span class="n">execute</span>(<span class="s">"app --load app.yaml"</span>)</pre>
+        <p class="sub"><b>Nothing</b> constructs a capability from seed data → it's a post-READY action. Fanout, order-free, no SSOT. It just has to exist before tests run.</p>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:2vh">The tell is mechanical: <b>does a <span class="mono">@provides</span> factory read your result?</b> Yes → graph noun (ordered by edges). No → <span class="mono">ctf_provision</span> verb (post-ready fanout). You decide “consumed?”, and the citizen picks itself.</p>
+  </section>
+
+  <!-- 14 · ACT IV INTRO — THE SPECTRUM -->
+  <section class="slide center">
+    <div class="title-wrap">
+      <div class="kicker">Act VI · Composition patterns</div>
+      <h1>The same model scales the <span class="accent">whole test pyramid</span></h1>
+      <p class="lead">Unit, component, and integration aren't different frameworks — they're different
+      <em>compositions</em>. You add contracts only as you climb. Below, five real shapes and how each is assembled.</p>
+      <div class="ladder fill" style="max-height:20vh; margin-top:3vh">
+        <div class="rung" style="border-color:#3a2a5f;color:#c9b3ff">UNIT<br/><span class="sub">no target</span></div>
+        <div class="arrow">›</div>
+        <div class="rung" style="border-color:#2a3a6f;color:#9fc0ff">COMPONENT<br/><span class="sub">swappable target</span></div>
+        <div class="arrow">›</div>
+        <div class="rung" style="border-color:#1f5a6f;color:#8fe0ff">INTEGRATION<br/><span class="sub">deployed image</span></div>
+        <div class="arrow">›</div>
+        <div class="rung" style="border-color:#1f6b52;color:#8ff0c8">PROVISIONED<br/><span class="sub">bench + heartbeat</span></div>
+        <div class="arrow">›</div>
+        <div class="rung" style="border-color:#1f6b3a;color:#a8f0a0">DIAGNOSTIC<br/><span class="sub">UDS over any bus</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 · UNIT TESTS -->
+  <section class="slide">
+    <div class="kicker">Act VI · Pattern 1 — unit</div>
+    <h2>Unit tests — the framework <span class="k">gets out of the way</span></h2>
+    <div class="split fill">
+      <div class="stack">
+        <pre><span class="c"># test_parser.py — no target, no contracts, no composition</span>
+<span class="k">from</span> <span class="n">mylib.parser</span> <span class="k">import</span> <span class="n">parse</span>
+
+<span class="k">def</span> <span class="n">test_parse_roundtrip</span>():
+    <span class="k">assert</span> <span class="n">parse</span>(<span class="s">"a=1;b=2"</span>) == {<span class="s">"a"</span>: <span class="n">1</span>, <span class="s">"b"</span>: <span class="n">2</span>}</pre>
+        <p class="sub">Plain pytest. No <span class="mono">ctf/target</span> anchor, no providers registered.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Zero tax when you don't need it</h3>
+        <ul class="good tight">
+          <li>With no anchor and no providers, the composition plane is <b>inert</b> — nothing to resolve.</li>
+          <li>You import the code under test directly and assert. Same as any pytest suite.</li>
+          <li>The moment you need a real target, you <em>add</em> a contract — you never rewrite the test's intent.</li>
+        </ul>
+        <p class="sub">Escalation is additive: unit → component is “introduce an anchor”, not “migrate frameworks”.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 16 · COMPONENT — SWAPPABLE TARGETS -->
+  <section class="slide">
+    <div class="kicker">Act VI · Pattern 2 — component</div>
+    <h2>Component tests — one test, a <span class="k">ladder of targets</span></h2>
+    <div class="split fill">
+      <div class="stack">
+        <p class="sub">Four targets, all <span class="mono">@provides("ctf/target")</span> and an <span class="mono">exec</span> backend:</p>
+        <pre><span class="c"># each in its own plugin — pick ONE per run</span>
+<span class="d">@provides</span>(<span class="s">"ctf/target"</span>)          <span class="c"># mock     -> in-memory</span>
+<span class="d">@provides</span>(<span class="s">"ctf/target"</span>)          <span class="c"># host     -> this machine</span>
+<span class="d">@provides</span>(<span class="s">"ctf/target"</span>)          <span class="c"># docker   -> container</span>
+<span class="d">@provides</span>(<span class="s">"ctf/target"</span>)          <span class="c"># hw       -> real board</span></pre>
+        <pre><span class="n">pytest --ctf-target=mock</span>     <span class="c"># fast CI gate</span>
+<span class="n">pytest --ctf-target=docker</span>   <span class="c"># realistic, hermetic</span>
+<span class="n">pytest --ctf-target=hw</span>       <span class="c"># the lab, real silicon</span></pre>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Same component test, escalating fidelity</h3>
+        <table>
+          <tr><th>Target</th><th>Where the component runs</th><th>Trade</th></tr>
+          <tr><td class="mono">mock</td><td>in-memory double</td><td>fastest</td></tr>
+          <tr><td class="mono">host</td><td>local process</td><td>quick</td></tr>
+          <tr><td class="mono">docker</td><td>container image</td><td>hermetic</td></tr>
+          <tr><td class="mono">hw</td><td>real board</td><td>true fidelity</td></tr>
+        </table>
+        <p class="sub" style="margin-top:10px">The test asks <span class="mono">require("ctf/cap/exec")</span>. Which box ran it is a composition flag, not a code change.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 · INTEGRATION — DEPLOY IMAGE -->
+  <section class="slide">
+    <div class="kicker">Act VI · Pattern 3 — integration</div>
+    <h2>Integration — deploy a <span class="k">full image</span>, talk to it over interfaces</h2>
+    <div class="split fill">
+      <div class="stack">
+        <pre><span class="c"># the image is a FACT (a descriptor) — tier 0</span>
+add(<span class="n">Descriptor</span>(<span class="s">"ctf/image"</span>, <span class="s">"build/system.img"</span>))
+
+<span class="c"># flashing brings the target into existence — tier derived from its edges</span>
+<span class="d">@provides</span>(<span class="s">"ctf/target"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/image"</span>)              <span class="c"># image → target</span>
+<span class="k">def</span> <span class="n">flashed_target</span>(<span class="n">image</span>):
+    flash(<span class="n">image</span>); boot()
+    <span class="k">yield</span> <span class="n">Board</span>()
+    power_off()               <span class="c"># reverse-order teardown</span></pre>
+        <p class="sub">Deploy happens because <span class="mono">ctf/target</span> <em>requires</em> the image — not because a fixture called flash() first.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">Then interact via interfaces — oblivious to flashing</h3>
+        <pre><span class="k">def</span> <span class="n">test_service_up</span>(<span class="n">shell</span>, <span class="n">files</span>):
+    files.<span class="n">push</span>(<span class="s">"cfg.yaml"</span>, <span class="s">"/etc/app/"</span>)
+    code, _ = <span class="n">shell</span>.<span class="n">execute</span>(<span class="s">"systemctl is-active app"</span>)
+    <span class="k">assert</span> code == <span class="n">0</span></pre>
+        <p class="sub">The test consumes <span class="mono">exec</span> + <span class="mono">file_transfer</span> capabilities. It never sees the flash, boot, or power-off — the ladder handled all of it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 18 · TESTBENCH PROVISION + HEARTBEAT -->
+  <section class="slide">
+    <div class="kicker">Act VI · Pattern 4 — provisioning &amp; liveness</div>
+    <h2>Bench provisioning + a <span class="k">heartbeat</span> that keeps the target reachable</h2>
+    <div class="ladder fill" style="max-height:16vh">
+      <div class="rung" style="border-color:#3a2a5f;color:#c9b3ff">TIER 0<br/><span class="sub">bench facts</span></div>
+      <div class="arrow">›</div>
+      <div class="rung" style="border-color:#2a3a6f;color:#9fc0ff">TIER 1<br/><span class="sub">power → boot</span></div>
+      <div class="arrow">›</div>
+      <div class="rung" style="border-color:#1f5a6f;color:#8fe0ff">TIER 2<br/><span class="sub">heartbeat running</span></div>
+      <div class="arrow">›</div>
+      <div class="rung" style="border-color:#1f6b3a;color:#a8f0a0">TIER 3<br/><span class="sub">capabilities</span></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:2vh">
+      <div class="card what">
+        <pre><span class="d">@provides</span>(<span class="s">"ctf/bench/power"</span>)
+<span class="k">def</span> <span class="n">energize</span>():
+    tb.<span class="n">power_on</span>(); <span class="k">yield</span>; tb.<span class="n">power_off</span>()
+
+<span class="d">@provides</span>(<span class="s">"ctf/target"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/bench/power"</span>)      <span class="c"># boots only once powered → higher tier</span>
+<span class="k">def</span> <span class="n">board</span>(<span class="n">power</span>): ...</pre>
+      </div>
+      <div class="card what">
+        <pre><span class="d">@provides</span>(<span class="s">"ctf/net/link"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/target"</span>)            <span class="c"># target → link, tier follows</span>
+<span class="k">def</span> <span class="n">heartbeat</span>(<span class="n">target</span>):
+    hb = <span class="n">start_keepalive</span>(<span class="n">target</span>)   <span class="c"># background thread</span>
+    <span class="k">yield</span> hb
+    hb.<span class="n">stop</span>()                       <span class="c"># stops on teardown</span>
+
+<span class="c"># exec @requires("ctf/net/link") -> usable only while alive</span></pre>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:1.6vh">Bench powers the board (tier 1), the heartbeat holds it reachable (tier 2), capabilities light up (tier 3) — order and liveness both fall out of the graph, and unwind in reverse.</p>
+  </section>
+
+  <!-- 17b · RECOVERY -->
+  <section class="slide">
+    <div class="kicker">Act VI · Pattern 3½ — messy hardware</div>
+    <h2>Recovery — <span class="k">invalidate a noun</span>, rebuild lazily</h2>
+    <div class="split fill">
+      <div class="stack">
+        <div class="card what">
+          <pre><span class="c"># heartbeat dropped mid-test; the box is still up but unreachable</span>
+<span class="n">dut</span>.<span class="n">invalidate</span>(<span class="s">"ctf/net/link"</span>)   <span class="c"># link + everything above it,</span>
+                              <span class="c"># torn down in reverse order</span>
+
+<span class="c"># rebuild is lazy — just ask again</span>
+<span class="n">shell</span> = <span class="n">dut</span>.<span class="n">require</span>(<span class="s">"ctf/cap/exec"</span>)  <span class="c"># fresh, over a live link</span></pre>
+          <p class="sub">The DUT handle a test holds <b>outlives any one composition</b>. You recover by <em>re-requiring</em>, never by mutating a stale object in place.</p>
+        </div>
+        <div class="card good">
+          <h3 class="goodc">What <span class="mono">invalidate</span> does</h3>
+          <ul class="good tight">
+            <li>Drops the node <b>and its transitive dependents</b> — the reverse-dependency closure</li>
+            <li>Tears them down in <b>reverse instantiation order</b> — no stale handle survives over a re-flashed box</li>
+            <li>Rebuild is on-demand: the next <span class="mono">require</span> re-realizes the subtree in tier order</li>
+          </ul>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card bad">
+          <h3 class="badc">Why a fixture can't do this</h3>
+          <p class="sub">pytest's fixture cache is <b>compute-once and opaque</b>. There is no “drop <em>this</em> node and rebuild the subtree” — an autouse fixture fires once, and you can't re-fire it. This single requirement is <span class="accent">why the engine owns its own cache</span>.</p>
+        </div>
+        <div class="card good">
+          <h3 class="goodc">Honest residue</h3>
+          <ul class="good tight">
+            <li>Re-flash invalidates a token deployed on the <em>old</em> firmware → reverse teardown runs <b>revoke-then-redeploy</b> for you</li>
+            <li>Verbs re-fire by re-requiring their nouns; provisioning-of-state <em>is</em> a noun, so it comes back on rebuild</li>
+            <li>Recovery is <b>explicit</b> — a test calls <span class="mono">invalidate</span>. No hidden watchdog; failure detection stays domain code</li>
+            <li>Finalizers must be <b>defensive</b> (idempotent) — an upstream node may already be gone</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 18b · FLASH CHAIN -->
+  <section class="slide">
+    <div class="kicker">Act VI · Pattern 4½ — ordering without peer coupling</div>
+    <h2>Dev-flash then eng-flash — order via a <span class="k">state contract</span>, not a plugin</h2>
+    <div class="split fill">
+      <div class="stack">
+        <div class="card">
+          <h3>The wrong edge — peer coupling</h3>
+          <pre><span class="d">@provides</span>(<span class="s">"ctf/fw/signed"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/flash/dev"</span>)   <span class="c"># ✗ names a PEER</span>
+<span class="k">def</span> <span class="n">eng_flash</span>(<span class="n">dev</span>): ...</pre>
+          <p class="sub badc">eng now can't exist without the dev <em>plugin</em> loaded. Two contributors bound to each other — exactly the coupling the tier law forbids.</p>
+          <h3 style="margin-top:2vh">The right edge — a state</h3>
+          <pre><span class="d">@provides</span>(<span class="s">"ctf/fw/signed"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/fw/base"</span>)     <span class="c"># ✓ a STATE it needs true</span>
+<span class="k">def</span> <span class="n">eng_flash</span>(<span class="n">base</span>): ...</pre>
+          <p class="sub">eng requires <b>base firmware present</b> — owned by the target surface, not by whoever happens to establish it.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card good">
+          <h3 class="goodc">Who satisfies <span class="mono">ctf/fw/base</span>? — establish vs assert</h3>
+          <pre><span class="c"># CI: actually do the work (hermetic)</span>
+<span class="d">@provides</span>(<span class="s">"ctf/fw/base"</span>)
+<span class="k">def</span> <span class="n">dev_flash</span>():
+    flash_dev(); <span class="k">yield</span> <span class="n">BaseFw</span>()
+
+<span class="c"># light run: assert it's already there</span>
+add(<span class="n">Descriptor</span>(<span class="s">"ctf/fw/base"</span>, present=<span class="k">True</span>))</pre>
+          <ul class="good tight">
+            <li><b>Establish</b> — a producer does the flashing (reproducible pipeline)</li>
+            <li><b>Assert</b> — a descriptor swears the board already has it (fast bench run, no dev import)</li>
+            <li>SSOT: <b>exactly one</b> provider of <span class="mono">ctf/fw/base</span> per run</li>
+            <li>Neither present → honest <span class="mono">compose error</span> / skip, never a silent wrong-firmware pass</li>
+          </ul>
+          <p class="sub">eng-flash is written once and doesn't care which way base got there — it only requires the <em>state</em>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 19 · UDS OVER DOIP vs CAN -->
+  <section class="slide">
+    <div class="kicker">Act VI · Pattern 5 — one plugin, three owners</div>
+    <h2>UDS over DoIP <span class="k">and/or</span> CAN — the UDS plugin owns none of the wires</h2>
+    <p class="sub" style="margin-top:-1vh;margin-bottom:1.6vh">Three independent owners: the <b>target</b> exposes facts, a <b>transport plugin</b> turns a fact into a byte-mover, the <b>UDS plugin</b> speaks UDS over whatever transport it's handed. One <span class="mono">UdsClient</span>, re-exported per transport it can bind to.</p>
+    <div class="split fill">
+      <div class="stack">
+        <div class="card">
+          <h3>Shape A · “either wire is fine” — substitutable</h3>
+          <pre><span class="c"># ONE transport noun, two backend variants</span>
+<span class="d">@provides</span>(<span class="s">"ctf/diag/transport"</span>, variant=<span class="s">"can"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/bus/can"</span>)              <span class="c"># target fact</span>
+<span class="k">def</span> <span class="n">can_tp</span>(<span class="n">bus</span>): ...
+
+<span class="d">@provides</span>(<span class="s">"ctf/diag/uds"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/diag/transport"</span>)       <span class="c"># a NOUN, not a wire</span>
+<span class="k">def</span> <span class="n">uds</span>(<span class="n">tp</span>): <span class="k">return</span> <span class="n">UdsClient</span>(<span class="n">tp</span>)</pre>
+          <p class="sub">Composition selects one transport variant → one live <span class="mono">uds</span>. Two live at once → <span class="badc mono">DuplicateProviderError</span>.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card good">
+          <h3 class="goodc">Shape B · “test <em>both</em> wires” — simultaneous</h3>
+          <pre><span class="c"># the UDS plugin re-exports ONE impl per transport</span>
+<span class="d">@provides</span>(<span class="s">"ctf/diag/uds/can"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/link/can"</span>)             <span class="c"># another plugin's contract</span>
+<span class="k">def</span> <span class="n">uds_can</span>(<span class="n">link</span>):  <span class="k">return</span> <span class="n">UdsClient</span>(<span class="n">link</span>)
+
+<span class="d">@provides</span>(<span class="s">"ctf/diag/uds/doip"</span>)
+<span class="d">@requires</span>(<span class="s">"ctf/link/doip"</span>)
+<span class="k">def</span> <span class="n">uds_doip</span>(<span class="n">link</span>): <span class="k">return</span> <span class="n">UdsClient</span>(<span class="n">link</span>)</pre>
+          <pre style="margin-top:10px"><span class="d">@parametrize</span>(<span class="s">"uds"</span>, [<span class="s">"ctf/diag/uds/can"</span>,
+                        <span class="s">"ctf/diag/uds/doip"</span>])
+<span class="k">def</span> <span class="n">test_read_vin</span>(<span class="n">dut</span>, <span class="n">uds</span>):
+    <span class="k">assert</span> <span class="n">dut</span>.<span class="n">require</span>(<span class="n">uds</span>).<span class="n">read</span>(<span class="s">0xF190</span>)</pre>
+          <p class="sub">Whichever transports resolve become the available UDS variants; the <b>test chooses</b>. Both reuse the same <span class="mono">UdsClient</span>.</p>
+        </div>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:1.4vh"><b>The disambiguator — ask the test's intent, not the device:</b> <em>one result over a chosen path</em> → one <span class="mono">ctf/diag/uds</span> noun, transport selected (Shape A). <em>two results to check independently</em> → two distinct <span class="mono">uds/can</span>, <span class="mono">uds/doip</span> nouns, both live (Shape B). A device that physically supports both never picks — intent does.</p>
+  </section>
+
+  <!-- 20 · COMPOSE RECIPE -->
+  <section class="slide">
+    <div class="kicker">Act VI · How to compose any of them</div>
+    <h2>The composition recipe — <span class="k">five moves</span></h2>
+    <div class="grid cols-2 fill">
+      <div class="stack">
+        <div class="card"><h3><span class="accent">1 ·</span> Choose the anchor</h3><p class="sub">No <span class="mono">ctf/target</span> → unit. One anchor → a device under test. The anchor decides mode.</p></div>
+        <div class="card"><h3><span class="accent">2 ·</span> Publish facts</h3><p class="sub">Targets declare what they <em>have</em>: endpoints, buses, images, key-requests — plain descriptors, string-keyed.</p></div>
+        <div class="card"><h3><span class="accent">3 ·</span> Register backends</h3><p class="sub">Capabilities <span class="mono">@provide</span> a contract and <span class="mono">@require</span> the facts they consume. Reusable, target-blind.</p></div>
+      </div>
+      <div class="stack">
+        <div class="card"><h3><span class="accent">4 ·</span> Let tiers derive themselves</h3><p class="sub">You never tag a phase. Each <span class="mono">@requires</span> edge places a node in its tier; the ladder is the toposort rendered. Order that matters is an edge; order that doesn't is fanout.</p></div>
+        <div class="card"><h3><span class="accent">5 ·</span> Tests require by string</h3><p class="sub">A test names the capability it needs and nothing else. The graph resolves <em>who</em>, <em>what</em>, and <em>when</em>.</p></div>
+        <div class="card good"><h3 class="goodc">That's the whole method</h3><p class="sub">Every pattern here — unit to UDS-over-CAN — is these five moves with different facts. You compose; you never orchestrate.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20b · CAPSTONE — TIE IT ALL TOGETHER -->
+  <section class="slide center">
+    <div class="title-wrap">
+      <div class="kicker">Act VI · Capstone</div>
+      <h1>One bench that uses <span class="accent">every</span> pattern at once</h1>
+      <p class="lead">A powered HW target, deployed image, a heartbeat keeping it alive, an SSH exec that needs a
+      provisioned key, and a diagnostic over CAN — assembled by one registry, consumed by one oblivious test.</p>
+    </div>
+  </section>
+
+  <!-- 20c · CAPSTONE — THE REGISTRY -->
+  <section class="slide">
+    <div class="kicker">Act VI · Capstone — the composition</div>
+    <h2>Every plugin declares one contract; the <span class="k">graph</span> does the rest</h2>
+    <div class="split fill">
+      <div class="stack">
+        <pre><span class="c"># FACTS the target publishes about itself</span>
+<span class="n">Descriptor</span>(<span class="s">"ctf/image"</span>,        <span class="s">"build/sys.img"</span>)
+<span class="n">Descriptor</span>(<span class="s">"ctf/sec/token_request"</span>, <span class="s">"token-42"</span>)
+<span class="n">Descriptor</span>(<span class="s">"ctf/bus/can"</span>,      <span class="s">"can0"</span>)
+
+<span class="c"># PROVIDERS — reusable, target-blind, tiers derived from edges</span>
+<span class="d">@provides</span>(<span class="s">"ctf/bench/power"</span>)
+<span class="d">@provides</span>(<span class="s">"ctf/target"</span>)              <span class="c"># req image+power</span>
+<span class="d">@provides</span>(<span class="s">"ctf/net/link"</span>)            <span class="c"># heartbeat, req target</span>
+<span class="d">@provides</span>(<span class="s">"ctf/sec/token"</span>)           <span class="c"># req token_request</span>
+<span class="d">@provides</span>(<span class="s">"ctf/net/ssh_endpoint"</span>)     <span class="c"># req link+token</span>
+<span class="d">@provides</span>(<span class="s">"ctf/cap/exec"</span>)            <span class="c"># req endpoint</span>
+<span class="d">@provides</span>(<span class="s">"ctf/diag/uds/can"</span>)        <span class="c"># req bus/can</span></pre>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">The resolver linearizes it — no one wrote this order</h3>
+        <div class="stack" style="gap:8px">
+          <div class="mono sub">power <span class="accent">→</span> image <span class="accent">→</span> target</div>
+          <div class="mono sub">target <span class="accent">→</span> heartbeat (link)</div>
+          <div class="mono sub">token_request <span class="accent">→</span> token</div>
+          <div class="mono sub">link + token <span class="accent">→</span> ssh_endpoint <span class="accent">→</span> exec</div>
+          <div class="mono sub">can <span class="accent">→</span> uds/can</div>
+        </div>
+        <p class="sub" style="margin-top:10px">Each <span class="mono">@requires</span> edge is a constraint; the plan is their topological sort. Add a plugin, the order re-derives itself.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20d · CAPSTONE — TIMELINE + TEST -->
+  <section class="slide">
+    <div class="kicker">Act VI · Capstone — the realized run</div>
+    <h2>The ladder brings it up; the test just <span class="k">consumes</span></h2>
+    <div class="split fill">
+      <div class="stack">
+        <div class="ladder" style="flex-direction:column; gap:8px;">
+          <div class="rung" style="border-color:#2a3a6f;color:#9fc0ff;text-align:left">ACQUIRED&nbsp; <span class="sub">power on → flash image → boot board</span></div>
+          <div class="rung" style="border-color:#1f5a6f;color:#8fe0ff;text-align:left">CONNECTED <span class="sub">start heartbeat → target reachable</span></div>
+          <div class="rung" style="border-color:#1f6b52;color:#8ff0c8;text-align:left">PROVISIONED <span class="sub">deploy token-42 → open ssh endpoint</span></div>
+          <div class="rung" style="border-color:#1f6b3a;color:#a8f0a0;text-align:left">READY&nbsp;&nbsp;&nbsp; <span class="sub">exec + uds/can capabilities live</span></div>
+        </div>
+        <p class="sub">…and on teardown, all of it unwinds in reverse: revoke token → stop heartbeat → power off.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">The whole test — every layer, still oblivious</h3>
+        <pre><span class="k">def</span> <span class="n">test_update_and_verify</span>(<span class="n">shell</span>, <span class="n">uds</span>):
+    <span class="c"># shell = exec-over-ssh-over-provisioned-key</span>
+    code, _ = <span class="n">shell</span>.<span class="n">execute</span>(<span class="s">"systemctl restart app"</span>)
+    <span class="k">assert</span> code == <span class="n">0</span>
+    <span class="c"># uds = diagnostics over CAN</span>
+    <span class="k">assert</span> <span class="n">uds</span>.<span class="n">read</span>(<span class="s">0xF190</span>) == <span class="n">EXPECTED_VIN</span></pre>
+        <p class="sub">Two fixtures, two contract strings. No IP, no flash call, no power sequencing, no bus wiring — the composition delivered a ready world and the test asserted behavior.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20b · WHY NOT FIXTURES -->
+  <section class="slide">
+    <div class="kicker">Act VII · The honest question</div>
+    <h2>Why not just <span class="k">pytest fixtures</span>?</h2>
+    <div class="split fill">
+      <div class="card">
+        <h3>Fixtures already give you ~80%</h3>
+        <ul class="tight">
+          <li>Lazy, cached, dependency-ordered, reverse-teardown</li>
+          <li>A <b>noun</b> ≈ a session fixture; a <b>verb</b> ≈ a hook</li>
+          <li>Honest: this is why the engine <em>rides</em> pytest for collection, test items, parametrization &amp; reporting</li>
+        </ul>
+        <p class="sub">If that were the whole job, the engine would be redundant. It isn't — for five reasons pytest's static, per-name cache can't express.</p>
+      </div>
+      <div class="card good">
+        <h3 class="goodc">The 20% the engine owns</h3>
+        <ul class="good tight">
+          <li><b>SSOT error</b>, not silent fixture override — two providers of one contract is a hard stop</li>
+          <li><b>Eager fail-fast</b> at compose time, not lazy-per-request deep in a test</li>
+          <li><b>String namespace</b> + target-blind selection, not name + conftest-proximity</li>
+          <li><b>The tier law is structural</b> — derived from the graph, not a convention you hope holds</li>
+          <li><b>Recovery</b> — invalidate one node, rebuild its subtree, re-fire its verbs</li>
+        </ul>
+        <p class="sub" style="margin-top:1.2vh"><span class="accent">The decider:</span> pytest's fixture cache is <b>compute-once and opaque</b>. The moment you must re-flash a box mid-run and rebuild only what sat on top of it, you need a cache you can invalidate — so the engine owns one.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21 · WHAT THIS BUYS -->
+  <section class="slide">
+    <div class="kicker">Act VII · The payoff</div>
+    <h2>What the inversion buys you</h2>
+    <div class="grid cols-3 fill">
+      <div class="card good"><h3 class="goodc">Portable tests</h3><p class="sub">A test targets a capability, so it runs on any box that provides it — mock, docker, or real silicon.</p></div>
+      <div class="card good"><h3 class="goodc">Swappable backends</h3><p class="sub">SSH today, UART tomorrow: add a provider, pick it in composition. Tests untouched.</p></div>
+      <div class="card good"><h3 class="goodc">Order without scripts</h3><p class="sub">Deploy → connect → provision falls out of the dependency graph, and unwinds itself.</p></div>
+      <div class="card good"><h3 class="goodc">True multi-repo</h3><p class="sub">Plugins share only strings. No plugin imports another; each can ship from its own repo.</p></div>
+      <div class="card good"><h3 class="goodc">Deterministic</h3><p class="sub">One provider per contract; a fixed plan for a fixed registry. No hidden tie-breaks.</p></div>
+      <div class="card good"><h3 class="goodc">Honest availability</h3><p class="sub">Missing capability = a graph fact → the test skips. No scattered <span class="mono">if</span> guards.</p></div>
+    </div>
+  </section>
+
+  <!-- 22 · CLOSE -->
+  <section class="slide center">
+    <div class="title-wrap">
+      <div class="kicker">In one sentence</div>
+      <h1>Tests declare <span class="whatc">needs</span>.<br/>The graph composes the <span class="whenc">environment</span>.<br/>
+      <span class="accent">Contracts</span> are the only thing anyone shares.</h1>
+      <p class="lead">Everything a traditional framework hardcodes — the box, the transport, the auth, the boot order —
+      becomes a resolvable contract. Write the test once; run it everywhere.</p>
+      <div style="margin-top:4vh; display:flex; gap:12px; flex-wrap:wrap;">
+        <span class="pill what">WHAT · resolve who provides</span>
+        <span class="pill when">WHEN · walk the ladder</span>
+        <span class="pill good">COUPLE · only by string</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- chrome -->
+<div class="nav">
+  <button onclick="go(-1)" aria-label="previous"></button>
+  <button onclick="go(1)" aria-label="next"></button>
+</div>
+<div id="bar"></div>
+<div class="brand">CTF · Contract Test Framework</div>
+<div class="snum"><span id="cur">1</span> / <span id="tot">15</span></div>
+<div id="hud"><span><kbd>←</kbd> <kbd>→</kbd> navigate</span><span><kbd>F</kbd> fullscreen</span><span><kbd>O</kbd> overview</span></div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let i = 0;
+  const bar = document.getElementById('bar');
+  const cur = document.getElementById('cur');
+  document.getElementById('tot').textContent = slides.length;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    cur.textContent = i + 1;
+    location.hash = i + 1;
+  }
+  function go(d) { show(i + d); }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { go(1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(-1); e.preventDefault(); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key.toLowerCase() === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+    else if (e.key.toLowerCase() === 'o') document.body.classList.toggle('ov');
+  });
+
+  // overview grid
+  const style = document.createElement('style');
+  style.textContent = `
+    body.ov { overflow:auto; }
+    body.ov #deck { height:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:14px; padding:20px; }
+    body.ov .slide { position:relative; display:flex !important; inset:auto; height:34vh; border:1px solid var(--line); border-radius:12px; transform:scale(1); cursor:pointer; padding:18px; overflow:hidden; animation:none; }
+    body.ov .nav,body.ov #hud { display:none; }
+  `;
+  document.head.appendChild(style);
+  document.getElementById('deck').addEventListener('click', (e) => {
+    if (!document.body.classList.contains('ov')) return;
+    const s = e.target.closest('.slide');
+    if (s) { document.body.classList.remove('ov'); show(slides.indexOf(s)); }
+  });
+
+  const start = parseInt(location.hash.replace('#','')) || 1;
+  show(start - 1);
+</script>
+</body>
+</html>
