@@ -97,6 +97,7 @@ py_itf_test(
 py_itf_test(
     name = "test_ssh",
     srcs = [
+        "conftest.py",
         "test_ssh.py",
     ],
     args = [
@@ -111,6 +112,7 @@ py_itf_test(
 py_itf_test(
     name = "test_ssh_configurable",
     srcs = [
+        "conftest.py",
         "test_ssh.py",
     ],
     args = select(
