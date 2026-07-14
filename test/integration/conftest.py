@@ -27,6 +27,7 @@ This conftest demonstrates how a product conftest composes the DUT:
 import os
 
 import pytest
+from score.itf.core.ctf.contracts import provides, requires
 
 # ITF core (provides dut fixture + phased lifecycle)
 pytest_plugins = [
@@ -49,6 +50,14 @@ pytest_plugins = [
 # Product-level DUT customization: add extra volume mount for tests
 # ---------------------------------------------------------------------------
 CONTAINER_EXTRA_MNT_PATH = "/extra/mount/directory"
+CONTROL_ANCHOR = "ctf/target/control"
+
+
+@provides(CONTROL_ANCHOR)
+@requires("itf/cap/exec")
+def control_anchor(exec_capability):
+    """Anchor-level control requirement for suites that need command execution."""
+    return exec_capability
 
 
 @pytest.hookimpl(trylast=True)
@@ -64,6 +73,7 @@ def pytest_itf_declare(registry, config):
                 "mode": "rw",
             }
         }
+    registry.register(control_anchor)
 
 
 @pytest.fixture()
