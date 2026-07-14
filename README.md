@@ -301,6 +301,27 @@ def docker_exec(target):
 - **SSOT**: exactly one provider per contract. Two = hard error.
 - **Tiers**: derived from the graph, never declared
 
+### Anchor, Spine, and Additive Capabilities
+
+Think of composition as a walk that starts from one root:
+
+- `ctf/target` is the root (anchor).
+- ITF follows every `@requires(...)` from that root.
+- The contracts reached by that walk are the **spine** (the minimum required graph).
+
+Anything not in that required walk is **additive**.
+Additive capabilities are useful extras (for example: `ssh`, `ping`, `dlt`) that are included only when their dependencies can be satisfied.
+
+Simple example:
+
+- `itf/cap/exec` requires `ctf/target` -> part of the spine.
+- `itf/cap/ssh` requires `itf/net/ssh_endpoint` -> additive if that endpoint is available.
+
+Run-mode effect:
+
+- **LOOSE**: spine must resolve; additive misses are allowed (typically skipped tests).
+- **STRICT**: unresolved contracts are composition errors.
+
 ### Lifecycle Phases
 
 ```
@@ -342,6 +363,13 @@ registry.bind("itf/cap/udp_heartbeat",    # the consumer
 ```
 
 Other consumers of `itf/net/ip_address` are unaffected — bindings are scoped.
+
+### Run Mode vs Governance (Different Controls)
+
+- **STRICT/LOOSE run mode** is a **core CTF/ITF composition mode** (engine behavior during resolve/assemble).
+- **Governance `off|warn|strict`** is a **separate utility plugin policy** for contract/alias integrity checks.
+
+They are independent knobs. The shared word `strict` means different things in each context.
 
 ### Governance
 
