@@ -38,10 +38,7 @@ pytest_plugins = [
     # Generic fixtures (exec_interface, file_transfer_interface, restart_interface)
     "score.itf.plugins.targets.fixtures",
     # Utility plugins (observability)
-    "score.itf.plugins.utility.dashboard.plugin",
     "score.itf.plugins.utility.logger.plugin",
-    # Domain plugins (persistence)
-    "score.itf.plugins.domain.sqlite_logger.plugin",
 ]
 
 
