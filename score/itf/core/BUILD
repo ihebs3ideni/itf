@@ -10,4 +10,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-from score.itf import plugins  # noqa: F401
+
+load("@itf_pip//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "itf_plugin",
+    srcs = [
+        "__init__.py",
+        "itf_plugin.py",
+        "pytest_plugin.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//score/itf/core/ctf",
+        requirement("pytest"),
+    ],
+)

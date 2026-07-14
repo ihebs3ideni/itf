@@ -10,4 +10,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-from score.itf import plugins  # noqa: F401
+"""ITF core pytest plugin — loads the ITF integration layer.
+
+This file is a backward-compat entry point. The real implementation lives in
+``score.itf.core.itf_plugin``.
+"""
+
+pytest_plugins = ["score.itf.core.itf_plugin"]
