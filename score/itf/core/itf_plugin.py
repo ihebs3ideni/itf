@@ -569,6 +569,7 @@ def _run_verify_phase(dut: DUT, config: pytest.Config) -> None:
         check_name = parts[-1] if parts else module
 
         is_conftest = _is_conftest_module(module, impl)
+        is_target_plugin = module.startswith("score.itf.plugins.targets.")
 
         _emit_phase(logger, f"CHECK — {check_name}")
         t0 = _time.time()
@@ -582,7 +583,7 @@ def _run_verify_phase(dut: DUT, config: pytest.Config) -> None:
             logger.info("Result: FAILED (%.3fs) — %s", duration, exc)
             _auto_report_if_needed(config, check_name, "failed", duration, detail=str(exc))
 
-            if is_conftest or mode is RunMode.STRICT:
+            if is_conftest or is_target_plugin or mode is RunMode.STRICT:
                 raise
             else:
                 logger.warning(
