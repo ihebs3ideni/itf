@@ -27,6 +27,36 @@ py_itf_test(
     ],
 )
 
+py_itf_test(
+    name = "test_composition",
+    srcs = [
+        "test_composition.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
+        "--docker-image=score_itf_examples:latest",
+    ],
+    data = ["//examples/docker:image_load"],
+    plugins = [
+        "@score_itf//score/itf/plugins:docker_plugin",
+    ],
+)
+
+py_itf_test(
+    name = "test_fault_recovery",
+    srcs = [
+        "test_fault_recovery.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
+        "--docker-image=score_itf_examples:latest",
+    ],
+    data = ["//examples/docker:image_load"],
+    plugins = [
+        "@score_itf//score/itf/plugins:docker_plugin",
+    ],
+)
+
 # py_itf_test(
 #     name = "test_dlt",
 #     srcs = [
