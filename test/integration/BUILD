@@ -41,10 +41,8 @@ py_itf_test(
         "--docker-image=ubuntu:24.04",
     ],
     plugins = [
-        "//score/itf/plugins:dashboard_plugin",
         "//score/itf/plugins:docker_plugin",
         "//score/itf/plugins:logger_plugin",
-        "//score/itf/plugins:sqlite_logger_plugin",
     ],
 )
 
@@ -59,10 +57,8 @@ py_itf_test(
         "--docker-image=ubuntu:24.04",
     ],
     plugins = [
-        "//score/itf/plugins:dashboard_plugin",
         "//score/itf/plugins:docker_plugin",
         "//score/itf/plugins:logger_plugin",
-        "//score/itf/plugins:sqlite_logger_plugin",
     ],
 )
 
@@ -78,11 +74,9 @@ py_itf_test(
     ],
     data = ["//test/resources:image_load"],
     plugins = [
-        "//score/itf/plugins:dashboard_plugin",
         "//score/itf/plugins:dlt_plugin",
         "//score/itf/plugins:docker_plugin",
         "//score/itf/plugins:logger_plugin",
-        "//score/itf/plugins:sqlite_logger_plugin",
     ],
 )
 
@@ -98,11 +92,9 @@ py_itf_test(
     ],
     data = ["//test/resources:image_load"],
     plugins = [
-        "//score/itf/plugins:dashboard_plugin",
         "//score/itf/plugins:dlt_plugin",
         "//score/itf/plugins:docker_plugin",
         "//score/itf/plugins:logger_plugin",
-        "//score/itf/plugins:sqlite_logger_plugin",
     ],
 )
 
@@ -116,10 +108,8 @@ py_itf_test(
         "--docker-image=linuxserver/openssh-server:version-10.2_p1-r0",
     ],
     plugins = [
-        "//score/itf/plugins:dashboard_plugin",
         "//score/itf/plugins:docker_plugin",
         "//score/itf/plugins:logger_plugin",
-        "//score/itf/plugins:sqlite_logger_plugin",
     ],
     pytest_config = "//:pyproject.toml",  # Optional same content as default pytest.ini
 )
@@ -153,16 +143,12 @@ py_itf_test(
     plugins = select(
         {
             "@platforms//os:qnx": [
-                "//score/itf/plugins:dashboard_plugin",
                 "//score/itf/plugins:logger_plugin",
                 "//score/itf/plugins:qemu_plugin",
-                "//score/itf/plugins:sqlite_logger_plugin",
             ],
             "//conditions:default": [
-                "//score/itf/plugins:dashboard_plugin",
                 "//score/itf/plugins:docker_plugin",
                 "//score/itf/plugins:logger_plugin",
-                "//score/itf/plugins:sqlite_logger_plugin",
             ],
         },
     ),
