@@ -33,6 +33,10 @@ py_itf_test(
 
 py_itf_test(
     name = "test_rules_are_working_correctly",
+    srcs = [
+        "conftest.py",
+        "test_rules_are_working_correctly.py",
+    ],
     args = [
         "--docker-image=ubuntu:24.04",
     ],
@@ -41,10 +45,6 @@ py_itf_test(
         "//score/itf/plugins:docker_plugin",
         "//score/itf/plugins:logger_plugin",
         "//score/itf/plugins:sqlite_logger_plugin",
-    ],
-    srcs = [
-        "conftest.py",
-        "test_rules_are_working_correctly.py",
     ],
 )
 

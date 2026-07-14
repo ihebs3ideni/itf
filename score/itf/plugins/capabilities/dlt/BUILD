@@ -12,8 +12,8 @@
 # *******************************************************************************
 
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
-load("@rules_python//python:defs.bzl", "py_library")
 load("@itf_pip//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
 
 copy_file(
     name = "libdlt",

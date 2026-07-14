@@ -14,8 +14,8 @@ load("//:defs.bzl", "py_itf_unittest")
 
 py_itf_unittest(
     name = "test_ping",
-    deps = ["//score/itf/plugins/capabilities/ping"],
     srcs = ["test_ping.py"],
+    deps = ["//score/itf/plugins/capabilities/ping"],
 )
 
 py_itf_unittest(
