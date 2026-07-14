@@ -29,6 +29,7 @@ py_library(
         "components.py",
         "dlt_receive.py",
         "dlt_window.py",
+        "plugin.py",
     ],
     data = [
         ":libdlt",
@@ -38,6 +39,7 @@ py_library(
         "//score/itf/core/ctf",
         "//score/itf/core/process",
         "//score/itf/core/utils",
+        "//score/itf/plugins/capabilities:pkg",
         "//third_party/python_dlt",
         requirement("pytest"),
     ],

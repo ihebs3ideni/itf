@@ -16,10 +16,14 @@ load("@itf_pip//:requirements.bzl", "requirement")
 
 py_library(
     name = "mock",
-    srcs = ["__init__.py"],
+    srcs = [
+        "__init__.py",
+        "plugin.py",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//score/itf/core/ctf",
+        "//score/itf/plugins/targets:pkg",
         requirement("pytest"),
     ],
 )

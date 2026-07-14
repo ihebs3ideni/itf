@@ -14,6 +14,12 @@ load("@itf_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 
+py_library(
+    name = "pkg",
+    srcs = ["__init__.py"],
+    visibility = ["//visibility:public"],
+)
+
 # ---- ITF plugin targets (used by py_itf_test symbolic macro) ----
 
 py_itf_plugin(
@@ -30,7 +36,7 @@ py_itf_plugin(
 py_itf_plugin(
     name = "qemu_plugin",
     enabled_plugins = [
-        "score.itf.plugins.targets.qemu",
+        "score.itf.plugins.targets.qemu.plugin",
         "score.itf.plugins.capabilities.ping.plugin",
         "score.itf.plugins.capabilities.ssh.plugin",
     ],
@@ -41,7 +47,7 @@ py_itf_plugin(
 py_itf_plugin(
     name = "dlt_plugin",
     enabled_plugins = [
-        "score.itf.plugins.capabilities.dlt",
+        "score.itf.plugins.capabilities.dlt.plugin",
     ],
     plugin_args = [
         "--dlt-receive-path=$(location @score_itf//third_party/dlt:dlt-receive)",

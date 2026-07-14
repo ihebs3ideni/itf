@@ -4,4 +4,5 @@ py_library(
     name = "pkg",
     srcs = ["__init__.py"],
     visibility = ["//visibility:public"],
+    deps = ["//score/itf/plugins:pkg"],
 )

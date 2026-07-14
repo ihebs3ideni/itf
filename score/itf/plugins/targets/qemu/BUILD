@@ -26,6 +26,7 @@ py_library(
     srcs = [
         "__init__.py",
         "checks.py",
+        "plugin.py",
         "process.py",
         "qemu.py",
         "runtime.py",
@@ -38,6 +39,7 @@ py_library(
         "//score/itf/core/utils",
         "//score/itf/plugins/capabilities/ssh",
         "//score/itf/plugins/capabilities/ping",
+        "//score/itf/plugins/targets:pkg",
         requirement("pytest"),
     ],
 )
