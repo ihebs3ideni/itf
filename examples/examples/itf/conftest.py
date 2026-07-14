@@ -20,7 +20,6 @@ so all contracts are known and aliases are ready before any test code runs.
 """
 
 import pytest
-from score.itf.core.ctf.contracts import provides, requires
 
 # Ensure ITF lifecycle hooks are registered (provides hookspecs + dut fixture).
 # In a Bazel py_itf_test this is handled by the rule; for standalone pytest
@@ -29,20 +28,6 @@ pytest_plugins = [
     "score.itf.core.itf_plugin",
     "score.itf.plugins.targets.fixtures",
 ]
-
-CONTROL_ANCHOR = "ctf/target/control"
-
-
-@provides(CONTROL_ANCHOR)
-@requires("itf/cap/exec")
-def control_anchor(exec_capability):
-    """Anchor-level control requirement for suites that need command execution."""
-    return exec_capability
-
-
-@pytest.hookimpl
-def pytest_itf_declare(registry, config):
-    registry.register(control_anchor)
 
 
 @pytest.hookimpl

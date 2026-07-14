@@ -49,6 +49,7 @@ CAP_FILE_TRANSFER_CONTRACT = "itf/cap/file_transfer"
 CAP_RESTART_CONTRACT = "itf/cap/restart"
 CAP_SSH_ENDPOINT_CONTRACT = "itf/net/ssh_endpoint"
 CAP_IP_ADDRESS_CONTRACT = "itf/net/ip_address"
+EXEC_REQUIRED_ANCHOR = "ctf/target/exec_required"
 DOCKER_IMAGE_CONTRACT = "itf/target/docker/image"
 DOCKER_CONFIG_CONTRACT = "itf/target/docker/config"
 
@@ -96,6 +97,13 @@ def docker_ssh_endpoint(target):
 @requires(TARGET_ANCHOR)
 def docker_ip_address(target):
     return target.get_ip()
+
+
+@provides(EXEC_REQUIRED_ANCHOR)
+@requires(CAP_EXEC_CONTRACT)
+def docker_exec_required_anchor(exec_capability):
+    """Marks exec as part of the mandatory anchor spine for docker targets."""
+    return exec_capability
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +169,7 @@ def pytest_itf_declare(registry, config):
     registry.register(docker_restart)
     registry.register(docker_ssh_endpoint)
     registry.register(docker_ip_address)
+    registry.register(docker_exec_required_anchor)
 
 
 # ---------------------------------------------------------------------------
