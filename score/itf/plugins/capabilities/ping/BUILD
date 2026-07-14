@@ -25,6 +25,7 @@ py_library(
     deps = [
         "//score/itf/core:itf_plugin",
         "//score/itf/core/ctf",
+        "//score/itf/plugins/capabilities:pkg",
         requirement("pytest"),
     ],
 )
