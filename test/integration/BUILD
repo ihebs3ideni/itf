@@ -51,6 +51,7 @@ py_itf_test(
 py_itf_test(
     name = "test_docker",
     srcs = [
+        "conftest.py",
         "test_async_exec.py",
         "test_docker.py",
     ],
@@ -65,6 +66,7 @@ py_itf_test(
 py_itf_test(
     name = "test_dlt",
     srcs = [
+        "conftest.py",
         "test_dlt.py",
     ],
     args = [
@@ -81,6 +83,7 @@ py_itf_test(
 py_itf_test(
     name = "test_dlt_on_target",
     srcs = [
+        "conftest.py",
         "test_dlt_on_target.py",
     ],
     args = [

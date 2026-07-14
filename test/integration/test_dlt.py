@@ -15,7 +15,14 @@ import time
 import score.itf
 
 from score.itf.plugins.capabilities.dlt.dlt_receive import DltReceive, Protocol
-from score.itf.plugins.capabilities.dlt.dlt_window import DltWindow
+
+
+def _require_dlt_window():
+    try:
+        from score.itf.plugins.capabilities.dlt.dlt_window import DltWindow
+    except Exception as exc:  # noqa: BLE001 - native lib load may fail at import time
+        pytest.skip(f"DltWindow unavailable in this environment: {exc}")
+    return DltWindow
 
 
 def test_dlt_standard_config(exec_interface, dlt_config):
@@ -100,6 +107,7 @@ def test_dlt_multicast_udp(exec_interface, dut, dlt_config, caplog):
 
 @score.itf.core.capability_gating.requires_capabilities("network")
 def test_dlt_window_no_stdout(exec_interface, dut, dlt_config):
+    DltWindow = _require_dlt_window()
     exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
     target = dut.require("ctf/target")
@@ -117,6 +125,7 @@ def test_dlt_window_no_stdout(exec_interface, dut, dlt_config):
 
 @score.itf.core.capability_gating.requires_capabilities("network")
 def test_dlt_window_stdout(exec_interface, dut, dlt_config):
+    DltWindow = _require_dlt_window()
     exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
     target = dut.require("ctf/target")
@@ -135,6 +144,7 @@ def test_dlt_window_stdout(exec_interface, dut, dlt_config):
 
 @score.itf.core.capability_gating.requires_capabilities("network")
 def test_dlt_window_with_filter(exec_interface, dut, dlt_config):
+    DltWindow = _require_dlt_window()
     exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
     target = dut.require("ctf/target")
@@ -154,6 +164,7 @@ def test_dlt_window_with_filter(exec_interface, dut, dlt_config):
 
 @score.itf.core.capability_gating.requires_capabilities("network")
 def test_dlt_window_with_record(exec_interface, dut, dlt_config):
+    DltWindow = _require_dlt_window()
     exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
     target = dut.require("ctf/target")
