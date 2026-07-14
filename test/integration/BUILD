@@ -39,6 +39,7 @@ py_itf_test(
     plugins = [
         "//score/itf/plugins:dashboard_plugin",
         "//score/itf/plugins:docker_plugin",
+        "//score/itf/plugins:logger_plugin",
         "//score/itf/plugins:sqlite_logger_plugin",
     ],
     srcs = [

@@ -69,6 +69,15 @@ py_itf_plugin(
 )
 
 py_itf_plugin(
+    name = "logger_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.utility.logger.plugin",
+    ],
+    py_library = "//score/itf/plugins/utility/logger",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
     name = "sqlite_logger_plugin",
     enabled_plugins = [
         "score.itf.plugins.domain.sqlite_logger.plugin",
