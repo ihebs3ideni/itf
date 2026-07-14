@@ -148,7 +148,7 @@ The `@requires_capabilities` decorator automatically skips tests if the target
 does not provide the listed capabilities.
 
 ```python
-from score.itf.plugins.core import requires_capabilities
+from score.itf.core.capability_gating import requires_capabilities
 
 @requires_capabilities("exec")
 def test_docker_only(target):

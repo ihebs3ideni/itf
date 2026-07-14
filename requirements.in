@@ -1,6 +1,7 @@
 --extra-index-url https://pypi.org/simple/
 
 docker==7.1.0
+pyserial==3.5
 pytest==9.0.3
 paramiko==4.0.0
 typing-extensions==4.15.0

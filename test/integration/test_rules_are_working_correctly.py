@@ -14,9 +14,9 @@ def test_local_fixture_has_correct_value(fixture42):
     assert 42 == fixture42
 
 
-def test_target_fixture_is_available(target):
-    assert target is not None
+def test_dut_is_available(dut):
+    assert dut is not None
 
 
-def test_target_fixture_has_no_capabilities_by_default(target):
-    assert target.get_capabilities() == set()
+def test_dut_exposes_target_anchor_by_default(dut):
+    assert "ctf/target" in dut.provides()

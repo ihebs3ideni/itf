@@ -11,15 +11,18 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # Integration Test Framework (ITF)
 
-ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testing framework designed for ECU (Electronic Control Unit) testing in automotive domains. It provides a flexible, plugin-based architecture that enables testing on multiple target environments including Docker containers, QEMU virtual machines, and real hardware.
+ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testing framework built on a **Composable Target Framework (CTF)** — a contract-based dependency-injection engine for ECU and embedded testing. Tests declare *what* they need as contract strings; the framework assembles the environment deterministically for any target.
 
 ## Key Features
 
-- **Plugin-Based Architecture**: Modular design with support for Docker, QEMU, DLT, and custom plugins
-- **Target Abstraction**: Unified `Target` interface with capability-based system for different test environments
-- **Flexible Testing**: Write tests once, run across multiple targets (Docker, QEMU, hardware)
-- **Capability System**: Tests can query and adapt based on available target capabilities
-- **Bazel Integration**: Seamless integration with Bazel build system via `py_itf_test` macro
+- **Contract-Based Composition**: Tests and plugins couple through string contracts — no shared imports
+- **Phased Lifecycle**: declare → bind → aliases → init → provision → verify → tests → teardown
+- **Target-Blind Tests**: Write once, run on Docker, QEMU, mock, or real hardware
+- **Fail-Fast**: Composition errors surface at session start, not mid-test
+- **Aliases**: Project-level vocabulary — tests say `dut["shell"]` not `dut.require("itf/cap/exec")`
+- **Bindings**: Redirect a plugin's dependency to a different contract without modifying the plugin
+- **Governance**: Optional namespace/alias integrity validation (off / warn / strict)
+- **Bazel Integration**: Seamless via `py_itf_test` macro
 
 ## Quick Start
 
@@ -36,19 +39,53 @@ common --registry=https://raw.githubusercontent.com/eclipse-score/bazel_registry
 common --registry=https://bcr.bazel.build
 ```
 
-### Basic Test Example
+### Root conftest — load ITF and configure
+
+```python
+# conftest.py
+import pytest
+
+pytest_plugins = [
+    "score.itf.core.itf_plugin",
+    "score.itf.plugins.targets.docker.plugin",
+    "score.itf.plugins.capabilities.ping.plugin",
+    "score.itf.plugins.utility.logger.plugin",
+]
+
+
+@pytest.hookimpl
+def pytest_itf_aliases(dut, config):
+    """Project vocabulary — tests use these short names."""
+    dut.alias("shell", "itf/cap/exec")
+    dut.alias("file_transfer", "itf/cap/file_transfer")
+    dut.alias("restart", "itf/cap/restart")
+    dut.alias("ping", "itf/cap/ping")
+    dut.alias("ip", "itf/net/ip_address")
+    dut.alias("target", "ctf/target")
+
+
+@pytest.hookimpl
+def pytest_itf_bindings(registry, config):
+    """Redirect plugin requirements for this project's topology."""
+    # Example: UDP heartbeat uses a dedicated interface
+    # registry.bind("itf/cap/udp_heartbeat",
+    #               "itf/net/ip_address", "itf/net/heartbeat_ip")
+```
+
+### Basic Test
 
 ```python
 # test_example.py
-def test_docker_exec(target):
-    exit_code, output = target.execute("echo 'Hello from target!'")
+from score.itf.core.capability_gating import requires_capabilities
+
+@requires_capabilities("exec")
+def test_deploy(dut):
+    shell = dut["shell"]
+    exit_code, output = shell.execute("echo 'Hello from target!'")
     assert exit_code == 0
-    assert b"Hello from target!" in output
 ```
 
 ### BUILD Configuration
-
-For external consumers, use the `@score_itf` prefix for all loads and plugin references:
 
 ```starlark
 load("@score_itf//:defs.bzl", "py_itf_test")
@@ -61,528 +98,491 @@ py_itf_test(
 )
 ```
 
+## Architecture At A Glance
+
+The framework is layered: **target plugins** produce hardware/container handles, **capability plugins** transform those into test-facing interfaces, and **tests** consume capabilities through the DUT. Each layer couples only through contract strings.
+
+### 1. Target Plugin (provides the anchor)
+
+A target plugin owns the lifecycle of the actual target — Docker container, QEMU VM, or real hardware. It publishes `ctf/target` and any network facts:
+
+```python
+# score/itf/plugins/targets/my_target/plugin.py
+from score.itf.core.ctf.contracts import provides, requires
+from score.itf.core.ctf.descriptor import Descriptor
+from score.itf.core.ctf.target import TARGET_ANCHOR
+
+@provides(TARGET_ANCHOR)  # "ctf/target"
+@requires("itf/target/image", "itf/target/config")
+def my_target_anchor(image, config):
+    """Start the target and return a handle. Teardown on generator close."""
+    handle = start_target(image, config)
+    yield handle          # tests run while yielded
+    handle.shutdown()     # teardown (reverse order)
+
+
+def pytest_itf_declare(registry, config):
+    """Phase: DECLARE — register target descriptors and anchor provider."""
+    registry.add_descriptor(Descriptor("itf/target/image", config.getoption("--image")))
+    registry.add_descriptor(Descriptor("itf/target/config", {"network": "bridge"}))
+    registry.add_descriptor(Descriptor("itf/net/ip_address", "10.0.0.2"))
+    registry.add_descriptor(Descriptor("itf/net/ssh_endpoint", {
+        "host": "10.0.0.2", "port": 22, "username": "root",
+    }))
+    registry.register(my_target_anchor)
+```
+
+### 2. Capability Plugins (transform target facts into interfaces)
+
+A capability plugin requires target facts and provides a test-facing interface. It knows nothing about *which* target — only the contract it needs:
+
+```python
+# score/itf/plugins/capabilities/exec/plugin.py
+from score.itf.core.ctf.contracts import provides, requires
+
+@provides("itf/cap/exec")
+@requires("ctf/target")
+def exec_capability(target):
+    """Wrap the raw target handle into an exec interface."""
+    return ExecInterface(target)
+
+
+class ExecInterface:
+    """What tests see — execute commands, get (exit_code, output)."""
+
+    def __init__(self, target):
+        self._target = target
+
+    def execute(self, command: str) -> tuple[int, str]:
+        return self._target.run(command)
+
+    def execute_async(self, binary, args=None):
+        return self._target.start_process(binary, args)
+```
+
+Another capability — same pattern, different contract:
+
+```python
+# score/itf/plugins/capabilities/file_transfer/plugin.py
+from score.itf.core.ctf.contracts import provides, requires
+
+@provides("itf/cap/file_transfer")
+@requires("ctf/target")
+def file_transfer_capability(target):
+    """Wrap the target handle into a file transfer interface."""
+    return FileTransferInterface(target)
+
+
+class FileTransferInterface:
+    """What tests see — push/pull files to/from target."""
+
+    def __init__(self, target):
+        self._target = target
+
+    def upload(self, local_path: str, remote_path: str) -> None:
+        self._target.copy_to(local_path, remote_path)
+
+    def download(self, remote_path: str, local_path: str) -> None:
+        self._target.copy_from(remote_path, local_path)
+```
+
+Each capability is its own plugin — loaded independently, coupled only through contracts.
+
+### 3. Root Conftest (wires plugins together)
+
+The conftest is the only place that knows which *specific* plugins to load. Tests never import plugins directly:
+
+```python
+# conftest.py
+import pytest
+
+pytest_plugins = [
+    "score.itf.core.itf_plugin",                        # CTF engine
+    "score.itf.plugins.targets.docker.plugin",          # target: Docker
+    "score.itf.plugins.capabilities.ssh.plugin",        # cap: SSH
+    "score.itf.plugins.capabilities.ping.plugin",       # cap: ping
+    "score.itf.plugins.utility.logger.plugin",          # observability
+]
+
+@pytest.hookimpl
+def pytest_itf_aliases(dut, config):
+    dut.alias("shell", "itf/cap/exec")
+    dut.alias("files", "itf/cap/file_transfer")
+    dut.alias("target", "ctf/target")
+```
+
+### 4. The Test (target-blind)
+
+Tests only know aliases and contract interfaces. Swap the target plugin in conftest and the same test runs on Docker, QEMU, or silicon:
+
+```python
+# test_deployment.py
+from score.itf.core.capability_gating import requires_capabilities
+
+@requires_capabilities("exec", "file_transfer")
+def test_deploy_and_verify(dut):
+    files = dut["files"]
+    files.upload("/tmp/app.bin", "/opt/app.bin")
+
+    shell = dut["shell"]
+    code, out = shell.execute("/opt/app.bin --self-test")
+    assert code == 0, f"Self-test failed: {out}"
+
+def test_network_reachable(dut):
+    assert dut.available("itf/cap/ping")
+    ping = dut.require("itf/cap/ping")
+    assert ping.check()
+```
+
+### What flows where
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        conftest.py                           │
+│  loads: target plugin + capability plugins + aliases        │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ pytest_itf_declare
+              ┌────────────────▼────────────────┐
+              │         CTF Registry            │
+              │  descriptors: ip, ssh_endpoint  │
+              │  providers:   target → exec     │
+              └────────────────┬────────────────┘
+                               │ resolve
+              ┌────────────────▼────────────────┐
+              │           DUT                    │
+              │  dut["shell"] → ExecInterface   │
+              │  dut["files"] → FileTransfer    │
+              └────────────────┬────────────────┘
+                               │ inject
+              ┌────────────────▼────────────────┐
+              │           Test                   │
+              │  code, out = shell.execute(...)  │
+              └─────────────────────────────────┘
+```
+
+---
+
 ## Architecture
 
-### Target System
+### Two Planes, One Seam
 
-ITF uses a capability-based target system. The `Target` base class provides a common interface that all target implementations extend:
+| Layer | Responsibility | Pytest-free? |
+|-------|----------------|--------------|
+| **CTF** (engine) | Registry → Resolver → Assembly → DUT | Yes |
+| **ITF** (plugin) | Phased lifecycle hooks on pytest | No |
 
-```python
-from score.itf.plugins.core import Target
+They meet at one line: `dut.require("contract")` — a lifecycle hook asks the DUT for a resolved capability by contract string.
 
-class MyTarget(Target):
-    def __init__(self):
-        super().__init__(capabilities={'ssh', 'sftp', 'exec'})
-```
+### Contracts
 
-Tests can check for capabilities and adapt accordingly:
+A contract is a string — identity, not shape. Plugins agree on names the way web services agree on URLs:
 
-```python
-from score.itf.plugins.core import requires_capabilities
+| Prefix | Meaning |
+|--------|---------|
+| `ctf/target` | Engine anchor — only one per run |
+| `itf/cap/*` | Capabilities (exec, file_transfer, ssh, restart, ping) |
+| `itf/net/*` | Network facts (ip_address, ssh_endpoint) |
+| `itf/target/*` | Target-specific descriptors (image, config) |
+| `itf/env/*` | Environment controllers (heartbeat, faults) |
 
-@requires_capabilities("exec")
-def test_docker_command(target):
-    exit_code, output = target.execute("ls -la")
-    assert exit_code == 0
-
-@requires_capabilities("ssh", "sftp")
-def test_file_transfer(target):
-    with target.ssh() as ssh:
-        # SSH operations
-        pass
-```
-
-### Plugin System
-
-ITF supports modular plugins that extend functionality:
-
-- **`core`**: Basic functionality that is the entry point for plugin extensions and hooks
-- **`docker`**: Docker container targets with `exec`, `file_transfer`, and `restart` capabilities
-- **`qemu`**: QEMU virtual machine targets with `ssh`, `sftp`, `exec`, `file_transfer`, and `restart` capabilities
-- **`dlt`**: DLT (Diagnostic Log and Trace) message capture and analysis
-
-## Writing Tests
-
-### Basic Test Structure
-
-Tests receive a `target` fixture that provides access to the target environment:
+### Providers & Descriptors
 
 ```python
-def test_basic(target):
-    # Use target methods based on capabilities
-    if target.has_capability("ssh"):
-        with target.ssh() as ssh:
-            # Perform SSH operations
-            pass
+from score.itf.core.ctf.contracts import provides, requires
+
+@provides("itf/cap/exec")
+@requires("ctf/target")
+def docker_exec(target):
+    return DockerExecClient(target)
 ```
 
-### Docker Tests
+- **Provider**: a factory that `@provides` one contract and `@requires` others
+- **Descriptor**: a static fact (config value, IP address, image path)
+- **SSOT**: exactly one provider per contract. Two = hard error.
+- **Tiers**: derived from the graph, never declared
 
-Docker tests use `target.execute()` which runs commands via Docker's native exec API. This works with any Docker image:
+### Anchor, Spine, and Additive Capabilities
+
+Think of composition as a walk that starts from one root:
+
+- `ctf/target` is the root (anchor).
+- ITF follows every `@requires(...)` from that root.
+- The contracts reached by that walk are the **spine** (the minimum required graph).
+
+Anything not in that required walk is **additive**.
+Additive capabilities are useful extras (for example: `ssh`, `ping`, `dlt`) that are included only when their dependencies can be satisfied.
+
+Simple example:
+
+- `itf/cap/exec` requires `ctf/target` -> part of the spine.
+- `itf/cap/ssh` requires `itf/net/ssh_endpoint` -> additive if that endpoint is available.
+
+Run-mode effect:
+
+- **LOOSE**: spine must resolve; additive misses are allowed (typically skipped tests).
+- **STRICT**: unresolved contracts are composition errors.
+
+### Lifecycle Phases
+
+```
+declare → bind → aliases → init → provision → verify → tests → teardown
+```
+
+Plugins implement only the hooks they need:
 
 ```python
-def test_docker_exec(target):
-    exit_code, output = target.execute("uname -a")
-    assert exit_code == 0
-    assert b"Linux" in output
+@pytest.hookimpl
+def pytest_itf_declare(registry, config):
+    """Register providers/descriptors."""
+
+@pytest.hookimpl
+def pytest_itf_verify(dut, config):
+    """Health check — just raise on failure. ITF auto-times and reports."""
+    shell = dut["shell"]
+    code, _ = shell.execute("echo ok")
+    assert code == 0
 ```
 
-BUILD file:
-```starlark
-py_itf_test(
-    name = "test_docker",
-    srcs = ["test_docker.py"],
-    args = ["--docker-image=ubuntu:24.04"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
-)
-```
+### Aliases
 
-#### SSH on Docker Targets
-
-If you need SSH access to a Docker container (via `target.ssh()`), the Docker image must have an SSH server installed and running. A plain image like `ubuntu:24.04` will **not** work with `target.ssh()`.
-
-Use an SSH-capable image (e.g. `linuxserver/openssh-server`) and configure credentials via the `docker_configuration` fixture:
+Short project-level names that map to contract strings. Registered in the root conftest only, locked after the aliases phase:
 
 ```python
-import pytest
-
-@pytest.fixture(scope="session")
-def docker_configuration():
-    return {
-        "environment": {
-            "PASSWORD_ACCESS": "true",
-            "USER_NAME": "score",
-            "USER_PASSWORD": "score",
-        },
-        "command": None,
-        "init": False,
-    }
-
-def test_ssh_on_docker(target):
-    with target.ssh() as ssh:
-        exit_code = ssh.execute_command("echo 'Hello via SSH!'")
-        assert exit_code == 0
+dut.alias("shell", "itf/cap/exec")
+# Tests use: dut["shell"]
 ```
 
-```starlark
-py_itf_test(
-    name = "test_docker_ssh",
-    srcs = ["test_docker_ssh.py"],
-    args = ["--docker-image=linuxserver/openssh-server:version-10.2_p1-r0"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
-)
-```
+### Bindings
 
-### QEMU Tests
+Per-provider requirement redirects. A generic plugin asks for `itf/net/ip_address`; the conftest redirects it to a project-specific contract:
 
 ```python
-def test_qemu_ssh(target):
-    with target.ssh(username="root", password="") as ssh:
-        exit_code = ssh.execute_command("uname -a")
-        assert exit_code == 0
+registry.bind("itf/cap/udp_heartbeat",    # the consumer
+              "itf/net/ip_address",         # what it asks for
+              "itf/net/heartbeat_ip")       # what it gets
 ```
 
-BUILD file:
-```starlark
-py_itf_test(
-    name = "test_qemu",
-    srcs = ["test_qemu.py"],
-    args = [
-        "--qemu-image=$(location //path:qemu_image)",
-        "--qemu-config=$(location qemu_config.json)",
-    ],
-    data = [
-        "//path:qemu_image",
-        "qemu_config.json",
-    ],
-    plugins = ["@score_itf//score/itf/plugins:qemu_plugin"],
-)
+Other consumers of `itf/net/ip_address` are unaffected — bindings are scoped.
+
+### Run Mode vs Governance (Different Controls)
+
+- **STRICT/LOOSE run mode** is a **core CTF/ITF composition mode** (engine behavior during resolve/assemble).
+- **Governance `off|warn|strict`** is a **separate utility plugin policy** for contract/alias integrity checks.
+
+They are independent knobs. The shared word `strict` means different things in each context.
+
+### Governance
+
+Optional contract/alias integrity enforcement via the governance plugin:
+
+```ini
+# pytest.ini
+itf_governance = strict  # off | warn | strict
 ```
 
-QEMU targets are configured using a JSON configuration file that specifies network settings, resource allocation, and other parameters:
+Validates namespace conventions, alias targets, and composition integrity at session start.
 
-```json
-{
-    "networks": [
-        {
-            "name": "tap0",
-            "ip_address": "169.254.158.190",
-            "gateway": "169.254.21.88"
-        }
-    ],
-    "ssh_port": 22,
-    "qemu_num_cores": 2,
-    "qemu_ram_size": "1G"
-}
-```
+### Typed Contracts (Optional Governance Layer)
 
-
-### Capability-Based Tests
-
-The `@requires_capabilities` decorator automatically skips tests if the target doesn't support required capabilities:
+String contracts maximize decoupling but sacrifice discoverability. The solution: a **dependency-free vocabulary module** that lives alongside the contracts — not inside any plugin.
 
 ```python
-from score.itf.plugins.core import requires_capabilities
+# contracts.py — zero deps, just typing.Protocol + string constants
+from typing import Protocol, runtime_checkable
 
-@requires_capabilities("exec")
-def test_docker_specific(target):
-    # Only runs on targets with 'exec' capability
-    target.execute("echo test")
+EXEC = "automation/exec"
+FILE_TRANSFER = "automation/file_transfer"
+NETWORK_INFO = "automation/network_info"
 
-@requires_capabilities("ssh", "sftp")
-def test_network_features(target):
-    # Only runs on targets with both 'ssh' and 'sftp'
-    with target.ssh() as ssh:
-        pass
+@runtime_checkable
+class ExecCapability(Protocol):
+    def execute(self, cmd: str) -> tuple[int, str]: ...
+
+@runtime_checkable
+class FileTransfer(Protocol):
+    def push(self, local: str, remote: str) -> None: ...
+    def pull(self, remote: str, local: str) -> None: ...
+
+class TypedDut:
+    """Thin typed wrapper — gives tests full autocomplete for free."""
+    def __init__(self, dut): self._dut = dut
+
+    @property
+    def exec(self) -> ExecCapability: return self._dut.require(EXEC)
+    @property
+    def files(self) -> FileTransfer: return self._dut.require(FILE_TRANSFER)
 ```
 
-## Communication APIs
-
-### SSH Operations
-
-The `Ssh` class provides `execute_command` (returns exit code) and `execute_command_output` (returns exit code, stdout lines, stderr lines) methods. SSH requires a target with an SSH server running (e.g. a Docker image with OpenSSH, or a QEMU VM).
+Expose it as a fixture in conftest:
 
 ```python
-def test_ssh_command(target):
-    with target.ssh(username="root", password="") as ssh:
-        exit_code = ssh.execute_command("ls -la /tmp")
-        assert exit_code == 0
-
-def test_ssh_with_output(target):
-    with target.ssh(username="root", password="") as ssh:
-        exit_code, stdout_lines, stderr_lines = ssh.execute_command_output("ls -la /tmp")
-        assert exit_code == 0
+@pytest.fixture
+def target(dut) -> TypedDut:
+    return TypedDut(dut)
 ```
 
-> **Note:** For Docker targets, `target.ssh()` connects to the container via SSH on port 2222. Your Docker image must have an SSH server installed and running (e.g. `linuxserver/openssh-server`). If you only need to run commands in a Docker container, use `target.execute()` instead — it uses Docker's native exec API and works with any image.
-
-### SFTP File Transfer
-
-SFTP is available on QEMU targets via `target.sftp()`:
+Tests get full autocomplete with zero annotations:
 
 ```python
-def test_file_transfer(target):
-    with target.sftp() as sftp:
-        sftp.upload("local_file.txt", "/tmp/remote_file.txt")
-        sftp.download("/tmp/remote_file.txt", "downloaded_file.txt")
+def test_deploy(target):
+    code, out = target.exec.execute("uname -a")  # IDE resolves .execute()
+    target.files.push("/tmp/fw.bin", "/opt/fw.bin")  # IDE resolves .push()
 ```
 
-> **Note:** `target.sftp()` is only available on QEMU targets. For Docker targets, use `target.upload()` and `target.download()` instead, which use the Docker API directly.
-
-### Network Testing
-
-Network testing methods are available on QEMU targets:
+The verify hook can enforce protocol compliance:
 
 ```python
-def test_ping(target):
-    # Check if target is reachable
-    assert target.ping(timeout=5)
-
-    # Wait until target becomes unreachable (e.g. after restart)
-    target.ping_lost(timeout=30, interval=1)
+@pytest.hookimpl
+def pytest_itf_verify(dut, config):
+    assert isinstance(dut.require(EXEC), ExecCapability), "Bad exec provider!"
 ```
 
-> **Note:** `target.ping()` and `target.ping_lost()` are only available on QEMU targets.
+**Key principle**: this is a *downstream governance choice*, not an ITF concern. ITF stays untyped and decoupled; teams that want typing create their own vocabulary layer. See `examples/governance_protocols/` for a complete working demo.
 
-## DLT Support
+### Capability Gating
 
-The DLT plugin enables capturing and analyzing Diagnostic Log and Trace messages. `DltWindow` captures DLT messages from a target and allows querying the recorded data:
+The `@requires_capabilities` decorator auto-skips tests whose requirements aren't met:
 
 ```python
-from score.itf.plugins.dlt.dlt_window import DltWindow
-from score.itf.plugins.dlt.dlt_receive import Protocol
-import re
+from score.itf.core.capability_gating import requires_capabilities
 
-def test_with_dlt_capture(target, dlt_config):
-    # Create DltWindow to capture DLT messages via UDP
-    with DltWindow(
-        protocol=Protocol.UDP,
-        host_ip="127.0.0.1",
-        multicast_ips=["224.0.0.1"],
-        print_to_stdout=False,
-        binary_path=dlt_config.dlt_receive_path,
-    ) as window:
-        # Perform operations that generate DLT messages
-        with target.ssh() as ssh:
-            ssh.execute_command("my_application")
-        
-        # Access the recorded DLT data
-        record = window.record()
-        
-        # Query for specific DLT messages
-        query = {
-            "apid": re.compile(r"APP1"),
-            "payload": re.compile(r".*Started successfully.*")
-        }
-        results = record.find(query=query)
-        assert len(results) > 0
-        
-        # Or iterate through all messages
-        for frame in record.find():
-            if "error" in frame.payload.lower():
-                print(f"Error found: {frame.payload}")
+@requires_capabilities("exec", "file_transfer")
+def test_deploy(dut):
+    # Only runs on targets providing both capabilities
+    ...
+
+# Device-scoped: check availability on a specific device
+@requires_capabilities("ssh", device="integ")
+def test_remote_integ(dut):
+    ssh = dut["integ"]["ssh"]
+    ...
+
+# Stacked: require capabilities on multiple devices
+@requires_capabilities("ping", device="safety")
+@requires_capabilities("ping", device="integ")
+def test_both_reachable(dut):
+    ...
 ```
 
-DLT messages can also be captured with TCP protocol and optional filters:
+### Fault Injection & Recovery
 
 ```python
-# TCP connection to specific target
-with DltWindow(
-    protocol=Protocol.TCP,
-    target_ip="192.168.1.100",
-    print_to_stdout=True,
-    binary_path=dlt_config.dlt_receive_path,
-) as window:
-    # Operations...
-    pass
+def test_degraded_mode(dut):
+    dut.disable("file_transfer")       # block a capability
+    # ... test graceful degradation ...
+    dut.enable("file_transfer")        # restore
 
-# With application/context ID filter
-with DltWindow(
-    protocol=Protocol.UDP,
-    host_ip="127.0.0.1",
-    multicast_ips=["224.0.0.1"],
-    dlt_filter="APPID CTID",  # Filter by APPID and CTID
-    binary_path=dlt_config.dlt_receive_path,
-) as window:
-    # Operations...
-    pass
+def test_crash_recovery(dut):
+    dut.rebuild()                      # tear down and re-realize from scratch
 ```
 
-### DLT Configuration File
+## Plugin Categories
 
-DLT settings can be specified in a JSON configuration file:
+| Category | Purpose | Examples |
+|----------|---------|----------|
+| **targets/** | Provide `ctf/target` anchor + inherent capabilities | docker, qemu, mock |
+| **capabilities/** | Additive capabilities requiring target facts | ssh, ping, dlt |
+| **utility/** | Observe and report (never affect DUT) | governance, logger, dashboards |
+| **domain/** | Persist data (results, artifacts) | sqlite_logger |
+| **env/** | Simulate conditions | heartbeat, fault injection |
 
-```json
-{
-    "target_ip": "192.168.122.76",
-    "host_ip": "192.168.122.1",
-    "multicast_ips": [
-        "239.255.42.99"
-    ]
-}
-```
+## Structured Logging
 
-This configuration file can be passed to tests via the `--dlt-config` argument in the BUILD file:
-
-```starlark
-py_itf_test(
-    name = "test_with_dlt",
-    srcs = ["test.py"],
-    args = [
-        "--dlt-config=$(location dlt_config.json)",
-    ],
-    data = ["dlt_config.json"],
-    plugins = ["@score_itf//score/itf/plugins:dlt_plugin", "@score_itf//score/itf/plugins:docker_plugin"],
-)
-```
-
-## Advanced Features
-
-### Target Lifecycle Management
-
-Control whether targets persist across tests using the `--keep-target` flag:
+ITF includes a structured file logger plugin that captures the entire lifecycle with visual section separators:
 
 ```bash
-# Keep target running between tests (faster, but shared state)
-bazel test //test:my_test -- --test_arg="--keep-target"
-
-# Default: Create fresh target for each test
-bazel test //test:my_test
+pytest test/ -p score.itf.plugins.utility.logger.plugin \
+    --itf-logfile=test.log --itf-loglevel=DEBUG
 ```
 
-### Custom Docker Configuration
-
-Override Docker settings in tests by implementing the `docker_configuration` fixture. Supported keys: `environment`, `command`, `init`, `shm_size`, `volumes`.
-
+Or add it to your conftest's `pytest_plugins`:
 ```python
-import pytest
-
-@pytest.fixture
-def docker_configuration():
-    return {
-        "environment": {"MY_VAR": "value"},
-        "command": "my-custom-command",
-        "init": True,
-        "shm_size": "2G",
-        "volumes": {"/host/path": {"bind": "/container/path", "mode": "rw"}},
-    }
-
-def test_with_custom_docker(target):
-    # Uses custom configuration
-    pass
+pytest_plugins = [
+    "score.itf.core.itf_plugin",
+    "score.itf.plugins.targets.docker.plugin",
+    "score.itf.plugins.utility.logger.plugin",  # structured file logger
+]
 ```
+
+The log output shows the full lifecycle with section separators:
+```
+═══════════════════════════════════════════════════════════════════════════════
+║ DECLARE — Graph Construction
+═══════════════════════════════════════════════════════════════════════════════
+[2026-07-08 13:39:11.177] [INF] [itf_plugin]   [provider] ctf/target ← image, config  (docker_anchor)
+[2026-07-08 13:39:11.177] [INF] [itf_plugin]   [provider] itf/cap/exec ← ctf/target  (docker_exec)
+
+═══════════════════════════════════════════════════════════════════════════════
+║ COMPOSITION GRAPH — Resolved
+═══════════════════════════════════════════════════════════════════════════════
+[...] Mode: loose
+[...]   ┌─ Tier 0 (2 nodes)
+[...]   │  ● itf/target/docker/config [descriptor]
+[...]   │  ● itf/target/docker/image [descriptor]
+[...]   └────────────────────────────────────────
+
+═══════════════════════════════════════════════════════════════════════════════
+║ VERIFY — Startup Checks
+═══════════════════════════════════════════════════════════════════════════════
+║ CHECK — ping
+[...] Ping startup check: localhost OK
+[...] Result: PASSED (1.013s)
+║ CHECK — docker
+[...] Docker startup check: container exec OK
+[...] Result: PASSED (2.348s)
+║ VERIFY SUMMARY — 4 passed (4 total)
+
+═══════════════════════════════════════════════════════════════════════════════
+║ TEST CALL — test_docker_runs_1
+═══════════════════════════════════════════════════════════════════════════════
+[...] Result: PASSED (0.127s)
+```
+
+**Architecture**: The ITF plugin emits phase markers as log records with a special `_itf_section` attribute. The logger plugin's formatter detects these and renders them as visual blocks. Without the logger plugin, they appear as normal INFO messages. This means:
+- ITF owns the lifecycle and emits all diagnostic info
+- The logger plugin is purely a rendering layer — no coupling to ITF internals
+- Any custom handler can consume the same structured records
+
 ## Running Tests
 
-### Basic Test Execution
+### With Bazel
 
 ```bash
-# Run all tests
-bazel test //test/...
-
-# Run specific test
-bazel test //test:test_docker
-
-# Show test output
+bazel test //test/...                         # all tests
 bazel test //test:test_docker --test_output=all
-
-# Show pytest output
-bazel test //test:test_docker --test_arg="-s"
-
-# Don't cache test results
-bazel test //test:test_docker --nocache_test_results
+bazel test //test:test_docker --test_arg="-s"  # pytest output
 ```
 
-### Docker Tests
+### Without Bazel (development)
 
 ```bash
-bazel test //test:test_docker \
-    --test_arg="--docker-image=ubuntu:24.04"
-```
+PYTHONPATH=. python -m pytest tests/integration/ \
+    --docker-image=ubuntu:24.04 -v
 
-### QEMU Tests
-
-```bash
-# With pre-built QEMU image
-bazel test //test:test_qemu \
-    --test_arg="--qemu-image=/path/to/kernel.img"
+PYTHONPATH=. python -m pytest tests/component/ -v  # mock target
 ```
 
 ## QEMU Setup (Linux)
 
-### Prerequisites
-
-Check KVM support:
 ```bash
+# Check KVM support
 ls -l /dev/kvm
-```
 
-If `/dev/kvm` exists, your system supports hardware virtualization.
-
-### Installation (Ubuntu/Debian)
-
-```bash
+# Install (Ubuntu/Debian)
 sudo apt-get install qemu-kvm libvirt-daemon-system \
     libvirt-clients bridge-utils qemu-utils
-
-# Add user to required groups
 sudo adduser $(id -un) libvirt
 sudo adduser $(id -un) kvm
-
-# Re-login to apply group changes
-sudo login $(id -un)
-
-# Verify group membership
-groups
 ```
 
-### KVM Acceleration
-
-ITF automatically detects KVM availability and uses:
-- **KVM acceleration** when `/dev/kvm` is accessible (fast)
-- **TCG emulation** as fallback (slower, no virtualization)
+ITF auto-detects KVM and falls back to TCG emulation if unavailable.
 
 ## Development
 
-### Regenerating Dependencies
-
 ```bash
-bazel run //:requirements.update
-```
-
-### Code Formatting
-
-```bash
-bazel run //:format.fix
-```
-
-### Running Tests During Development
-
-```bash
-# Run with verbose output
-bazel test //test/... \
-    --test_output=all \
-    --test_arg="-s" \
-    --nocache_test_results
-```
-
-## Creating Custom Plugins
-
-Create a custom plugin by implementing the `Target` abstract class and a `target_init` fixture:
-
-```python
-# my_plugin.py
-import pytest
-from score.itf.plugins.core import Target, determine_target_scope
-
-MY_CAPABILITIES = ["custom_feature"]
-
-class MyTarget(Target):
-    def __init__(self):
-        super().__init__(capabilities=MY_CAPABILITIES)
-
-    def execute(self, command):
-        # Implementation specific logic
-        pass
-
-    def execute_async(self, binary_path, args=None, cwd="/"):
-        # Implementation specific logic
-        pass
-
-    def upload(self, local_path, remote_path):
-        # Implementation specific logic
-        pass
-
-    def download(self, remote_path, local_path):
-        # Implementation specific logic
-        pass
-
-    def restart(self):
-        # Implementation specific logic
-        pass
-
-@pytest.fixture(scope=determine_target_scope)
-def target_init():
-    yield MyTarget()
-```
-
-Register the plugin in a BUILD file using `py_itf_plugin`:
-
-```starlark
-load("@score_itf//bazel:py_itf_plugin.bzl", "py_itf_plugin")
-
-py_itf_plugin(
-    name = "my_plugin",
-    enabled_plugins = ["my_plugin"],
-    py_library = "//path/to:my_plugin_lib",
-    visibility = ["//visibility:public"],
-)
-```
-
-Use in tests:
-
-```starlark
-py_itf_test(
-    name = "test_custom",
-    srcs = ["test.py"],
-    plugins = ["//path/to:my_plugin"],
-)
-```
-
-## Project Structure
-
-```
-score/itf/
-├── core/                 # Core ITF functionality
-│   ├── com/              # Communication modules (SSH, SFTP)
-│   ├── process/          # Process management
-│   ├── target/           # Target base class
-│   └── utils/            # Utility functions
-├── plugins/              # Plugin implementations
-│   ├── core.py           # Core plugin with Target and decorators
-│   ├── docker.py         # Docker plugin
-│   ├── dlt/              # DLT plugin
-│   └── qemu/             # QEMU plugin
-└── ...
+bazel run //:requirements.update   # regenerate deps
+bazel run //:format.fix            # format code
+bazel test //test/... --test_output=all --nocache_test_results
 ```
 
 ## Contributing

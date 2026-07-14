@@ -23,5 +23,6 @@ Practical guides for installing and using ITF.
    :maxdepth: 1
 
    get_started
+   adopt_itf
    write_tests
    plugins

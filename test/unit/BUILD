@@ -15,17 +15,24 @@ load("//:defs.bzl", "py_itf_unittest")
 py_itf_unittest(
     name = "test_ping",
     srcs = ["test_ping.py"],
+    deps = ["//score/itf/plugins/capabilities/ping"],
 )
 
 py_itf_unittest(
     name = "test_qemu_config_schema",
     srcs = ["test_qemu_config_schema.py"],
-    deps = ["//score/itf/plugins/qemu:config"],
+    deps = ["//score/itf/plugins/targets/qemu:config"],
+)
+
+py_itf_unittest(
+    name = "test_ctf_kernel_migration",
+    srcs = ["test_ctf_kernel_migration.py"],
 )
 
 test_suite(
     name = "unit",
     tests = [
+        ":test_ctf_kernel_migration",
         ":test_ping",
         ":test_qemu_config_schema",
     ],

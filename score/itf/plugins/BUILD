@@ -15,25 +15,9 @@ load("@rules_python//python:defs.bzl", "py_library")
 load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 
 py_library(
-    name = "core",
-    srcs = ["core.py"],
+    name = "pkg",
+    srcs = ["__init__.py"],
     visibility = ["//visibility:public"],
-    deps = [
-        "//score/itf/core/target",
-        requirement("pytest"),
-    ],
-)
-
-py_library(
-    name = "docker",
-    srcs = ["docker.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":core",
-        "//score/itf/core/target",
-        requirement("docker"),
-        requirement("pytest"),
-    ],
 )
 
 # ---- ITF plugin targets (used by py_itf_test symbolic macro) ----
@@ -41,25 +25,29 @@ py_library(
 py_itf_plugin(
     name = "docker_plugin",
     enabled_plugins = [
-        "score.itf.plugins.docker",
+        "score.itf.plugins.targets.docker.plugin",
+        "score.itf.plugins.capabilities.ping.plugin",
+        "score.itf.plugins.capabilities.ssh.plugin",
     ],
-    py_library = ":docker",
+    py_library = "//score/itf/plugins/targets/docker",
     visibility = ["//visibility:public"],
 )
 
 py_itf_plugin(
     name = "qemu_plugin",
     enabled_plugins = [
-        "score.itf.plugins.qemu",
+        "score.itf.plugins.targets.qemu.plugin",
+        "score.itf.plugins.capabilities.ping.plugin",
+        "score.itf.plugins.capabilities.ssh.plugin",
     ],
-    py_library = "//score/itf/plugins/qemu",
+    py_library = "//score/itf/plugins/targets/qemu",
     visibility = ["//visibility:public"],
 )
 
 py_itf_plugin(
     name = "dlt_plugin",
     enabled_plugins = [
-        "score.itf.plugins.dlt",
+        "score.itf.plugins.capabilities.dlt.plugin",
     ],
     plugin_args = [
         "--dlt-receive-path=$(location @score_itf//third_party/dlt:dlt-receive)",
@@ -67,7 +55,43 @@ py_itf_plugin(
     plugin_data_as_exec = [
         "@score_itf//third_party/dlt:dlt-receive",
     ],
-    py_library = "//score/itf/plugins/dlt",
+    py_library = "//score/itf/plugins/capabilities/dlt",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
+    name = "dashboard_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.utility.dashboard.plugin",
+    ],
+    py_library = "//score/itf/plugins/utility/dashboard",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
+    name = "logger_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.utility.logger.plugin",
+    ],
+    py_library = "//score/itf/plugins/utility/logger",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
+    name = "sqlite_logger_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.domain.sqlite_logger.plugin",
+    ],
+    py_library = "//score/itf/plugins/domain/sqlite_logger",
+    visibility = ["//visibility:public"],
+)
+
+py_itf_plugin(
+    name = "udp_heartbeat_plugin",
+    enabled_plugins = [
+        "score.itf.plugins.env.udp_heartbeat.plugin",
+    ],
+    py_library = "//score/itf/plugins/env/udp_heartbeat",
     visibility = ["//visibility:public"],
 )
 

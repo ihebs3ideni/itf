@@ -15,7 +15,7 @@ import json
 import pytest
 
 from python.runfiles import runfiles
-from score.itf.plugins.qemu.config import load_configuration
+from score.itf.plugins.targets.qemu.config import load_configuration
 
 
 def _resource_path(filename: str) -> str:

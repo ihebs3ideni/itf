@@ -26,7 +26,7 @@ py_itf_test(
         "//test/resources:qemu_port_forwarding_config",
     ],
     deps = [
-        "//score/itf/plugins/qemu",
+        "//score/itf/plugins/targets/qemu",
         "@rules_python//python/runfiles",
     ],
 )
@@ -37,11 +37,19 @@ py_itf_test(
         "conftest.py",
         "test_rules_are_working_correctly.py",
     ],
+    args = [
+        "--docker-image=ubuntu:24.04",
+    ],
+    plugins = [
+        "//score/itf/plugins:docker_plugin",
+        "//score/itf/plugins:logger_plugin",
+    ],
 )
 
 py_itf_test(
     name = "test_docker",
     srcs = [
+        "conftest.py",
         "test_async_exec.py",
         "test_docker.py",
     ],
@@ -50,12 +58,14 @@ py_itf_test(
     ],
     plugins = [
         "//score/itf/plugins:docker_plugin",
+        "//score/itf/plugins:logger_plugin",
     ],
 )
 
 py_itf_test(
     name = "test_dlt",
     srcs = [
+        "conftest.py",
         "test_dlt.py",
     ],
     args = [
@@ -66,12 +76,14 @@ py_itf_test(
     plugins = [
         "//score/itf/plugins:dlt_plugin",
         "//score/itf/plugins:docker_plugin",
+        "//score/itf/plugins:logger_plugin",
     ],
 )
 
 py_itf_test(
     name = "test_dlt_on_target",
     srcs = [
+        "conftest.py",
         "test_dlt_on_target.py",
     ],
     args = [
@@ -82,12 +94,14 @@ py_itf_test(
     plugins = [
         "//score/itf/plugins:dlt_plugin",
         "//score/itf/plugins:docker_plugin",
+        "//score/itf/plugins:logger_plugin",
     ],
 )
 
 py_itf_test(
     name = "test_ssh",
     srcs = [
+        "conftest.py",
         "test_ssh.py",
     ],
     args = [
@@ -95,6 +109,7 @@ py_itf_test(
     ],
     plugins = [
         "//score/itf/plugins:docker_plugin",
+        "//score/itf/plugins:logger_plugin",
     ],
     pytest_config = "//:pyproject.toml",  # Optional same content as default pytest.ini
 )
@@ -102,6 +117,7 @@ py_itf_test(
 py_itf_test(
     name = "test_ssh_configurable",
     srcs = [
+        "conftest.py",
         "test_ssh.py",
     ],
     args = select(
@@ -127,10 +143,12 @@ py_itf_test(
     plugins = select(
         {
             "@platforms//os:qnx": [
+                "//score/itf/plugins:logger_plugin",
                 "//score/itf/plugins:qemu_plugin",
             ],
             "//conditions:default": [
                 "//score/itf/plugins:docker_plugin",
+                "//score/itf/plugins:logger_plugin",
             ],
         },
     ),

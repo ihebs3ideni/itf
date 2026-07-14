@@ -13,7 +13,7 @@
 
 import pytest
 
-from score.itf.plugins.qemu.config import QemuConfigModel
+from score.itf.plugins.targets.qemu.config import QemuConfigModel
 
 
 _VALID_BRIDGE_CONFIG = {

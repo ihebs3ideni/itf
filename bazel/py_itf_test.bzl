@@ -45,7 +45,7 @@ def _itf_test_impl(ctx):
     args.append("--junit-xml=$XML_OUTPUT_FILE")
 
     # 4. Plugin enable flags and plugin-specific args (resolved at analysis time)
-    args.append("-p score.itf.plugins.core")
+    args.append("-p score.itf.core.itf_plugin")
     for plugin_target in ctx.attr.plugins:
         info = plugin_target[PyItfPluginInfo]
         for ep in info.enabled_plugins:

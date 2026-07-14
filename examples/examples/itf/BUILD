@@ -15,7 +15,40 @@ load("@score_itf//:defs.bzl", "py_itf_test")
 py_itf_test(
     name = "test_docker",
     srcs = [
+        "conftest.py",
         "test_docker.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
+        "--docker-image=score_itf_examples:latest",
+    ],
+    data = ["//examples/docker:image_load"],
+    plugins = [
+        "@score_itf//score/itf/plugins:docker_plugin",
+    ],
+)
+
+py_itf_test(
+    name = "test_composition",
+    srcs = [
+        "conftest.py",
+        "test_composition.py",
+    ],
+    args = [
+        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
+        "--docker-image=score_itf_examples:latest",
+    ],
+    data = ["//examples/docker:image_load"],
+    plugins = [
+        "@score_itf//score/itf/plugins:docker_plugin",
+    ],
+)
+
+py_itf_test(
+    name = "test_fault_recovery",
+    srcs = [
+        "conftest.py",
+        "test_fault_recovery.py",
     ],
     args = [
         "--docker-image-bootstrap=$(location //examples/docker:image_load)",
@@ -46,6 +79,7 @@ py_itf_test(
 py_itf_test(
     name = "test_qemu_ssh_bridge_network",
     srcs = [
+        "conftest.py",
         "test_qemu.py",
     ],
     args = [
@@ -68,6 +102,7 @@ py_itf_test(
 py_itf_test(
     name = "test_qemu_ssh_port_forwarding",
     srcs = [
+        "conftest.py",
         "test_qemu.py",
     ],
     args = [
