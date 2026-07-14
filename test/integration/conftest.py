@@ -55,6 +55,21 @@ def pytest_itf_declare(registry, config):
 
     existing = registry.descriptor(DOCKER_CONFIG_CONTRACT)
     if existing is not None:
+        docker_image = config.getoption("docker_image", default="") or ""
+
+        # linuxserver/openssh-server expects its own entrypoint/env contract.
+        # Keep the default for other images (e.g. ubuntu) where we want sleep infinity.
+        if docker_image.startswith("linuxserver/openssh-server"):
+            existing.value["environment"].update(
+                {
+                    "PASSWORD_ACCESS": "true",
+                    "USER_NAME": "score",
+                    "USER_PASSWORD": "score",
+                }
+            )
+            existing.value["command"] = None
+            existing.value["init"] = False
+
         existing.value["volumes"] = {
             os.path.dirname(os.path.abspath(__file__)): {
                 "bind": CONTAINER_EXTRA_MNT_PATH,

@@ -17,19 +17,6 @@ import score.itf
 pytest_plugins = ["score.itf.plugins.capabilities.ssh.plugin"]
 
 
-@pytest.fixture(scope="session")
-def docker_configuration():
-    return {
-        "environment": {
-            "PASSWORD_ACCESS": "true",
-            "USER_NAME": "score",
-            "USER_PASSWORD": "score",
-        },
-        "command": None,
-        "init": False,
-    }
-
-
 def check_command_exec(exec_interface, message):
     exit_code, output = exec_interface.execute(f"echo -n {message}")
     return f"{message}" == output.decode()
