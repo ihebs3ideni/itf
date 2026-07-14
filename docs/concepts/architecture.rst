@@ -71,7 +71,7 @@ Tests can be guarded against targets that lack required capabilities using the
 
 .. code-block:: python
 
-   from score.itf.plugins.core import requires_capabilities
+   from score.itf.core.capability_gating import requires_capabilities
 
    @requires_capabilities("ssh", "sftp")
    def test_file_roundtrip(target):
