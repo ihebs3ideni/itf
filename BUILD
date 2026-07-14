@@ -39,11 +39,10 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//score/itf/core/com",
+        "//score/itf/core:itf_plugin",
+        "//score/itf/core/ctf",
         "//score/itf/core/process",
-        "//score/itf/core/target",
         "//score/itf/core/utils",
-        "//score/itf/plugins:core",
     ],
 )
 

@@ -18,6 +18,7 @@ py_library(
     name = "itf_plugin",
     srcs = [
         "__init__.py",
+        "capability_gating.py",
         "itf_plugin.py",
         "pytest_plugin.py",
     ],

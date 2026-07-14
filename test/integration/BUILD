@@ -26,7 +26,7 @@ py_itf_test(
         "//test/resources:qemu_port_forwarding_config",
     ],
     deps = [
-        "//score/itf/plugins/qemu",
+        "//score/itf/plugins/targets/qemu",
         "@rules_python//python/runfiles",
     ],
 )

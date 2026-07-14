@@ -12,12 +12,13 @@
 # *******************************************************************************
 import pytest
 import time
+import score.itf
 
-from score.itf.plugins.dlt.dlt_receive import DltReceive, Protocol
-from score.itf.plugins.dlt.dlt_window import DltWindow
+from score.itf.plugins.capabilities.dlt.dlt_receive import DltReceive, Protocol
+from score.itf.plugins.capabilities.dlt.dlt_window import DltWindow
 
 
-def test_dlt_standard_config(target, dlt_config):
+def test_dlt_standard_config(exec_interface, dlt_config):
     with DltReceive(
         protocol=Protocol.UDP,
         host_ip=dlt_config.host_ip,
@@ -28,7 +29,7 @@ def test_dlt_standard_config(target, dlt_config):
         time.sleep(1)
 
 
-def test_dlt_custom_config(target, dlt_config):
+def test_dlt_custom_config(exec_interface, dlt_config):
     with DltReceive(
         protocol=Protocol.UDP,
         host_ip="127.0.0.1",
@@ -44,27 +45,27 @@ def test_dlt_custom_config(target, dlt_config):
         time.sleep(1)
 
 
-def send_secret_dlt_message(target):
+def send_secret_dlt_message(exec_interface):
     for i in range(10):
-        target.execute(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"')
+        exec_interface.execute(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"')
 
-    target.execute(f'/bin/sh -c "echo -n This is a secret message | /usr/bin/dlt-adaptor-stdin"')
+    exec_interface.execute(f'/bin/sh -c "echo -n This is a secret message | /usr/bin/dlt-adaptor-stdin"')
 
     for i in range(10):
-        target.execute(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"')
+        exec_interface.execute(f'/bin/sh -c "echo -n message{i} | /usr/bin/dlt-adaptor-stdin"')
 
 
-def test_dlt_direct_tcp(target, dlt_config, caplog):
-    target.execute(f"/usr/bin/dlt-daemon -d")
+def test_dlt_direct_tcp(exec_interface, dut, dlt_config, caplog):
+    exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
     with DltReceive(
         protocol=Protocol.TCP,
-        target_ip=target.get_ip(),
+        target_ip=dut.require("itf/net/ip_address"),
         print_to_stdout=True,
         logger_name="fixed_dlt_receive",
         binary_path=dlt_config.dlt_receive_path,
     ):
-        send_secret_dlt_message(target)
+        send_secret_dlt_message(exec_interface)
 
     for record in caplog.records:
         if record.name == "fixed_dlt_receive":
@@ -74,9 +75,11 @@ def test_dlt_direct_tcp(target, dlt_config, caplog):
         pytest.fail("Expected DLT message was not received")
 
 
-def test_dlt_multicast_udp(target, dlt_config, caplog):
-    target.execute(f"/usr/bin/dlt-daemon -d")
+@score.itf.core.capability_gating.requires_capabilities("network")
+def test_dlt_multicast_udp(exec_interface, dut, dlt_config, caplog):
+    exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
+    target = dut.require("ctf/target")
     with DltReceive(
         protocol=Protocol.UDP,
         host_ip=target.get_gateway(),
@@ -85,7 +88,7 @@ def test_dlt_multicast_udp(target, dlt_config, caplog):
         logger_name="fixed_dlt_receive",
         binary_path=dlt_config.dlt_receive_path,
     ):
-        send_secret_dlt_message(target)
+        send_secret_dlt_message(exec_interface)
 
     for record in caplog.records:
         if record.name == "fixed_dlt_receive":
@@ -95,9 +98,11 @@ def test_dlt_multicast_udp(target, dlt_config, caplog):
         pytest.fail("Expected DLT message was not received")
 
 
-def test_dlt_window_no_stdout(target, dlt_config):
-    target.execute(f"/usr/bin/dlt-daemon -d")
+@score.itf.core.capability_gating.requires_capabilities("network")
+def test_dlt_window_no_stdout(exec_interface, dut, dlt_config):
+    exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
+    target = dut.require("ctf/target")
     with DltWindow(
         protocol=Protocol.UDP,
         host_ip=target.get_gateway(),
@@ -105,14 +110,16 @@ def test_dlt_window_no_stdout(target, dlt_config):
         print_to_stdout=False,
         binary_path=dlt_config.dlt_receive_path,
     ) as window:
-        send_secret_dlt_message(target)
+        send_secret_dlt_message(exec_interface)
         assert 0 == len(window.get_captured_logs())
         assert 0 == len(window.get_logged_output())
 
 
-def test_dlt_window_stdout(target, dlt_config):
-    target.execute(f"/usr/bin/dlt-daemon -d")
+@score.itf.core.capability_gating.requires_capabilities("network")
+def test_dlt_window_stdout(exec_interface, dut, dlt_config):
+    exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
+    target = dut.require("ctf/target")
     with DltWindow(
         protocol=Protocol.UDP,
         host_ip=target.get_gateway(),
@@ -120,15 +127,17 @@ def test_dlt_window_stdout(target, dlt_config):
         print_to_stdout=True,
         binary_path=dlt_config.dlt_receive_path,
     ) as window:
-        send_secret_dlt_message(target)
+        send_secret_dlt_message(exec_interface)
         assert 0 != len(window.get_captured_logs())
         assert 0 != len(window.get_logged_output())
         assert "This is a secret message" in window.get_logged_output()
 
 
-def test_dlt_window_with_filter(target, dlt_config):
-    target.execute(f"/usr/bin/dlt-daemon -d")
+@score.itf.core.capability_gating.requires_capabilities("network")
+def test_dlt_window_with_filter(exec_interface, dut, dlt_config):
+    exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
+    target = dut.require("ctf/target")
     with DltWindow(
         protocol=Protocol.UDP,
         host_ip=target.get_gateway(),
@@ -137,15 +146,17 @@ def test_dlt_window_with_filter(target, dlt_config):
         dlt_filter="SINA SINC",
         binary_path=dlt_config.dlt_receive_path,
     ) as window:
-        send_secret_dlt_message(target)
+        send_secret_dlt_message(exec_interface)
         assert 0 != len(window.get_captured_logs())
         assert 0 != len(window.get_logged_output())
         assert "This is a secret message" in window.get_logged_output()
 
 
-def test_dlt_window_with_record(target, dlt_config):
-    target.execute(f"/usr/bin/dlt-daemon -d")
+@score.itf.core.capability_gating.requires_capabilities("network")
+def test_dlt_window_with_record(exec_interface, dut, dlt_config):
+    exec_interface.execute(f"/usr/bin/dlt-daemon -d")
 
+    target = dut.require("ctf/target")
     with DltWindow(
         protocol=Protocol.UDP,
         host_ip=target.get_gateway(),
@@ -153,7 +164,7 @@ def test_dlt_window_with_record(target, dlt_config):
         print_to_stdout=False,
         binary_path=dlt_config.dlt_receive_path,
     ) as window:
-        send_secret_dlt_message(target)
+        send_secret_dlt_message(exec_interface)
         record = window.record()
 
         for frame in record.find():
