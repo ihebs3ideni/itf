@@ -37,6 +37,6 @@ py_library(
     deps = [
         ":config",
         "//score/itf/core/process",
-        "//score/itf/core/utils",
+        "//score/itf/plugins/utils",
     ],
 )

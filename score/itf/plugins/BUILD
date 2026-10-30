@@ -16,11 +16,18 @@ load("@rules_python//python:defs.bzl", "py_library")
 load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 
 py_library(
+    name = "target",
+    srcs = ["target.py"],
+    visibility = ["//visibility:public"],
+    deps = ["//score/itf/core/process"],
+)
+
+py_library(
     name = "core",
     srcs = ["core.py"],
     visibility = ["//visibility:public"],
     deps = [
-        "//score/itf/core/target",
+        ":target",
         requirement("pytest"),
     ],
 )
@@ -31,7 +38,7 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         ":core",
-        "//score/itf/core/target",
+        ":target",
         requirement("docker"),
         requirement("pytest"),
     ],
@@ -52,6 +59,7 @@ py_library(
 py_itf_plugin(
     name = "docker_plugin",
     enabled_plugins = [
+        "score.itf.plugins.core",
         "score.itf.plugins.docker",
     ],
     py_library = ":docker",
@@ -101,6 +109,7 @@ py_itf_plugin(
 py_itf_plugin(
     name = "qemu_plugin",
     enabled_plugins = [
+        "score.itf.plugins.core",
         "score.itf.plugins.qemu",
     ],
     py_library = "//score/itf/plugins/qemu",

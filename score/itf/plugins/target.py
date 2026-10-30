@@ -108,6 +108,10 @@ class Target(ABC):
         :return: an :class:`AsyncProcess` instance.
         """
 
+    def spawn(self, *args, **kwargs) -> AsyncProcess:
+        """The exec.process contract's name for `execute_async`, used by WrappedProcess."""
+        return self.execute_async(*args, **kwargs)
+
     def wrap_exec(
         self,
         *args,

@@ -16,7 +16,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from score.itf.core.utils.bunch import Bunch
+from score.itf.plugins.utils.bunch import Bunch
 from score.itf.plugins.dlt.dlt_receive import DltReceive, Protocol, protocol_arguments
 
 

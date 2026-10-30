@@ -21,9 +21,9 @@ from score.itf.core.process.async_process import AsyncProcess
 from score.itf.plugins.core import Target
 from score.itf.plugins.qemu.qemu_process import QemuProcess
 
-from score.itf.core.com.ssh import Ssh
-from score.itf.core.com.sftp import Sftp
-from score.itf.core.com.ping import ping, ping_lost
+from score.itf.plugins.com.ssh import Ssh
+from score.itf.plugins.com.sftp import Sftp
+from score.itf.plugins.com.ping import ping, ping_lost
 
 
 QEMU_CAPABILITIES = ["ssh", "sftp"]
@@ -228,7 +228,7 @@ class QemuTarget(Target):
         :param str username: SSH username.
         :param str password: SSH password (optional)
         :param str pkey_path: SSH private key path (optional)
-        :return: keyword arguments for :class:`~score.itf.core.com.ssh.Ssh`.
+        :return: keyword arguments for :class:`~score.itf.plugins.com.ssh.Ssh`.
         :rtype: dict
         :raises ValueError: if no authentication method can be determined.
         """

@@ -10,5 +10,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+from score.itf.core import hookimpl
 
-from .target import Target, UnsupportedTarget
+
+pytest_plugins = ["fake_shell.plugin", "teardown_recorder_pack", "teardown_raiser_pack"]
+
+
+@hookimpl
+def itf_setup(ctx):
+    main = ctx.scope("main")
+    main.add("world", using="fake_shell.world")
+    main.add("shell", "itf.capabilities.exec.shell", using="fake_shell.session", bind={"world": "world"})
+
+
+@hookimpl
+def itf_init(ctx):
+    ctx.scope("main").goal("itf.states.shell.open")

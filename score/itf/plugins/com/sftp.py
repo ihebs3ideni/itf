@@ -14,7 +14,7 @@ import os
 import stat
 import logging
 
-from score.itf.core.com.ssh import Ssh
+from score.itf.plugins.com.ssh import Ssh
 from typing import Optional
 
 # Reduce the logging level of paramiko, from DEBUG to INFO

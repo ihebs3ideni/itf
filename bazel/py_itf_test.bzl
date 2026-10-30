@@ -44,8 +44,9 @@ def _itf_test_impl(ctx):
     # 3. JUnit XML output (Bazel sets XML_OUTPUT_FILE environment variable)
     args.append("--junit-xml=$XML_OUTPUT_FILE")
 
-    # 4. Plugin enable flags and plugin-specific args (resolved at analysis time)
-    args.append("-p score.itf.plugins.core")
+    # 4. The ITF adapter (a pip install would register it as a pytest11 entry point), then
+    #    every plugin's enable flags and args. Packs are plugins like any other.
+    args.append("-p score.itf.core.adapters.pytest.plugin")
     for plugin_target in ctx.attr.plugins:
         info = plugin_target[PyItfPluginInfo]
         for ep in info.enabled_plugins:
@@ -146,7 +147,10 @@ def _itf_test_impl(ctx):
         # Also merge the DefaultInfo runfiles forwarded from py_library
         runfiles = runfiles.merge(plugin_target[DefaultInfo].default_runfiles)
         env.update(info.env)
-    env.update(ctx.attr.env)
+    env.update({
+        k: ctx.expand_location(v.replace("$(location ", "$(rootpath "), targets = expand_targets)
+        for k, v in ctx.attr.env.items()
+    })
 
     return [
         DefaultInfo(
@@ -170,11 +174,12 @@ _itf_test = rule(
             providers = [PyInfo],
         ),
         "plugins": attr.label_list(
-            doc = "List of py_itf_plugin targets.",
+            doc = "List of py_itf_plugin targets: ITF packs and plain pytest plugins.",
             providers = [PyItfPluginInfo],
             cfg = "exec",
             default = [],
         ),
+
         "srcs": attr.label_list(
             doc = "Test source files (passed as positional args to pytest).",
             cfg = "exec",

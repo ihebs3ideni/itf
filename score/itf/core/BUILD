@@ -10,18 +10,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-
 load("@itf_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
+# ITF core: engine, session, gating and the YAML frontend. Vocabulary-neutral (see the banned-words
+# gate in //test/core/gates); domain code lives in packs.
 py_library(
-    name = "target",
-    srcs = [
-        "__init__.py",
-        "target.py",
-    ],
+    name = "core",
+    srcs = glob([
+        "*.py",
+        "engine/*.py",
+        "frontends/*.py",
+    ]),
     visibility = ["//visibility:public"],
     deps = [
-        requirement("typing-extensions"),
+        "//score/itf/core/octo",
+        "//score/itf/core/process",
+        requirement("pluggy"),
+        requirement("pyyaml"),
     ],
 )

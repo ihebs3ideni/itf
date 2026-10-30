@@ -14,7 +14,7 @@
 import functools
 import pytest
 
-from score.itf.core.target import Target, UnsupportedTarget
+from score.itf.plugins.target import Target, UnsupportedTarget
 
 
 def pytest_addoption(parser):

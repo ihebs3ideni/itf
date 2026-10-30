@@ -21,7 +21,7 @@ import time
 import docker as pypi_docker
 import pytest
 
-from score.itf.core.com.ssh import Ssh
+from score.itf.plugins.com.ssh import Ssh
 from score.itf.core.process.async_process import AsyncProcess
 
 from score.itf.plugins.core import determine_target_scope
