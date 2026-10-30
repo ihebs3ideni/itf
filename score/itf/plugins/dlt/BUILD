@@ -11,15 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@rules_python//python:defs.bzl", "py_library")
-
-copy_file(
-    name = "libdlt",
-    src = "//third_party/dlt:libdlt.so",
-    out = "libdlt.so.2",
-    allow_symlink = True,
-)
 
 py_library(
     name = "dlt",
@@ -28,12 +20,10 @@ py_library(
         "dlt_receive.py",
         "dlt_window.py",
     ],
-    data = [
-        ":libdlt",
-    ],
     visibility = ["//visibility:public"],
     deps = [
         "//score/itf/core/process",
+        "//score/itf/packs/dlt",  # libdlt.so.2 for python-dlt
         "//score/itf/plugins/utils",
         "//third_party/python_dlt",
     ],
