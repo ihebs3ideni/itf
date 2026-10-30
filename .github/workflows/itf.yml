@@ -28,6 +28,13 @@ jobs:
       - name: Run build
         run: |
           bazel build //...
+      - name: Check ITF plans
+        # Reuses the build above: resolves both gates of every ITF test (providers, bindings, shapes,
+        # config, action order, gating) with --itf-plan and stops before constructing, probing or
+        # running anything, so it takes seconds. A wrong recipe fails here, before any container starts.
+        run: |
+          bazel test --test_output=errors \
+            --test_arg=--itf-plan --test_arg=--itf-strict-shapes //test/integration/...
       - name: Run test
         run: |
           bazel test //...

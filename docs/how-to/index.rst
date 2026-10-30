@@ -25,3 +25,4 @@ Practical guides for installing and using ITF.
    get_started
    write_tests
    plugins
+   migrate

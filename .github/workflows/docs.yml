@@ -27,7 +27,24 @@ on:
     types: [created]
 
 jobs:
+  # The documentation site serves the pack marketplace (docs/_generated/catalog.html), generated from the
+  # packs' code. The Sphinx build only sees source files, so it is regenerated here on every docs run and
+  # the run fails when the checked-in copy differs: the published marketplace is never stale.
+  marketplace:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+      - name: Regenerate the pack marketplace
+        run: bazel run //tools/catalog:build -- --out docs/_generated/catalog.html
+      - name: Fail when the checked-in marketplace is stale
+        run: git diff --exit-code docs/_generated/catalog.html
+
   docs-verify:
+    needs: [marketplace]
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     uses: eclipse-score/cicd-workflows/.github/workflows/docs-verify.yml@8d80e8df150cae21d53cbc8031d0f970648f7a67 # v0.0.3
     permissions:
@@ -37,7 +54,7 @@ jobs:
       bazel-docs-verify-target: "//:docs"
 
   docs-build:
-    needs: [docs-verify]
+    needs: [marketplace, docs-verify]
     if: github.event_name != 'pull_request'
     uses: eclipse-score/cicd-workflows/.github/workflows/docs.yml@8d80e8df150cae21d53cbc8031d0f970648f7a67 # v0.0.3
     permissions:

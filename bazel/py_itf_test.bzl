@@ -15,6 +15,7 @@
 
 load("@rules_python//python:defs.bzl", "PyInfo", "py_test")
 load("@score_itf//bazel:py_itf_plugin.bzl", "PyItfPluginInfo")
+load("@score_itf//bazel:recipe_info.bzl", "ItfRecipeInfo")
 
 # =============================================================================
 # Wrapper test rule: resolves plugin providers at analysis time and creates
@@ -22,6 +23,8 @@ load("@score_itf//bazel:py_itf_plugin.bzl", "PyItfPluginInfo")
 # =============================================================================
 
 def _itf_test_impl(ctx):
+    recipe = ctx.attr.recipe[ItfRecipeInfo] if ctx.attr.recipe else None
+    plugins = list(ctx.attr.plugins) + (recipe.plugins if recipe else [])
     executable = ctx.executable.test_binary
     pytest_config = ctx.file.pytest_config
 
@@ -44,13 +47,18 @@ def _itf_test_impl(ctx):
     # 3. JUnit XML output (Bazel sets XML_OUTPUT_FILE environment variable)
     args.append("--junit-xml=$XML_OUTPUT_FILE")
 
-    # 4. Plugin enable flags and plugin-specific args (resolved at analysis time)
-    args.append("-p score.itf.plugins.core")
-    for plugin_target in ctx.attr.plugins:
+    # 4. The ITF adapter (a pip install would register it as a pytest11 entry point), then
+    #    every plugin's enable flags and args. Packs are plugins like any other.
+    args.append("-p score.itf.core.adapters.pytest.plugin")
+    for plugin_target in plugins:
         info = plugin_target[PyItfPluginInfo]
         for ep in info.enabled_plugins:
             args.append("-p %s" % ep)
         args.extend(info.resolved_args)
+
+    # The recipe's itf_setup/itf_init; the conftest, if any, keeps the code hooks.
+    if recipe:
+        args.append("-p score.itf.recipes.document")
 
     # 5. Source file paths (positional args for pytest)
     for src in ctx.files.srcs:
@@ -72,7 +80,7 @@ def _itf_test_impl(ctx):
     # for _itf_test (target config) vs py_test (exec config via cfg transition).
     # Augmenting PYTHONPATH ensures the correct plugin packages are importable.
     plugin_imports = []
-    for plugin_target in ctx.attr.plugins:
+    for plugin_target in plugins:
         if PyInfo in plugin_target:
             plugin_imports.extend(plugin_target[PyInfo].imports.to_list())
     seen = {}
@@ -139,14 +147,20 @@ def _itf_test_impl(ctx):
 
     # Merge plugin runfiles (carries plugin data files + py_library runfiles) and envs
     env = {}
-    for plugin_target in ctx.attr.plugins:
+    for plugin_target in plugins:
         info = plugin_target[PyItfPluginInfo]
         runfiles = runfiles.merge(info.plugin_runfiles)
 
         # Also merge the DefaultInfo runfiles forwarded from py_library
         runfiles = runfiles.merge(plugin_target[DefaultInfo].default_runfiles)
         env.update(info.env)
-    env.update(ctx.attr.env)
+    if recipe:
+        runfiles = runfiles.merge(recipe.runfiles)
+        env["ITF_RECIPE_DOCUMENT"] = recipe.document.short_path
+    env.update({
+        k: ctx.expand_location(v.replace("$(location ", "$(rootpath "), targets = expand_targets)
+        for k, v in ctx.attr.env.items()
+    })
 
     return [
         DefaultInfo(
@@ -169,8 +183,13 @@ _itf_test = rule(
             mandatory = True,
             providers = [PyInfo],
         ),
+        "recipe": attr.label(
+            doc = "An itf_recipe target: itf_setup/itf_init as data, with the packs it needs.",
+            providers = [ItfRecipeInfo],
+            cfg = "exec",
+        ),
         "plugins": attr.label_list(
-            doc = "List of py_itf_plugin targets.",
+            doc = "List of py_itf_plugin targets: ITF packs and plain pytest plugins.",
             providers = [PyItfPluginInfo],
             cfg = "exec",
             default = [],
@@ -214,7 +233,7 @@ _itf_test = rule(
 # Symbolic macro: the public API, creates the py_test + _itf_test pair.
 # =============================================================================
 
-def _py_itf_test_impl(name, visibility, srcs, args, data, data_as_exec, plugins, deps, tags, pytest_config, env, **kwargs):
+def _py_itf_test_impl(name, visibility, srcs, args, data, data_as_exec, plugins, recipe, deps, tags, pytest_config, env, **kwargs):
     """Symbolic macro implementation for ITF tests."""
     pytest_bootstrap = Label("@score_itf//:main.py")
 
@@ -230,7 +249,7 @@ def _py_itf_test_impl(name, visibility, srcs, args, data, data_as_exec, plugins,
         main = pytest_bootstrap,
         deps = [
             "@score_itf//:itf",
-        ] + deps + plugins,
+        ] + deps + plugins + ([recipe] if recipe else []),
         tags = ["manual"],
         visibility = ["//visibility:private"],
     )
@@ -242,6 +261,7 @@ def _py_itf_test_impl(name, visibility, srcs, args, data, data_as_exec, plugins,
         name = name,
         test_binary = name + ".test_binary",
         plugins = plugins,
+        recipe = recipe,
         srcs = srcs,
         pytest_config = pytest_config,
         data = data,
@@ -265,6 +285,7 @@ py_itf_test = macro(
         "data": attr.label_list(default = [], allow_files = True),
         "data_as_exec": attr.label_list(default = [], allow_files = True),
         "plugins": attr.label_list(default = [], providers = [PyItfPluginInfo]),
+        "recipe": attr.label(default = None, configurable = False, providers = [ItfRecipeInfo], doc = "An itf_recipe target standing in for the itf_setup/itf_init hooks; a conftest in srcs keeps itf_verify, itf_teardown, fixtures and bench-local actions."),
         "deps": attr.label_list(default = [], providers = [PyInfo]),
         "pytest_config": attr.label(default = None, allow_single_file = True, doc = "Custom pytest configuration file. If not specified, uses the default from @score_itf//:pytest.ini."),
         "env": attr.string_dict(default = {}, doc = "Environment variables for the test."),

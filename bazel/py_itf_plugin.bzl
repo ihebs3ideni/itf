@@ -86,7 +86,7 @@ py_itf_plugin = rule(
             mandatory = True,
         ),
         "enabled_plugins": attr.string_list(
-            doc = "List of pytest plugin module paths to enable (e.g. 'score.itf.plugins.docker').",
+            doc = "List of pytest plugin module paths to enable (e.g. 'score.itf.packs.docker.plugin').",
             default = [],
         ),
         "plugin_args": attr.string_list(

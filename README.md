@@ -11,689 +11,204 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # Integration Test Framework (ITF)
 
-ITF is a [`pytest`](https://docs.pytest.org/en/latest/contents.html)-based testing framework designed for ECU (Electronic Control Unit) testing in automotive domains. It provides a flexible, plugin-based architecture that enables testing on multiple target environments including Docker containers, QEMU virtual machines, and real hardware.
+ITF is a [`pytest`](https://docs.pytest.org)-based framework for testing ECUs and the software on
+them: in Docker containers, QEMU virtual machines and on real hardware, with Bazel.
 
-## Key Features
+A test target is **composed from packs**, not coded as a class. Each pack publishes *contracts*:
+capabilities a test can hold (`itf.capabilities.exec.command`, `...files.transfer`, ...) and states
+an action makes true (`itf.states.platform.up`, `itf.states.shell.open`, ...). A **recipe** (the
+test's root `conftest.py`, in Python or YAML) picks providers and states goals; the **OCTO**
+planner derives what to construct and in which order to run actions, before any test starts.
+Tests ask for contracts by token, so the same test runs on a container, a VM or a bench.
 
-- **Plugin-Based Architecture**: Modular design with support for Docker, QEMU, DLT, and custom plugins
-- **Target Abstraction**: Unified `Target` interface with capability-based system for different test environments
-- **Flexible Testing**: Write tests once, run across multiple targets (Docker, QEMU, hardware)
-- **Capability System**: Tests can query and adapt based on available target capabilities
-- **Bazel Integration**: Seamless integration with Bazel build system via `py_itf_test` macro
+```
+tests ──(contract tokens)──► target ◄── recipe (conftest.py / YAML): nodes, goals, relations
+                               ▲
+           ITF core: session, gating, bring-up, probes, unwind ── OCTO: the two-gate planner
+                               ▲
+   packs: docker · qemu · ssh · net · ping · dlt · pcap · serial · core_dump   (+ sim variants)
+```
 
-## Quick Start
+## Quick start
 
-### Installation
+`MODULE.bazel`:
 
-Add ITF to your `MODULE.bazel`:
 ```starlark
-bazel_dep(name = "score_itf", version = "0.1.0")
+bazel_dep(name = "score_itf", version = "...")
 ```
 
-Configure your `.bazelrc`:
-```
-common --registry=https://raw.githubusercontent.com/eclipse-score/bazel_registry/main/
-common --registry=https://bcr.bazel.build
-```
-
-### Basic Test Example
-
-```python
-# test_example.py
-def test_docker_exec(target):
-    exit_code, output = target.execute("echo 'Hello from target!'")
-    assert exit_code == 0
-    assert b"Hello from target!" in output
-```
-
-### BUILD Configuration
-
-For external consumers, use the `@score_itf` prefix for all loads and plugin references:
+`BUILD`:
 
 ```starlark
 load("@score_itf//:defs.bzl", "py_itf_test")
 
 py_itf_test(
-    name = "test_example",
-    srcs = ["test_example.py"],
-    args = ["--docker-image=ubuntu:24.04"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
+    name = "test_container",
+    srcs = ["conftest.py", "test_container.py"],
+    data = ["recipe.yaml"],
+    plugins = ["@score_itf//score/itf/packs/docker"],
 )
 ```
 
-## Architecture
+`recipe.yaml`:
 
-### Target System
+```yaml
+setup:
+  nodes:
+    - name: platform
+      contract: itf.capabilities.platform.instance
+      using: docker.instance
+      config:
+        image: ubuntu:24.04
+    - name: command
+      contract: itf.capabilities.exec.command
+      using: docker.exec
+    - name: files
+      contract: itf.capabilities.files.transfer
+      using: docker.files
+init:
+  goals:
+    - itf.states.platform.up
+```
 
-ITF uses a capability-based target system. The `Target` base class provides a common interface that all target implementations extend:
+`conftest.py` (the recipe):
 
 ```python
-from score.itf.plugins.core import Target
+from pathlib import Path
+from score.itf.core import hookimpl, load_init, load_setup
 
-class MyTarget(Target):
-    def __init__(self):
-        super().__init__(capabilities={'ssh', 'sftp', 'exec'})
+RECIPE = Path(__file__).with_name("recipe.yaml")
+
+@hookimpl
+def itf_setup(ctx):
+    load_setup(ctx, RECIPE)
+
+@hookimpl
+def itf_init(ctx):
+    load_init(ctx, RECIPE)
 ```
 
-Tests can check for capabilities and adapt accordingly:
+`test_container.py`:
 
 ```python
-from score.itf.plugins.core import requires_capabilities
+import score.itf as itf
 
-@requires_capabilities("exec")
-def test_docker_command(target):
-    exit_code, output = target.execute("ls -la")
-    assert exit_code == 0
-
-@requires_capabilities("ssh", "sftp")
-def test_file_transfer(target):
-    with target.ssh() as ssh:
-        # SSH operations
-        pass
+@itf.requires("itf.capabilities.exec.command")
+def test_hello(target):
+    assert target.command.exec("echo -n hello") == (0, "hello")
 ```
-
-### Plugin System
-
-ITF supports modular plugins that extend functionality:
-
-- **`core`**: Basic functionality that is the entry point for plugin extensions and hooks
-- **`docker`**: Docker container targets with `exec`, `file_transfer`, and `restart` capabilities
-- **`qemu`**: QEMU virtual machine targets with `ssh`, `sftp`, `exec`, `file_transfer`, and `restart` capabilities
-- **`core_dump`**: Target-agnostic core dump extraction for targets with `exec` and `file_transfer` capabilities
-- **`dlt`**: DLT (Diagnostic Log and Trace) message capture and analysis
-
-### Core Dump Extraction
-
-Core dump extraction is provided by the standalone `core_dump_plugin`. It can be composed with both Docker and QEMU targets instead of being embedded in a target-specific plugin.
-
-Example with Docker:
-
-```starlark
-py_itf_test(
-    name = "test_with_core_extraction",
-    srcs = ["test_with_core_extraction.py"],
-    args = ["--docker-image=ubuntu:24.04"],
-    plugins = [
-        "@score_itf//score/itf/plugins:docker_plugin",
-        "@score_itf//score/itf/plugins:core_dump_plugin",
-    ],
-)
-```
-
-Example with QEMU:
-
-```starlark
-py_itf_test(
-    name = "test_qemu_with_core_extraction",
-    srcs = ["test_qemu_with_core_extraction.py"],
-    args = [
-        "--qemu-image=$(location //path:qemu_image)",
-        "--qemu-config=$(location qemu_config.json)",
-    ],
-    data = [
-        "//path:qemu_image",
-        "qemu_config.json",
-    ],
-    plugins = [
-        "@score_itf//score/itf/plugins:qemu_plugin",
-        "@score_itf//score/itf/plugins:core_dump_plugin",
-    ],
-)
-```
-
-Enable extraction during the test run with:
 
 ```bash
-bazel test //path/to:test --@score_itf//score/itf/plugins:extract_core_dumps=true
+bazel test //:test_container                                   # bring up, run, tear down
+bazel test //:test_container --test_arg=--itf-plan --test_output=all   # plan only, nothing runs
 ```
 
-Optionally override the host output directory for extracted files:
+Artifacts land in `bazel-testlogs/<target>/test.outputs/itf-run/`: `plan.json`, `target.html`
+(an interactive view of the composed target), `test.log` and `events.jsonl`.
+
+## Packs
+
+| Pack (Bazel label) | Provides | Delivers |
+|---|---|---|
+| `//score/itf/packs/docker` (`:sim`) | `platform.instance`, `exec.command`, `exec.process`, `files.transfer`, `descriptor.endpoint` | `platform.up` |
+| `//score/itf/packs/qemu` | `platform.instance`, `exec.console`, `descriptor.endpoint`, `descriptor.credentials` | `platform.up`, `console.open` |
+| `//score/itf/packs/ssh` (`:sim`) | `exec.shell`, `exec.command`, `exec.process`, `files.transfer` (SFTP) | `shell.open` + `network.reachable` |
+| `//score/itf/packs/net` | `descriptor.endpoint`, `descriptor.credentials` (key or password) | — |
+| `//score/itf/packs/ping` (`:boot`) | `net.ping` (ICMP without a ping binary) | `platform.up` for hardware (`:boot`) |
+| `//score/itf/packs/dlt` (`:multicast`, `:receive`, `:on_target`, `:sim`) | `observe.logs` | `logs.active` |
+| `//score/itf/packs/pcap` (`:host`, `:sim`) | `observe.capture` (tcpdump built from source) | `capture.running` |
+| `//score/itf/packs/serial` | `exec.console`, `exec.command` | `console.open` |
+| `//score/itf/packs/core_dump` | core files copied off the target at teardown | — |
+
+Everything a pack offers (members, signatures, config keys, prerequisites) is in the catalog,
+built from the packs' own code:
 
 ```bash
-bazel test //path/to:test \
-    --@score_itf//score/itf/plugins:extract_core_dumps=true \
-    --@score_itf//score/itf/plugins:core_dumps_output_dir=/abs/path/to/coredumps
+bazel run //tools/catalog:query -- schema
+bazel run //tools/catalog:query -- search "serial console boot log"
+bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider = 'docker.instance'"
+bazel run //tools/catalog:query -- serve
 ```
 
-By default, extracted files are written to `$TEST_UNDECLARED_OUTPUTS_DIR/coredumps`. Under Bazel test runs this usually places them under the target's `bazel-testlogs/.../test.outputs/coredumps` directory.
+Docker and QEMU are two providers of the same platform contract: switching a test between them is
+a recipe change, not a test change. `test/integration` runs one capability-gated suite against
+recipes for the host, containers, DLT benches and QEMU machines; each runs exactly the tests its
+platform supports (the matrix is in its README).
 
-## Writing Tests
+## Concepts in one table
 
-### Basic Test Structure
+| Word | Is | Example |
+|---|---|---|
+| capability | an object a test uses, named by a contract token | `itf.capabilities.exec.shell` |
+| provider | one implementation of a capability, chosen with `using:` | `ssh.shell` |
+| state | a condition with a probe that checks it | `itf.states.shell.open` |
+| action | what makes a state true; may `require`/`invalidate` others | `ssh.open_session` |
+| node | one named instance in a scope; tests reach it as `target.<name>` | `target.shell` |
+| scope | the root, plus one per device: `target.gw.shell` | `gw` |
+| recipe | the root conftest: nodes (`itf_setup`) and goals (`itf_init`) | `recipe.yaml` |
 
-Tests receive a `target` fixture that provides access to the target environment:
+A test changes bench state only through the planner: `target.reach(state)` (e.g. after
+`target.platform.restart()`), or `target.renew(node)` for fresh objects. Called from a pytest
+fixture, `renew` gives per-test isolation at whatever scope the fixture has.
 
-```python
-def test_basic(target):
-    # Use target methods based on capabilities
-    if target.has_capability("ssh"):
-        with target.ssh() as ssh:
-            # Perform SSH operations
-            pass
-```
+## Writing packs and recipes
 
-### Docker Tests
+- [docs/how-to/write_tests.md](docs/how-to/write_tests.md): recipes, YAML, scopes, gating, reach/renew.
+- [docs/how-to/plugins.md](docs/how-to/plugins.md): writing a pack.
+- [docs/how-to/migrate.md](docs/how-to/migrate.md): from the original plugin API, and a legacy layer for old tests.
+- [score/itf/core/octo/README.md](score/itf/core/octo/README.md): the planner on its own.
+- [.github/skills/itf/SKILL.md](.github/skills/itf/SKILL.md): a guide for coding agents (see below).
+- [docs/decisions/DR-003-infra-starlark-recipes.md](docs/decisions/DR-003-infra-starlark-recipes.md): proposed Starlark recipes.
 
-Docker tests use `target.execute()` which runs commands via Docker's native exec API. This works with any Docker image:
+## Agent skill
 
-```python
-def test_docker_exec(target):
-    exit_code, output = target.execute("uname -a")
-    assert exit_code == 0
-    assert b"Linux" in output
-```
+`.github/skills/itf` is a skill for coding agents (Claude Code, Copilot and similar tools that load
+`SKILL.md` skills from `.github/skills`). It lets an agent work with ITF without prior knowledge:
 
-BUILD file:
-```starlark
-py_itf_test(
-    name = "test_docker",
-    srcs = ["test_docker.py"],
-    args = ["--docker-image=ubuntu:24.04"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
-)
-```
+| The agent can | How |
+|---|---|
+| Answer "what can ITF do on this target?" | queries the pack catalog (`bazel run //tools/catalog:query`): capabilities, providers, members and signatures, states, actions, config keys, prerequisites |
+| Find the provider for a requirement | full-text `search` over the catalog; "no matches" is reported as a gap |
+| Turn a requirement or an old test into a recipe and tests | decomposes it into scopes, capabilities, states and relations, maps each to a catalog row, writes the recipe (Python, YAML or Starlark) and gated tests |
+| Validate without hardware | `--itf-plan` resolves both gates and selects the tests; never touches a device |
+| Explain and write recipes | YAML schema, `extends`, `${ENV}` in config, scopes and aliases, `reach` and `renew` |
+| Drive ITF from plain Python | `Session` / `describe` without pytest |
+| Write a new pack | layout, providers, actions with probes, BUILD, catalog conformance test |
+| Migrate old tests | points to the legacy-layer pattern and the migration table |
 
-#### SSH on Docker Targets
+It enforces the rules reviewers care about: use only tokens and members the catalog holds, never
+import a pack from a test or another pack, no secrets in YAML, no hardware access to "check".
 
-If you need SSH access to a Docker container (via `target.ssh()`), the Docker image must have an SSH server installed and running. A plain image like `ubuntu:24.04` will **not** work with `target.ssh()`.
+## Original API
 
-Use an SSH-capable image (e.g. `linuxserver/openssh-server`) and configure credentials via the `docker_configuration` fixture:
+ITF no longer ships the original plugins or `Target` class. Projects keep tests written for them
+running with a legacy layer of their own over the packs; `examples/examples/legacy` is one, running
+ITF's original integration tests (see docs/how-to/migrate.md).
 
-```python
-import pytest
+## Requirements
 
-@pytest.fixture(scope="session")
-def docker_configuration():
-    return {
-        "environment": {
-            "PASSWORD_ACCESS": "true",
-            "USER_NAME": "score",
-            "USER_PASSWORD": "score",
-        },
-        "command": None,
-        "init": False,
-    }
+Bazel builds every dependency, including a hermetic C/C++ toolchain, DLT and tcpdump. Host
+prerequisites, checked when used: a Docker-compatible daemon (Docker or Podman) for the docker pack,
+`qemu-system-*`, `qemu-img` and `/dev/kvm` for the qemu pack, and `CAP_NET_RAW` for packet capture.
 
-def test_ssh_on_docker(target):
-    with target.ssh() as ssh:
-        exit_code = ssh.execute_command("echo 'Hello via SSH!'")
-        assert exit_code == 0
-```
-
-```starlark
-py_itf_test(
-    name = "test_docker_ssh",
-    srcs = ["test_docker_ssh.py"],
-    args = ["--docker-image=linuxserver/openssh-server:version-10.2_p1-r0"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
-)
-```
-
-### QEMU Tests
-
-```python
-def test_qemu_ssh(target):
-    with target.ssh(username="root", password="") as ssh:
-        exit_code = ssh.execute_command("uname -a")
-        assert exit_code == 0
-```
-
-BUILD file:
-```starlark
-py_itf_test(
-    name = "test_qemu",
-    srcs = ["test_qemu.py"],
-    args = [
-        "--qemu-image=$(location //path:qemu_image)",
-        "--qemu-config=$(location qemu_config.json)",
-    ],
-    data = [
-        "//path:qemu_image",
-        "qemu_config.json",
-    ],
-    plugins = ["@score_itf//score/itf/plugins:qemu_plugin"],
-)
-```
-
-QEMU targets are configured using a JSON configuration file that specifies network settings, resource allocation, and other parameters:
-
-```json
-{
-    "networks": [
-        {
-            "name": "tap0",
-            "ip_address": "169.254.158.190",
-            "gateway": "169.254.21.88"
-        }
-    ],
-    "ssh_port": 22,
-    "qemu_num_cores": 2,
-    "qemu_ram_size": "1G"
-}
-```
-
-#### Linux QEMU images
-
-Running tests with Linux is supported:
-
-Ubuntu:
-
-```starlark
-py_itf_test(
-    name = "test_qemu_ubuntu",
-    srcs = ["test_qemu_ubuntu.py"],
-    args = [
-        "--qemu-rootfs=$(location @os_images//ubuntu_x86_64:image)",
-        "--qemu-config=$(location @os_images//ubuntu_x86_64:qemu_config)",
-        # optional disk image with test data
-        "--qemu-disk=$(location @os_images//ubuntu_x86_64:qemu_disk_image)",
-    ],
-    data = [
-        "@os_images//ubuntu_x86_64:image",
-        "@os_images//ubuntu_x86_64:qemu_config",
-        "@os_images//ubuntu_x86_64:qemu_disk_image",
-    ],
-    plugins = ["@score_itf//score/itf/plugins:qemu_plugin"],
-)
-```
-
-Ebclfsa:
-
-```starlark
-py_itf_test(
-    name = "test_qemu_ebclfsa",
-    srcs = ["test_qemu_ebclfsa.py"],
-    args = [
-        "--qemu-rootfs=$(location @os_images//ebclfsa_aarch64:image)",
-        "--qemu-kernel=$(location @os_images//ebclfsa_aarch64:kernel)",
-        "--qemu-config=$(location @os_images//ebclfsa_aarch64:qemu_config)",
-        # optional disk image with test data
-        "--qemu-disk=$(location @os_images//ebclfsa_aarch64:qemu_disk_image)",
-    ],
-    data = [
-        "@os_images//ebclfsa_aarch64:image",
-        "@os_images//ebclfsa_aarch64:kernel",
-        "@os_images//ebclfsa_aarch64:qemu_config",
-        "@os_images//ebclfsa_aarch64:qemu_disk_image",
-    ],
-    plugins = ["@score_itf//score/itf/plugins:qemu_plugin"],
-)
-```
-
-### Capability-Based Tests
-
-The `@requires_capabilities` decorator automatically skips tests if the target doesn't support required capabilities:
-
-```python
-from score.itf.plugins.core import requires_capabilities
-
-@requires_capabilities("exec")
-def test_docker_specific(target):
-    # Only runs on targets with 'exec' capability
-    target.execute("echo test")
-
-@requires_capabilities("ssh", "sftp")
-def test_network_features(target):
-    # Only runs on targets with both 'ssh' and 'sftp'
-    with target.ssh() as ssh:
-        pass
-```
-
-## Communication APIs
-
-### SSH Operations
-
-The `Ssh` class provides `execute_command` (returns exit code) and `execute_command_output` (returns exit code, stdout lines, stderr lines) methods. SSH requires a target with an SSH server running (e.g. a Docker image with OpenSSH, or a QEMU VM).
-
-```python
-def test_ssh_command(target):
-    with target.ssh(username="root", password="") as ssh:
-        exit_code = ssh.execute_command("ls -la /tmp")
-        assert exit_code == 0
-
-def test_ssh_with_output(target):
-    with target.ssh(username="root", password="") as ssh:
-        exit_code, stdout_lines, stderr_lines = ssh.execute_command_output("ls -la /tmp")
-        assert exit_code == 0
-```
-
-> **Note:** For Docker targets, `target.ssh()` connects to the container via SSH on port 2222. Your Docker image must have an SSH server installed and running (e.g. `linuxserver/openssh-server`). If you only need to run commands in a Docker container, use `target.execute()` instead — it uses Docker's native exec API and works with any image.
-
-### SFTP File Transfer
-
-SFTP is available on QEMU targets via `target.sftp()`:
-
-```python
-def test_file_transfer(target):
-    with target.sftp() as sftp:
-        sftp.upload("local_file.txt", "/tmp/remote_file.txt")
-        sftp.download("/tmp/remote_file.txt", "downloaded_file.txt")
-```
-
-> **Note:** `target.sftp()` is only available on QEMU targets. For Docker targets, use `target.upload()` and `target.download()` instead, which use the Docker API directly.
-
-### Network Testing
-
-Network testing methods are available on QEMU targets:
-
-```python
-def test_ping(target):
-    # Check if target is reachable
-    assert target.ping(timeout=5)
-
-    # Wait until target becomes unreachable (e.g. after restart)
-    target.ping_lost(timeout=30, interval=1)
-```
-
-> **Note:** `target.ping()` and `target.ping_lost()` are only available on QEMU targets.
-
-## DLT Support
-
-The DLT plugin enables capturing and analyzing Diagnostic Log and Trace messages. `DltWindow` captures DLT messages from a target and allows querying the recorded data:
-
-```python
-from score.itf.plugins.dlt.dlt_window import DltWindow
-from score.itf.plugins.dlt.dlt_receive import Protocol
-import re
-
-def test_with_dlt_capture(target, dlt_config):
-    # Create DltWindow to capture DLT messages via UDP
-    with DltWindow(
-        protocol=Protocol.UDP,
-        host_ip="127.0.0.1",
-        multicast_ips=["224.0.0.1"],
-        print_to_stdout=False,
-        binary_path=dlt_config.dlt_receive_path,
-    ) as window:
-        # Perform operations that generate DLT messages
-        with target.ssh() as ssh:
-            ssh.execute_command("my_application")
-        
-        # Access the recorded DLT data
-        record = window.record()
-        
-        # Query for specific DLT messages
-        query = {
-            "apid": re.compile(r"APP1"),
-            "payload": re.compile(r".*Started successfully.*")
-        }
-        results = record.find(query=query)
-        assert len(results) > 0
-        
-        # Or iterate through all messages
-        for frame in record.find():
-            if "error" in frame.payload.lower():
-                print(f"Error found: {frame.payload}")
-```
-
-DLT messages can also be captured with TCP protocol and optional filters:
-
-```python
-# TCP connection to specific target
-with DltWindow(
-    protocol=Protocol.TCP,
-    target_ip="192.168.1.100",
-    print_to_stdout=True,
-    binary_path=dlt_config.dlt_receive_path,
-) as window:
-    # Operations...
-    pass
-
-# With application/context ID filter
-with DltWindow(
-    protocol=Protocol.UDP,
-    host_ip="127.0.0.1",
-    multicast_ips=["224.0.0.1"],
-    dlt_filter="APPID CTID",  # Filter by APPID and CTID
-    binary_path=dlt_config.dlt_receive_path,
-) as window:
-    # Operations...
-    pass
-```
-
-### DLT Configuration File
-
-DLT settings can be specified in a JSON configuration file:
-
-```json
-{
-    "target_ip": "192.168.122.76",
-    "host_ip": "192.168.122.1",
-    "multicast_ips": [
-        "239.255.42.99"
-    ]
-}
-```
-
-This configuration file can be passed to tests via the `--dlt-config` argument in the BUILD file:
-
-```starlark
-py_itf_test(
-    name = "test_with_dlt",
-    srcs = ["test.py"],
-    args = [
-        "--dlt-config=$(location dlt_config.json)",
-    ],
-    data = ["dlt_config.json"],
-    plugins = ["@score_itf//score/itf/plugins:dlt_plugin", "@score_itf//score/itf/plugins:docker_plugin"],
-)
-```
-
-## Advanced Features
-
-### Target Lifecycle Management
-
-Control whether targets persist across tests using the `--keep-target` flag:
+Tests reach the engine through `DOCKER_HOST`, which Bazel does not pass to tests on its own. With
+rootless Podman, start the socket, name the variable, and run tests unsandboxed so that image loading can
+write to `/run`:
 
 ```bash
-# Keep target running between tests (faster, but shared state)
-bazel test //test:my_test -- --test_arg="--keep-target"
-
-# Default: Create fresh target for each test
-bazel test //test:my_test
+systemctl --user enable --now podman.socket
+export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock
+bazel test //examples/exec_everywhere/... \
+  --test_env=DOCKER_HOST --test_env=XDG_RUNTIME_DIR --strategy=TestRunner=local   # from examples/
 ```
-
-### Custom Docker Configuration
-
-Override Docker settings in tests by implementing the `docker_configuration` fixture. Supported keys: `environment`, `command`, `init`, `shm_size`, `volumes`.
-
-```python
-import pytest
-
-@pytest.fixture
-def docker_configuration():
-    return {
-        "environment": {"MY_VAR": "value"},
-        "command": "my-custom-command",
-        "init": True,
-        "shm_size": "2G",
-        "volumes": {"/host/path": {"bind": "/container/path", "mode": "rw"}},
-    }
-
-def test_with_custom_docker(target):
-    # Uses custom configuration
-    pass
-```
-## Running Tests
-
-### Basic Test Execution
-
-```bash
-# Run all tests
-bazel test //test/...
-
-# Run specific test
-bazel test //test:test_docker
-
-# Show test output
-bazel test //test:test_docker --test_output=all
-
-# Show pytest output
-bazel test //test:test_docker --test_arg="-s"
-
-# Don't cache test results
-bazel test //test:test_docker --nocache_test_results
-```
-
-### Docker Tests
-
-```bash
-bazel test //test:test_docker \
-    --test_arg="--docker-image=ubuntu:24.04"
-```
-
-### QEMU Tests
-
-```bash
-# With a pre-built QEMU root filesystem image
-bazel test //test:test_qemu \
-    --test_arg="--qemu-rootfs=/path/to/rootfs.img"
-```
-
-## QEMU Setup (Linux)
-
-### Prerequisites
-
-Check KVM support:
-```bash
-ls -l /dev/kvm
-```
-
-If `/dev/kvm` exists, your system supports hardware virtualization.
-
-### Installation (Ubuntu/Debian)
-
-```bash
-sudo apt-get install qemu-kvm libvirt-daemon-system \
-    libvirt-clients bridge-utils qemu-utils
-
-# Add user to required groups
-sudo adduser $(id -un) libvirt
-sudo adduser $(id -un) kvm
-
-# Re-login to apply group changes
-sudo login $(id -un)
-
-# Verify group membership
-groups
-```
-
-### KVM Acceleration
-
-ITF automatically detects KVM availability and uses:
-- **KVM acceleration** when `/dev/kvm` is accessible (fast)
-- **TCG emulation** as fallback (slower, no virtualization)
 
 ## Development
 
-### Regenerating Dependencies
-
 ```bash
-bazel run //:requirements.update
+bazel test //...                      # unit, framework, pack and container tests
+bazel run //:format.fix               # ruff + buildifier
+bazel run //:requirements_3_12.update # after editing requirements.in
 ```
-
-### Code Formatting
-
-```bash
-bazel run //:format.fix
-```
-
-### Running Tests During Development
-
-```bash
-# Run with verbose output
-bazel test //test/... \
-    --test_output=all \
-    --test_arg="-s" \
-    --nocache_test_results
-```
-
-## Creating Custom Plugins
-
-Create a custom plugin by implementing the `Target` abstract class and a `target_init` fixture:
-
-```python
-# my_plugin.py
-import pytest
-from score.itf.plugins.core import Target, determine_target_scope
-
-MY_CAPABILITIES = ["custom_feature"]
-
-class MyTarget(Target):
-    def __init__(self):
-        super().__init__(capabilities=MY_CAPABILITIES)
-
-    def execute(self, command):
-        # Implementation specific logic
-        pass
-
-    def execute_async(self, binary_path, args=None, cwd="/"):
-        # Implementation specific logic
-        pass
-
-    def upload(self, local_path, remote_path):
-        # Implementation specific logic
-        pass
-
-    def download(self, remote_path, local_path):
-        # Implementation specific logic
-        pass
-
-    def restart(self):
-        # Implementation specific logic
-        pass
-
-@pytest.fixture(scope=determine_target_scope)
-def target_init():
-    yield MyTarget()
-```
-
-Register the plugin in a BUILD file using `py_itf_plugin`:
-
-```starlark
-load("@score_itf//bazel:py_itf_plugin.bzl", "py_itf_plugin")
-
-py_itf_plugin(
-    name = "my_plugin",
-    enabled_plugins = ["my_plugin"],
-    py_library = "//path/to:my_plugin_lib",
-    visibility = ["//visibility:public"],
-)
-```
-
-Use in tests:
-
-```starlark
-py_itf_test(
-    name = "test_custom",
-    srcs = ["test.py"],
-    plugins = ["//path/to:my_plugin"],
-)
-```
-
-## Project Structure
-
-```
-score/itf/
-├── core/                 # Core ITF functionality
-│   ├── com/              # Communication modules (SSH, SFTP)
-│   ├── process/          # Process management
-│   ├── target/           # Target base class
-│   └── utils/            # Utility functions
-├── plugins/              # Plugin implementations
-│   ├── core.py           # Core plugin with Target and decorators
-│   ├── docker.py         # Docker plugin
-│   ├── dlt/              # DLT plugin
-│   └── qemu/             # QEMU plugin
-└── ...
-```
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-- All tests pass: `bazel test //test/...`
-- Code is formatted: `bazel run //:format.fix`
-- New features include tests and documentation
 
 ## License
 

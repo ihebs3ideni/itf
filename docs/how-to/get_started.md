@@ -1,146 +1,98 @@
-# Get Started
+# Get started
 
-This guide walks you through setting up ITF in a new Bazel workspace from scratch.
-
-## Prerequisites
-
-- [Bazel](https://bazel.build/install) 7.x or later
-- Docker (for Docker-based tests)
-- Python 3.10+
-
-## 1. Add ITF to your workspace
-
-In your `MODULE.bazel`, declare the dependency using the latest published
-registry version:
+## Add ITF
 
 ```starlark
-bazel_dep(name = "score_itf", version = "0.2.0")
+# MODULE.bazel
+bazel_dep(name = "score_itf", version = "...")
 ```
 
-To get unreleased fixes from the main branch, add a `git_override` directly
-after the `bazel_dep`:
-
-```starlark
-git_override(
-    module_name = "score_itf",
-    remote = "https://github.com/eclipse-score/itf.git",
-    commit = "<COMMIT_HASH>",
-)
 ```
-
-Replace `<COMMIT_HASH>` with the full SHA of the desired commit from the
-[score_itf repository](https://github.com/eclipse-score/itf).
-
-## 2. Configure `.bazelrc`
-
-Add the S-CORE Bazel registry so Bazel can resolve the `score_itf` module:
-
-```
+# .bazelrc
 common --registry=https://raw.githubusercontent.com/eclipse-score/bazel_registry/main/
 common --registry=https://bcr.bazel.build
 ```
 
-If you also want to build the ITF documentation locally (optional), add the
-Java configuration required by PlantUML:
+## A first test
 
+```yaml
+# recipe.yaml
+setup:
+  nodes:
+    - name: platform
+      contract: itf.capabilities.platform.instance
+      using: docker.instance
+      config:
+        image: ubuntu:24.04
+    - name: command
+      contract: itf.capabilities.exec.command
+      using: docker.exec
+init:
+  goals:
+    - itf.states.platform.up
 ```
-build --java_language_version=17
-build --java_runtime_version=remotejdk_17
-build --tool_java_language_version=17
-build --tool_java_runtime_version=remotejdk_17
-```
-
-## 3. Write your first test
-
-Create a test file `test_hello.py`:
 
 ```python
-def test_hello(target):
-    exit_code, output = target.execute("echo 'Hello from target!'")
-    assert exit_code == 0
-    assert b"Hello from target!" in output
+# conftest.py: the recipe
+from pathlib import Path
+from score.itf.core import hookimpl, load_init, load_setup
+
+RECIPE = Path(__file__).with_name("recipe.yaml")
+
+@hookimpl
+def itf_setup(ctx):
+    load_setup(ctx, RECIPE)
+
+@hookimpl
+def itf_init(ctx):
+    load_init(ctx, RECIPE)
 ```
 
-Create a `BUILD` file in the same directory:
+```python
+# test_hello.py
+import score.itf as itf
+
+@itf.requires("itf.capabilities.exec.command")
+def test_hello(target):
+    assert target.command.exec("echo -n 'Hello from target!'") == (0, "Hello from target!")
+```
 
 ```starlark
+# BUILD
 load("@score_itf//:defs.bzl", "py_itf_test")
 
 py_itf_test(
     name = "test_hello",
-    srcs = ["test_hello.py"],
-    args = ["--docker-image=ubuntu:24.04"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
+    srcs = ["conftest.py", "test_hello.py"],
+    data = ["recipe.yaml"],
+    plugins = ["@score_itf//score/itf/packs/docker"],
 )
 ```
 
-> **Note:** All `load()` calls and plugin labels must use the `@score_itf`
-> prefix. Using `//:defs.bzl` without the prefix would look for that file
-> in your own workspace and fail with `no such file`.
-
-## 4. Run the test
-
 ```bash
-bazel test //path/to:test_hello
+bazel test //:test_hello --test_arg=--itf-plan --test_output=all   # see the plan; nothing runs
+bazel test //:test_hello
 ```
 
-To see full test output:
+## Test properties in the JUnit report
 
-```bash
-bazel test //path/to:test_hello --test_output=all
-```
-
-## 5. Link tests to requirements
-
-ITF integrates with the S-CORE docs-as-code traceability system. The
-`@add_test_properties` decorator writes requirement links and test
-classification metadata into the JUnit XML report, which Sphinx can then
-pick up to create bidirectional traceability between test results and
-requirements.
-
-```python
-from attribute_plugin import add_test_properties
-
-@add_test_properties(
-    fully_verifies=["REQ-001", "REQ-002"],
-    test_type="requirements-based",
-    derivation_technique="requirements-analysis",
-)
-def test_hello(target):
-    exit_code, output = target.execute("echo 'Hello from target!'")
-    assert exit_code == 0
-    assert b"Hello from target!" in output
-```
-
-Add `attribute_plugin` to the `plugins` list in your `BUILD` file:
+Add score_tooling's `attribute_plugin` to the `plugins` list and decorate tests with
+`@add_test_properties(...)`:
 
 ```starlark
 py_itf_test(
     name = "test_hello",
-    srcs = ["test_hello.py"],
-    args = ["--docker-image=ubuntu:24.04"],
+    srcs = ["conftest.py", "test_hello.py"],
+    data = ["recipe.yaml"],
     plugins = [
-        "@score_itf//score/itf/plugins:docker_plugin",
-        "@score_itf//score/itf/plugins:attribute_plugin",
+        "@score_itf//score/itf/packs/docker",
+        "@score_itf//:attribute_plugin",
     ],
 )
 ```
 
-## Next steps
+## Next
 
-- **Write more tests**: See [Write Tests](write_tests.md) for Docker, QEMU,
-  and DLT examples.
-- **Use plugins**: See [Using Plugins](plugins.md) for configuring and
-  combining built-in plugins.
-- **Understand the design**: See the [Concepts](../concepts/index.rst)
-  section for the architecture and plugin system.
-
-## For ITF contributors
-
-Build this documentation site locally:
-
-```bash
-bazel run //:docs
-```
-
-Open `_build/index.html` in your browser.
+- **Write tests**: [Write tests](write_tests.md): recipes, YAML, devices, gating, reach and renew.
+- **Find capabilities**: `bazel run //tools/catalog:query -- search "<what you need>"`.
+- **Write a pack**: [Write a pack](plugins.md).

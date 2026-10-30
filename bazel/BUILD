@@ -10,3 +10,5 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+
+exports_files(["recipe_plan_test.py"])

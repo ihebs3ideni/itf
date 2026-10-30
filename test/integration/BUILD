@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -12,276 +12,219 @@
 # *******************************************************************************
 load("//:defs.bzl", "py_itf_test")
 
-py_itf_test(
-    name = "test_attribute_plugin",
-    srcs = ["test_attribute_plugin.py"],
-    deps = ["//score/itf/plugins:attribute_plugin"],
-)
+# One generic suite, many recipes. Every test in suite/ (and specific/) is gated with
+# @itf.requires on the contracts it uses: each target runs exactly the tests its recipe's platform
+# supports, and lists the others as deselected with the reason. Adding a platform is adding a recipe.
 
-py_itf_test(
-    name = "test_qemu_config_schema",
-    srcs = ["test_qemu_config_schema.py"],
-    data = [
-        "//test/resources:qemu_bridge_config",
-        "//test/resources:qemu_port_forwarding_config",
-    ],
-    deps = [
-        "//score/itf/plugins/qemu",
-        "@rules_python//python/runfiles",
-    ],
-)
+SUITE = glob(["suite/*.py"])
 
-py_itf_test(
-    name = "test_rules_are_working_correctly",
-    srcs = [
-        "conftest.py",
-        "test_rules_are_working_correctly.py",
-    ],
-)
+CONFTEST = "//test/integration/recipes:conftest.py"
 
-py_itf_test(
-    name = "test_docker",
-    srcs = [
-        "test_async_exec.py",
-        "test_docker.py",
-    ],
-    args = [
-        "--docker-image=ubuntu:24.04",
-    ],
-    plugins = [
-        "//score/itf/plugins:docker_plugin",
-    ],
-    target_compatible_with = ["@platforms//os:linux"],
-)
+DOCKER_TAGS = ["requires-docker"]
 
-py_itf_test(
-    name = "test_dlt",
-    srcs = [
-        "test_dlt.py",
-    ],
-    args = [
-        "--docker-image-bootstrap=$(location //test/resources:image_load)",
-        "--docker-image=score_itf_examples:latest",
-    ],
-    data = ["//test/resources:image_load"],
-    plugins = [
-        "//score/itf/plugins:dlt_plugin",
-        "//score/itf/plugins:docker_plugin",
-    ],
-    target_compatible_with = ["@platforms//os:linux"],
-)
+QEMU_TAGS = ["manual"]  # qemu-system-*, /dev/kvm; run with --config=qemu-integration[-linux]
 
-py_itf_test(
-    name = "test_dlt_on_target",
-    srcs = [
-        "test_dlt_on_target.py",
-    ],
-    args = [
-        "--docker-image-bootstrap=$(location //test/resources:image_load)",
-        "--docker-image=score_itf_examples:latest",
-    ],
-    data = ["//test/resources:image_load"],
-    plugins = [
-        "//score/itf/plugins:dlt_plugin",
-        "//score/itf/plugins:docker_plugin",
-    ],
-    target_compatible_with = ["@platforms//os:linux"],
-)
+QEMU_PACKS = [
+    "//score/itf/packs/ping",
+    "//score/itf/packs/qemu",
+    "//score/itf/packs/ssh",
+]
 
-py_itf_test(
-    name = "test_ssh",
-    srcs = [
-        "test_ssh.py",
-    ],
-    args = [
-        "--docker-image=linuxserver/openssh-server:version-10.2_p1-r0",
-    ],
-    plugins = [
-        "//score/itf/plugins:docker_plugin",
-    ],
-    pytest_config = "//:pyproject.toml",  # Optional same content as default pytest.ini
-    target_compatible_with = ["@platforms//os:linux"],
-)
-
-py_itf_test(
-    name = "test_ssh_configurable",
-    srcs = [
-        "test_ssh.py",
-    ],
-    args = select(
-        {
-            "@platforms//os:qnx": [
-                "--qemu-config=$(location //test/resources:qemu_bridge_config)",
-                "--qemu-image=$(location //test/resources/qnx:init)",
-            ],
-            "//conditions:default": [
-                "--docker-image=linuxserver/openssh-server:version-10.2_p1-r0",
-            ],
-        },
+# (name, recipe, packs, recipe-specific tests, data, env, tags)
+RECIPES = [
+    (
+        "local",
+        "local.yaml",
+        ["//score/itf/packs/local"],
+        [],
+        [],
+        {},
+        [],
     ),
-    data = select(
-        {
-            "@platforms//os:qnx": [
-                "//test/resources:qemu_bridge_config",
-                "//test/resources/qnx:init",
-            ],
-            "//conditions:default": [],
-        },
+    (
+        "serial",
+        "serial.yaml",
+        ["//score/itf/packs/serial"],
+        [],
+        [],
+        {},
+        [],
     ),
-    plugins = select(
-        {
-            "@platforms//os:qnx": [
-                "//score/itf/plugins:qemu_plugin",
-            ],
-            "//conditions:default": [
-                "//score/itf/plugins:docker_plugin",
-            ],
-        },
+    (
+        "docker",
+        "docker.yaml",
+        ["//score/itf/packs/docker"],
+        ["specific/test_container.py"],
+        [],
+        {"ITF_EXTRA_MOUNT": "test/integration/suite"},
+        DOCKER_TAGS,
     ),
-)
+    (
+        "docker_ssh",
+        "docker_ssh.yaml",
+        [
+            "//score/itf/packs/docker",
+            "//score/itf/packs/net",
+            "//score/itf/packs/ssh",
+        ],
+        ["specific/test_container.py"],
+        [],
+        {"ITF_EXTRA_MOUNT": "test/integration/suite"},
+        DOCKER_TAGS,
+    ),
+    (
+        "dlt_stream",
+        "dlt_stream.yaml",
+        [
+            "//score/itf/packs/docker",
+            "//score/itf/packs/dlt",
+            "//score/itf/packs/dlt:on_target",
+        ],
+        ["specific/test_dlt_on_target.py"],
+        ["//test/resources:image_load"],
+        {
+            "ITF_DLT_PORT": "",  # any free host port
+            "ITF_IMAGE_LOAD": "$(location //test/resources:image_load)",
+        },
+        DOCKER_TAGS,
+    ),
+    (
+        "dlt_receive",
+        "dlt_receive.yaml",
+        [
+            "//score/itf/packs/docker",
+            "//score/itf/packs/dlt:on_target",
+            "//score/itf/packs/dlt:receive",
+        ],
+        ["specific/test_dlt_on_target.py"],
+        ["//test/resources:image_load"],
+        {
+            "ITF_DLT_PORT": "13490",  # dlt-receive's TCP mode always connects to 13490
+            "ITF_IMAGE_LOAD": "$(location //test/resources:image_load)",
+        },
+        DOCKER_TAGS,
+    ),
+    (
+        "qnx_bridge",
+        "qemu.yaml",
+        QEMU_PACKS,
+        [],
+        [
+            "//test/resources:qemu_bridge_config",
+            "//test/resources/qnx:init",
+        ],
+        {
+            "ITF_QEMU_CONFIG": "$(location //test/resources:qemu_bridge_config)",
+            "ITF_QEMU_KERNEL": "$(location //test/resources/qnx:init)",
+        },
+        QEMU_TAGS,
+    ),
+    (
+        "qnx_port_forwarding",
+        "qemu.yaml",
+        QEMU_PACKS,
+        [],
+        [
+            "//test/resources:qemu_port_forwarding_config",
+            "//test/resources/qnx:init",
+        ],
+        {
+            "ITF_QEMU_CONFIG": "$(location //test/resources:qemu_port_forwarding_config)",
+            "ITF_QEMU_KERNEL": "$(location //test/resources/qnx:init)",
+        },
+        QEMU_TAGS,
+    ),
+    (
+        "ubuntu",
+        "qemu.yaml",
+        QEMU_PACKS,
+        ["specific/test_disk.py"],
+        [
+            "//test/resources:qemu_disk_image",
+            "@os_images//ubuntu_x86_64:image",
+            "@os_images//ubuntu_x86_64:qemu_config",
+        ],
+        {
+            "ITF_QEMU_CONFIG": "$(location @os_images//ubuntu_x86_64:qemu_config)",
+            "ITF_QEMU_DISK": "$(location //test/resources:qemu_disk_image)",
+            "ITF_QEMU_ROOTFS": "$(location @os_images//ubuntu_x86_64:image)",
+        },
+        QEMU_TAGS,
+    ),
+    (
+        "ebclfsa",
+        "qemu.yaml",
+        QEMU_PACKS,
+        ["specific/test_disk.py"],
+        [
+            "//test/resources:qemu_disk_image",
+            "@os_images//ebclfsa_aarch64:image",
+            "@os_images//ebclfsa_aarch64:kernel",
+            "@os_images//ebclfsa_aarch64:qemu_config",
+        ],
+        {
+            "ITF_QEMU_CONFIG": "$(location @os_images//ebclfsa_aarch64:qemu_config)",
+            "ITF_QEMU_DISK": "$(location //test/resources:qemu_disk_image)",
+            "ITF_QEMU_KERNEL": "$(location @os_images//ebclfsa_aarch64:kernel)",
+            "ITF_QEMU_ROOTFS": "$(location @os_images//ebclfsa_aarch64:image)",
+        },
+        QEMU_TAGS,
+    ),
+]
 
-py_itf_test(
-    name = "test_qemu_bridge_network",
-    srcs = [
-        "test_async_exec.py",
-        "test_qemu.py",
-    ],
-    args = [
-        "--qemu-config=$(location //test/resources:qemu_bridge_config)",
-        "--qemu-image=$(location //test/resources/qnx:init)",
-        "--dlt-config=$(location //test/resources:dlt_config)",
-    ],
-    data = [
-        "//test/resources:dlt_config",
-        "//test/resources:qemu_bridge_config",
-        "//test/resources/qnx:init",
-    ],
-    plugins = [
-        "//score/itf/plugins:qemu_plugin",
-        "//score/itf/plugins:dlt_plugin",
-    ],
-    tags = [
-        "manual",
-    ],
-)
+[py_itf_test(
+    name = name,
+    timeout = "long",  # QEMU machines reboot in the restart and renew tests
+    srcs = [CONFTEST] + SUITE + specific,
+    data = ["//test/integration/recipes:yaml"] + data,
+    env = env | {"ITF_RECIPE": recipe},
+    plugins = packs,
+    tags = tags,
+    target_compatible_with = ["@platforms//os:linux"],
+) for name, recipe, packs, specific, data, env, tags in RECIPES]
 
+# The docker_ssh recipe written in Starlark: no ITF_RECIPE, the recipe target is the declarative
+# half; the same conftest still contributes the code half.
 py_itf_test(
-    name = "test_qemu_bridge_network_no_dlt",
-    srcs = [
-        "test_async_exec.py",
-        "test_qemu.py",
-    ],
-    args = [
-        "--qemu-config=$(location //test/resources:qemu_bridge_config)",
-        "--qemu-image=$(location //test/resources/qnx:init)",
-    ],
-    data = [
-        "//test/resources:qemu_bridge_config",
-        "//test/resources/qnx:init",
-    ],
-    plugins = [
-        "//score/itf/plugins:qemu_plugin",
-    ],
-    tags = [
-        "manual",
-    ],
-)
-
-py_itf_test(
-    name = "test_qemu_port_forwarding",
-    srcs = [
-        "test_async_exec.py",
-        "test_qemu.py",
-    ],
-    args = [
-        "--qemu-config=$(location //test/resources:qemu_port_forwarding_config)",
-        "--qemu-image=$(location //test/resources/qnx:init)",
-    ],
-    data = [
-        "//test/resources:qemu_port_forwarding_config",
-        "//test/resources/qnx:init",
-    ],
-    plugins = [
-        "//score/itf/plugins:qemu_plugin",
-        "//score/itf/plugins:dlt_plugin",
-    ],
-    tags = [
-        "manual",
-    ],
-)
-
-py_itf_test(
-    name = "test_ebclfsa",
-    srcs = [
-        "test_ping.py",
-        "test_qemu_disk.py",
-    ],
-    args = [
-        "--qemu-config=$(location @os_images//ebclfsa_aarch64:qemu_config)",
-        "--qemu-kernel=$(location @os_images//ebclfsa_aarch64:kernel)",
-        "--qemu-rootfs=$(location @os_images//ebclfsa_aarch64:image)",
-        "--qemu-disk=$(location //test/resources:qemu_disk_image)",
-    ],
-    data = [
-        "//test/resources:qemu_disk_image",
-        "@os_images//ebclfsa_aarch64:image",
-        "@os_images//ebclfsa_aarch64:kernel",
-        "@os_images//ebclfsa_aarch64:qemu_config",
-    ],
-    plugins = [
-        "//score/itf/plugins:qemu_plugin",
-    ],
-    tags = [
-        "manual",
-    ],
+    name = "docker_ssh_starlark",
+    srcs = [CONFTEST] + SUITE + ["specific/test_container.py"],
+    recipe = "//test/integration/recipes:docker_ssh_starlark",
+    tags = DOCKER_TAGS,
     target_compatible_with = ["@platforms//os:linux"],
 )
 
 py_itf_test(
-    name = "test_ubuntu",
-    srcs = [
-        "test_ping.py",
-        "test_qemu_disk.py",
-    ],
-    args = [
-        "--qemu-config=$(location @os_images//ubuntu_x86_64:qemu_config)",
-        "--qemu-rootfs=$(location @os_images//ubuntu_x86_64:image)",
-        "--qemu-disk=$(location //test/resources:qemu_disk_image)",
-    ],
-    data = [
-        "//test/resources:qemu_disk_image",
-        "@os_images//ubuntu_x86_64:image",
-        "@os_images//ubuntu_x86_64:qemu_config",
-    ],
-    plugins = [
-        "//score/itf/plugins:qemu_plugin",
-    ],
-    tags = [
-        "manual",
-    ],
+    name = "dlt_stream_starlark",
+    srcs = [CONFTEST] + SUITE + ["specific/test_dlt_on_target.py"],
+    plugins = ["//score/itf/packs/dlt:on_target"],
+    recipe = "//test/integration/recipes:dlt_stream_starlark",
+    tags = DOCKER_TAGS,
     target_compatible_with = ["@platforms//os:linux"],
+)
+
+py_itf_test(
+    name = "recipe_equivalence_test",
+    srcs = ["recipe_equivalence_test.py"],
+    data = [
+        "//test/integration/recipes:docker_ssh.yaml",
+        "//test/integration/recipes:docker_ssh_starlark",
+    ],
 )
 
 test_suite(
     name = "linux_qemu_tests",
-    tags = [
-        "manual",
-    ],
+    tags = ["manual"],
     tests = [
-        ":test_ebclfsa",
-        ":test_ubuntu",
+        ":ebclfsa",
+        ":ubuntu",
     ],
 )
 
 test_suite(
     name = "qnx_qemu_tests",
-    tags = [
-        "manual",
-    ],
+    tags = ["manual"],
     tests = [
-        ":test_qemu_bridge_network",
-        ":test_qemu_bridge_network_no_dlt",
-        ":test_qemu_port_forwarding",
-        ":test_ssh_configurable",
+        ":qnx_bridge",
+        ":qnx_port_forwarding",
     ],
 )

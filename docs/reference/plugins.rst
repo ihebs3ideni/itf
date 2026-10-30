@@ -12,193 +12,60 @@
    # SPDX-License-Identifier: Apache-2.0
    # *******************************************************************************
 
-.. _itf_plugins-reference:
+.. _itf_plugins_reference:
 
-Plugins Reference
-=================
+Packs
+=====
 
-Available plugins
------------------
+Each pack is loaded by Bazel label (``py_itf_test(plugins = [...])``); a recipe selects providers
+by name with ``using:``. The `pack marketplace <../catalog.html>`_ is the same catalog as a browsable page: every contract and
+state with its providers, consumers, packs, configuration and copy-ready recipe snippets. The catalog
+lists every member, signature, config key and prerequisite,
+built from the packs' code:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 35 20 45
+.. code-block:: bash
 
-   * - Bazel label
-     - Module path
-     - Description
-   * - N/A
-     - ``score.itf.plugins.core``
-     - Core plugin. Always active and implicitly enabled. Provides the
-       base ``Target`` class, ``@requires_capabilities`` decorator, and
-       ``--keep-target`` flag.
-   * - ``@score_itf//score/itf/plugins:docker_plugin``
-     - ``score.itf.plugins.docker``
-     - Docker container target. Starts and stops containers per test (or
-       per session with ``--keep-target``). Provides ``exec``,
-       ``file_transfer``, and ``restart`` capabilities.
-   * - ``@score_itf//score/itf/plugins:qemu_plugin``
-     - ``score.itf.plugins.qemu``
-     - QEMU virtual machine target. Provides ``ssh``, ``sftp``,
-       ``exec``, ``file_transfer``, and ``restart`` capabilities, plus
-       ``ping`` / ``ping_lost`` network-testing helpers.
-   * - ``@score_itf//score/itf/plugins:dlt_plugin``
-     - ``score.itf.plugins.dlt``
-     - DLT (Diagnostic Log and Trace) capture plugin. Provides the
-       ``dlt_config`` fixture and the ``DltWindow`` context manager for
-       capturing and querying DLT messages.
-   * - ``@score_itf//score/itf/plugins:attribute_plugin``
-     - ``attribute_plugin``
-     - Requirement traceability plugin. Provides the
-       ``@add_test_properties`` decorator for writing requirement links
-       and test classification metadata into the JUnit XML report.
-
-Target capabilities
--------------------
+   bazel run //tools/catalog:query -- sql "SELECT * FROM v_capability_providers"
+   bazel run //tools/catalog:query -- sql "SELECT * FROM v_state_deliverers"
+   bazel run //tools/catalog:query -- serve
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 20 60
 
-   * - Capability
-     - Provided by
-     - Description
-   * - ``exec``
-     - Docker, QEMU
-     - ``target.execute(cmd)`` — run a command and return
-       ``(exit_code, output)``.
-   * - ``ssh``
-     - QEMU
-     - ``target.ssh()`` — open an SSH session; returns an ``Ssh``
-       object with ``execute_command`` and ``execute_command_output``
-       methods.
-   * - ``sftp``
-     - QEMU
-     - ``target.sftp()`` — open an SFTP session; returns an ``Sftp``
-       object with ``upload`` and ``download`` methods.
-   * - ``file_transfer``
-     - Docker, QEMU
-     - ``target.upload(local, remote)`` / ``target.download(remote,
-       local)`` — copy files to/from the target.
-   * - ``restart``
-     - Docker, QEMU
-     - ``target.restart()`` — restart the target.
+   * - Label
+     - Providers
+     - Actions (state)
+   * - ``//score/itf/packs/docker``
+     - ``docker.instance``, ``docker.exec``, ``docker.process``, ``docker.files``, ``docker.endpoint``
+     - ``docker.start_platform`` (platform.up)
+   * - ``//score/itf/packs/qemu``
+     - ``qemu.instance``, ``qemu.console``, ``qemu.endpoint``, ``qemu.credentials``
+     - ``qemu.start_platform`` (platform.up), ``qemu.open_console`` (console.open)
+   * - ``//score/itf/packs/ssh``
+     - ``ssh.shell``, ``ssh.exec``, ``ssh.process``, ``sftp.files``
+     - ``ssh.open_session`` (shell.open, network.reachable)
+   * - ``//score/itf/packs/net``
+     - ``static.endpoint``, ``key.credentials``, ``password.credentials``
+     - —
+   * - ``//score/itf/packs/ping`` / ``:boot``
+     - ``icmp.ping``
+     - ``icmp.await_boot`` (platform.up), ``:boot`` only
+   * - ``//score/itf/packs/dlt`` / ``:multicast`` / ``:receive``
+     - ``dlt.stream`` / ``dlt.multicast`` / ``dlt.receive``, ``dlt.receive_tcp``
+     - ``dlt.subscribe_stream`` / ``dlt.join_multicast`` / ``dlt.start_receive`` (logs.active)
+   * - ``//score/itf/packs/dlt:on_target``
+     - the ``dlt_on_target`` fixture
+     - —
+   * - ``//score/itf/packs/pcap`` / ``:host``
+     - ``tcpdump.capture``
+     - ``tcpdump.start_capture`` / ``tcpdump.start_host_capture`` (capture.running)
+   * - ``//score/itf/packs/serial``
+     - ``serial.console``, ``serial.exec``
+     - ``serial.open_console`` (console.open)
+   * - ``//score/itf/packs/core_dump``
+     - ``itf_teardown`` hook (``--//score/itf/packs/core_dump:extract_core_dumps``)
+     - —
 
-Target class API
-----------------
-
-All concrete target classes inherit the following public methods from
-``score.itf.core.target.Target``.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 45 55
-
-   * - Method
-     - Description
-   * - ``execute(command) -> Tuple[int, bytes]``
-     - Run a command synchronously; returns ``(exit_code, output)``.
-   * - ``execute_async(binary_path, args=None, cwd="/") -> AsyncProcess``
-     - Start a binary without blocking; returns an ``AsyncProcess`` handle.
-   * - ``upload(local_path, remote_path) -> None``
-     - Copy a file from the test host to the target.
-   * - ``download(remote_path, local_path) -> None``
-     - Copy a file from the target to the test host.
-   * - ``restart() -> None``
-     - Restart the target environment.
-   * - ``has_capability(capability) -> bool``
-     - Return ``True`` if the target supports the given capability string.
-   * - ``has_all_capabilities(capabilities) -> bool``
-     - Return ``True`` if the target supports every capability in the set.
-   * - ``has_any_capability(capabilities) -> bool``
-     - Return ``True`` if the target supports at least one capability in
-       the set.
-   * - ``get_capabilities() -> Set[str]``
-     - Return a copy of all capability strings registered on this target.
-   * - ``add_capability(capability) -> None``
-     - Dynamically register an additional capability on the target instance.
-   * - ``remove_capability(capability) -> None``
-     - Dynamically remove a capability from the target instance.
-   * - ``wrap_exec(...) -> WrappedProcess``
-     - Convenience wrapper around ``execute_async`` that returns a
-       ``WrappedProcess`` context manager.
-
-CLI arguments
--------------
-
-The following arguments are accepted by their respective plugins at test
-runtime. Pass them via ``args`` in ``py_itf_test`` or override at the
-command line with ``--test_arg``.
-
-Docker plugin
-^^^^^^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Argument
-     - Description
-   * - ``--docker-image=<image>``
-     - **Required.** Docker image reference (e.g. ``ubuntu:24.04``) used to
-       start the container for each test.
-   * - ``--docker-image-bootstrap=<cmd>``
-     - Command run on the host before the container is started. Use this for
-       setup steps that must complete before the test body runs. ``<cmd>``
-       should identify the executable/program to invoke; it is not a command
-       run inside the container.
-   * - ``--extract-coverage``
-     - Flag. If set, extracts coverage files (``.gcda``) from the container
-       before teardown.
-   * - ``--coverage-output-dir=<dir>``
-     - Directory to write extracted coverage files. Defaults to
-       ``$TEST_UNDECLARED_OUTPUTS_DIR/sysroot`` or ``/tmp/sysroot`` if the
-       environment variable is not set.
-
-QEMU plugin
-^^^^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Argument
-     - Description
-   * - ``--qemu-config=<path>``
-     - **Required.** Path to a JSON configuration file that specifies network
-       settings, SSH port, number of CPU cores, and RAM size.
-   * - ``--qemu-image=<path>``
-     - Path to the QEMU kernel/disk image. Use
-       ``$(location <label>)`` in ``args`` to reference a Bazel-built
-       image.
-
-DLT plugin
-^^^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Argument
-     - Description
-   * - ``--dlt-receive-path=<path>``
-     - Required path to the DLT receive executable used by the plugin.
-       When using the Bazel ``dlt_plugin`` label, this argument may be
-       provided automatically.
-   * - ``--dlt-config=<path>``
-     - Optional path to a JSON configuration file with DLT network
-       settings (``target_ip``, ``host_ip``, ``multicast_ips``).
-
-Core plugin
-^^^^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Argument
-     - Description
-   * - ``--keep-target``
-     - Keep the target running across all tests in a session instead of
-       creating a fresh target per test function. Speeds up long test
-       suites but means tests share target state.
+Offline variants (``:sim``) of docker, ssh, dlt and pcap stand in when no daemon or hardware is
+available. score_tooling's attribute plugin is ``//:attribute_plugin``. The original plugins are gone; see
+:doc:`../how-to/migrate`.

@@ -31,6 +31,12 @@ jobs:
       - name: Run build
         run: |
           bazel build //...
+      - name: Check ITF plans
+        # Reuses the build above and resolves both gates of the ITF examples without starting anything
+        # (see itf.yml).
+        run: |
+          bazel test --test_output=errors \
+            --test_arg=--itf-plan --test_arg=--itf-strict-shapes //examples/itf/... //examples/legacy/... //examples/exec_everywhere/...
       - name: Run test
         run: |
           bazel test --test_output=all //...

@@ -10,3 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+"""ITF: `import score.itf as itf` is the public API of `score.itf.core`."""
+
+from .core import *  # noqa: F401,F403
+from .core import __all__  # noqa: F401
