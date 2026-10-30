@@ -50,6 +50,7 @@ Integration Test Framework for ECU testing in automotive domains.
       reference/index
       concepts/index
       decisions/index
+      proposals/index
       manual/index
       release/index
       safety_mgt/index
