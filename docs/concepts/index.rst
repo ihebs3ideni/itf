@@ -23,3 +23,4 @@ Architecture, design decisions, and explanatory material for ITF.
    :maxdepth: 1
 
    architecture
+   modeling

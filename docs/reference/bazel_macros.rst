@@ -38,7 +38,7 @@ Minimal example:
        name = "test_example",
        srcs = ["test_example.py"],
        args = ["--docker-image=ubuntu:24.04"],
-       plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
+       plugins = ["@score_itf//score/itf/packs/docker"],
    )
 
 Attributes
@@ -146,7 +146,7 @@ Attributes
      - string list
      - ``[]``
      - Pytest plugin module paths to activate (passed as ``-p <path>``
-       to pytest). Example: ``["score.itf.plugins.docker"]``.
+       to pytest). Example: ``["score.itf.packs.docker.plugin"]``.
    * - ``plugin_args``
      - string list
      - ``[]``

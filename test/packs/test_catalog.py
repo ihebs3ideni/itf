@@ -17,6 +17,9 @@ an action's `uses` name a token and the members they rely on (from their own Pro
 provider of that token must give those members, or the seam could never be wired.
 """
 
+import os
+from pathlib import Path
+
 import pytest
 
 from tools.catalog import build_catalog
@@ -46,3 +49,11 @@ def test_every_declared_expectation_is_met_by_some_provider(catalog):
 
 def test_every_action_states_a_probe(catalog):
     assert [a["name"] for a in catalog["actions"] if not a["probe"]] == []
+
+
+def test_the_published_marketplace_is_current(catalog):
+    """docs/_generated/catalog.html is what the documentation site serves as the pack marketplace; it is
+    checked in because the Sphinx build only sees source files. Refresh it with
+    `bazel run //tools/catalog:build -- --out docs/_generated/catalog.html`."""
+    published = Path(os.environ["CATALOG_HTML"]).read_text(encoding="utf-8")
+    assert published == build_catalog.render(catalog), "stale: re-run the command in this test's docstring"

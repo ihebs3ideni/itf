@@ -17,3 +17,7 @@ project_url = "https://github.com/eclipse-score/itf"
 extensions = [
     "score_sphinx_bundle",
 ]
+
+# The pack marketplace is generated from the packs' code (bazel run //tools/catalog:build -- --out
+# docs/_generated/catalog.html; catalog_fresh_test fails when it is stale) and served from the site root.
+html_extra_path = ["_generated"]

@@ -1,174 +1,124 @@
-# Write Tests
+# Write tests
 
-This guide covers how to write tests for the three main target types: Docker,
-QEMU, and capability-based tests.
+An ITF test has three parts: the **BUILD target** (which packs, which data), the **recipe** (the
+root `conftest.py`: which nodes exist and which states must hold) and the **tests** (which
+contracts they use).
 
-## Docker tests
+## The recipe
 
-Docker tests use `target.execute()` which runs commands via the Docker native
-exec API. Any Docker image works — no SSH server required.
+Python hooks, or YAML loaded by them; both produce the same declarations.
 
 ```python
-def test_exec(target):
-    exit_code, output = target.execute("uname -a")
-    assert exit_code == 0
-    assert b"Linux" in output
+from score.itf.core import hookimpl
+
+@hookimpl
+def itf_setup(ctx):
+    ctx.add("platform", "itf.capabilities.platform.instance", using="docker.instance",
+            config={"image": "ubuntu:24.04"})
+    ctx.add("command", "itf.capabilities.exec.command", using="docker.exec")
+
+@hookimpl
+def itf_init(ctx):
+    ctx.goal("itf.states.platform.up")
 ```
 
-`BUILD`:
+YAML equivalent, loaded with `load_setup(ctx, path)` / `load_init(ctx, path)`:
+
+```yaml
+setup:
+  nodes:
+    - name: platform
+      contract: itf.capabilities.platform.instance
+      using: docker.instance
+      config:
+        image: ubuntu:24.04
+    - name: command
+      contract: itf.capabilities.exec.command
+      using: docker.exec
+init:
+  goals:
+    - itf.states.platform.up
+```
+
+- `extends: [base.yaml]` derives a recipe from another, merging nodes by name.
+- Node `config` values expand `${NAME}` and `${NAME:-default}`: pass Bazel-built paths with
+  `py_itf_test(env = {"NAME": "$(location //label)"})`, secrets from the environment.
+- Several devices: `ctx.scope("gw").add(...)` / `setup.scopes.gw.nodes`; tests use `target.gw.x`.
+  Share a node with `alias` (`.name` is the root); a device never falls back to the root.
+- Order follows from state relations, never from the order of lines: `init.relations` adds
+  `requires`/`invalidates` to the action producing a state (e.g. open the console before the
+  platform starts, to record the boot).
+- `itf_verify(session)` runs readiness checks after bring-up (`session.check(name, ok)`);
+  `itf_teardown(session)` collects artifacts while the target still runs.
+
+## Starlark recipes
+
+Under Bazel, a recipe can also be a target (DR-003). It stands in for `itf_setup`/`itf_init`; a
+conftest in `srcs` keeps `itf_verify`, `itf_teardown`, fixtures and bench-local actions.
 
 ```starlark
-load("@score_itf//:defs.bzl", "py_itf_test")
+load("@score_itf//bazel:recipe.bzl", "itf_recipe", "location", "node")
 
+itf_recipe(
+    name = "bench",
+    nodes = [
+        node("platform", "itf.capabilities.platform.instance", using = "docker.instance",
+             config = {"image": "my_image:latest", "bootstrap": location("//images:load")}),
+        node("command", "itf.capabilities.exec.command", using = "docker.exec"),
+    ],
+    goals = ["itf.states.platform.up"],
+    plugins = ["@score_itf//score/itf/packs/docker"],
+)
+
+py_itf_test(name = "test", srcs = ["test_bench.py"], recipe = ":bench")
+```
+
+- `location(label)` puts a Bazel-built file's path in the config and the file in the runfiles.
+- Composition is Starlark: put node lists in `.bzl` functions; `extends = [":base"]` merges
+  recipes like YAML `extends` (`plan_test = False` on an incomplete base).
+- Each recipe gets `<name>_plan`, a test resolving both gates without building or starting anything.
+- `bazel run //tools/catalog:query -- recipe <provider>` prints a node skeleton.
+
+## The tests
+
+```python
+import score.itf as itf
+
+@itf.requires("itf.capabilities.exec.command")
+def test_kernel(target):
+    code, output = target.command.exec("uname -s")
+    assert code == 0 and output.strip() == "Linux"
+```
+
+- `@itf.requires(token, scope=..., shape=[...])` selects a test only when the recipe provides the
+  contract (and members); otherwise it is **deselected with a reason** before anything starts.
+- `target.<node>` / `target.<scope>.<node>` return the objects; call only the members the catalog
+  lists for the provider (`bazel run //tools/catalog:query -- sql "SELECT * FROM v_provider_api"`).
+- Change state through the planner: `target.reach("itf.states.shell.open")` re-establishes what an
+  action (e.g. `target.platform.restart()`) invalidated; `target.renew("platform")` rebuilds a node
+  and everything bound to it, then reaches the goals again.
+- Per-test isolation is a fixture you own, at the scope you choose:
+
+  ```python
+  @pytest.fixture(autouse=True)
+  def fresh_container(target):
+      target.renew("platform")
+  ```
+
+- Asynchronous processes: `WrappedProcess(target.process, "/usr/bin/app", wait_on_exit=True)`
+  from `score.itf.core.process`, for any `itf.capabilities.exec.process` provider.
+
+## The BUILD target
+
+```starlark
 py_itf_test(
-    name = "test_exec",
-    srcs = ["test_exec.py"],
-    args = ["--docker-image=ubuntu:24.04"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
+    name = "bench",
+    srcs = ["conftest.py", "test_bench.py"],
+    data = ["recipe.yaml"],
+    plugins = ["@score_itf//score/itf/packs/docker"],   # the packs the recipe's providers come from
+    env = {...},
 )
 ```
 
-### SSH on Docker targets
-
-> **`ubuntu:24.04` does not work with `target.ssh()`.**
-> `target.ssh()` makes a real SSH connection to port 2222 of the container
-> with username/password authentication. A plain Ubuntu image has no SSH
-> server, so the connection will always fail. Use `target.execute()` instead
-> (shown above) unless you specifically need SSH.
-
-If you do need SSH, use an image that runs an SSH server
-(e.g. `linuxserver/openssh-server`) and supply credentials via the
-`docker_configuration` fixture:
-
-```python
-import pytest
-
-@pytest.fixture(scope="session")
-def docker_configuration():
-    return {
-        "environment": {
-            "PASSWORD_ACCESS": "true",
-            "USER_NAME": "score",
-            "USER_PASSWORD": "score",
-        },
-        "command": None,
-        "init": False,
-    }
-
-def test_ssh(target):
-    with target.ssh() as ssh:
-        # execute_command is a method on the Ssh object — no separate import needed
-        exit_code = ssh.execute_command("whoami")
-        assert exit_code == 0
-```
-
-`BUILD`:
-
-```starlark
-py_itf_test(
-    name = "test_ssh",
-    srcs = ["test_ssh.py"],
-    args = ["--docker-image=linuxserver/openssh-server:version-10.2_p1-r0"],
-    plugins = ["@score_itf//score/itf/plugins:docker_plugin"],
-)
-```
-
-### Custom Docker configuration
-
-Override Docker settings per test by implementing `docker_configuration`.
-Supported keys: `environment`, `command`, `init`, `shm_size`, `volumes`.
-
-```python
-import pytest
-
-@pytest.fixture
-def docker_configuration():
-    return {
-        "environment": {"MY_VAR": "hello"},
-        "shm_size": "2G",
-        "volumes": {"/host/path": {"bind": "/container/path", "mode": "rw"}},
-    }
-```
-
-## QEMU tests
-
-QEMU targets expose SSH and SFTP capabilities, and optionally network testing
-via `target.ping()`.
-
-```python
-def test_qemu_ssh(target):
-    with target.ssh(username="root", password="") as ssh:
-        exit_code = ssh.execute_command("uname -a")
-        assert exit_code == 0
-
-def test_file_transfer(target):
-    with target.sftp() as sftp:
-        sftp.upload("local.txt", "/tmp/remote.txt")
-        sftp.download("/tmp/remote.txt", "downloaded.txt")
-```
-
-`BUILD`:
-
-```starlark
-py_itf_test(
-    name = "test_qemu",
-    srcs = ["test_qemu.py"],
-    args = [
-        "--qemu-image=$(location //path:qemu_image)",
-        "--qemu-config=$(location qemu_config.json)",
-    ],
-    data = [
-        "//path:qemu_image",
-        "qemu_config.json",
-    ],
-    plugins = ["@score_itf//score/itf/plugins:qemu_plugin"],
-)
-```
-
-QEMU configuration file (`qemu_config.json`):
-
-```json
-{
-    "networks": [
-        {
-            "name": "tap0",
-            "ip_address": "169.254.158.190",
-            "gateway": "169.254.21.88"
-        }
-    ],
-    "ssh_port": 22,
-    "qemu_num_cores": 2,
-    "qemu_ram_size": "1G"
-}
-```
-
-## Capability-based tests
-
-The `@requires_capabilities` decorator automatically skips tests if the target
-does not provide the listed capabilities.
-
-```python
-from score.itf.plugins.core import requires_capabilities
-
-@requires_capabilities("exec")
-def test_docker_only(target):
-    # Skipped automatically on targets without 'exec'
-    exit_code, output = target.execute("ls /tmp")
-    assert exit_code == 0
-
-@requires_capabilities("ssh", "sftp")
-def test_network_features(target):
-    # Only runs on targets that have both 'ssh' and 'sftp'
-    with target.ssh() as ssh:
-        ssh.execute_command("echo ok")
-```
-
-## Target lifecycle: `--keep-target`
-
-By default, ITF creates a fresh target for each test function. Pass
-`--keep-target` to keep the same target running across all tests in a suite
-(faster, but tests share state):
-
-```bash
-bazel test //test:my_test --test_arg=--keep-target
-```
+`--test_arg=--itf-plan` resolves and prints the plan and gating without constructing anything;
+`--test_arg=--itf-strict-gating` fails deselected tests instead.

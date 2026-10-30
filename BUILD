@@ -29,6 +29,7 @@ compile_pip_requirements(
 )
 
 exports_files([
+    "docs/_generated/catalog.html",
     "main.py",
     "pytest.ini",
 ])

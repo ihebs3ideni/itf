@@ -56,6 +56,8 @@ py_itf_unittest(
 py_itf_unittest(
     name = "catalog_test",
     srcs = ["test_catalog.py"],
+    data = ["//:docs/_generated/catalog.html"],
+    env = {"CATALOG_HTML": "$(rootpath //:docs/_generated/catalog.html)"},
     deps = ["//tools/catalog"],
 )
 
