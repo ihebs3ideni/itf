@@ -25,12 +25,16 @@ series in the [PR plan](pr-plan.md). Dates are deliberately absent: they depend 
 | 5. Adoption | Downstream projects migrate; feedback fed back to packs | At least two downstream suites on the new API |
 | 6. Legacy layers retired | Projects migrate their old tests and delete their layers | No downstream project depends on `examples/legacy` |
 
+Current state of each phase: see [Status](status.md). Phases 1 to 4 are implemented on `ihsa_itf_facelift`;
+phases 0, 5 and 6 depend on the community and downstream projects.
+
 ## Candidate follow-ups (not committed)
 
 - Starlark recipes as Bazel targets with hermetic plan checks ([DR-003](../decisions/DR-003-infra-starlark-recipes.md)).
 - Packs as separate Bazel modules with their own versions.
 - Opt-in per-test target lifetime in the adapter, if fixtures calling `renew` prove insufficient.
 - Project test kit: a runnable container/native bundle for suppliers (itf-core design note 11.3).
+- Pack kinds: separate capability packs from policy packs and pytest plugins, enforced by a gate and shown in the catalog.
 - More packs: CAN, DoIP, UDS, power supplies, network management (itf-core has designs and code).
 - Remote resource reservation for shared benches.
 

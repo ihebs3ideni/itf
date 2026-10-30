@@ -23,6 +23,7 @@ Roadmap and review material for the composable-targets proposal
 .. toctree::
    :maxdepth: 1
 
+   status
    roadmap
    pr-plan
    discussion-post
