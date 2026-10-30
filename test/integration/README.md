@@ -23,6 +23,7 @@ suite/      generic tests, one file per capability area (command, process, files
             ping, console, logs)
 specific/   tests needing one platform's equipment, still gated by shape: a container
             (`shape=["container"]`), a VM's second disk (`shape=["disk"]`), DLT on the target
+recipes/    one recipe per platform: YAML files, a Starlark twin, and the shared conftest.py
             (loads the YAML recipe, bench-local actions, itf_verify checks)
 ```
 
@@ -32,6 +33,7 @@ specific/   tests needing one platform's equipment, still gated by shape: a cont
 | `:serial` | `serial.yaml` | a serial console on a pty shell: commands go through `serial.exec` (runs anywhere, no hardware) |
 | `:docker` | `docker.yaml` | a container through the Docker API only |
 | `:docker_ssh` | `docker_ssh.yaml` | a container running sshd: SSH, SFTP, a shell session |
+| `:docker_ssh_starlark`, `:dlt_stream_starlark` | `recipes:docker_ssh_starlark`, `recipes:dlt_stream_starlark` | the same, recipes in Starlark (DR-003); `:recipe_equivalence_test` compares them with YAML |
 | `:dlt_stream`, `:dlt_receive` | `dlt_stream.yaml`, `dlt_receive.yaml` | a dlt-daemon container; stdlib stream or dlt-receive |
 | `:qnx_bridge`, `:qnx_port_forwarding`, `:ubuntu`, `:ebclfsa` | `qemu.yaml` | QEMU machines (manual) |
 
@@ -82,6 +84,7 @@ of one contract to one behaviour.
 ```bash
 bazel test //test/integration:local                                  # anywhere
 bazel test //test/integration:docker_ssh --test_output=all            # gating decisions in the log
+bazel test //test/integration/recipes:docker_ssh_starlark_plan        # resolve a recipe, no hardware
 bazel test //test/integration:linux_qemu_tests --config=qemu-integration-linux
 ```
 

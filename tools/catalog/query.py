@@ -16,6 +16,7 @@
     bazel run //tools/catalog:query -- sql "SELECT ..."  any read-only query; --json for JSON rows
     bazel run //tools/catalog:query -- search WORDS...   full-text hits for a requirement sentence
     bazel run //tools/catalog:query -- serve [--port N]  build catalog.html and serve it on 127.0.0.1
+    bazel run //tools/catalog:query -- recipe PROVIDER   a node skeleton, in Starlark and YAML
 
 The database is built from the packs' own decorators on every run (it cannot drift from the code)
 and kept in the temp directory while its sources are unchanged. `--from catalog.html` builds it from
@@ -122,6 +123,34 @@ def _print(rows, as_json: bool) -> None:
         print("\t".join("" if v is None else str(v).replace("\n", " ") for v in row.values()))
 
 
+def _print_recipe_node(db, provider: str) -> None:
+    """A node for `provider`, required config as placeholders, optional config as comments."""
+    row = db.execute("SELECT * FROM v_recipe_node WHERE provider = ?", (provider,)).fetchone()
+    if row is None:
+        sys.exit(f'no provider {provider!r}; see: sql "SELECT provider FROM v_recipe_node"')
+    fields = [f.strip() for f in (row["config"] or "").split(",") if f.strip()]
+    required = [f.split(":", 1)[0] for f in fields if f.endswith("!")]
+    optional = [f for f in fields if not f.endswith("!")]
+    name = provider.split(".", 1)[-1]
+    config = ", ".join(f'"{k}": "<{k}>"' for k in required)
+    print(f"# load: {row['entrypoints']}" + (f"; slots: {row['needs']}" if row["needs"] else ""))
+    print("# Starlark (bazel/recipe.bzl)")
+    print(
+        f'node("{name}", "{row["contract"]}", using = "{provider}"'
+        + (f", config = {{{config}}}" if required else "")
+        + ")"
+    )
+    print("# YAML")
+    yaml_config = ", ".join(f"{k}: <{k}>" for k in required)
+    print(
+        f"- {{name: {name}, contract: {row['contract']}, using: {provider}"
+        + (f", config: {{{yaml_config}}}" if required else "")
+        + "}"
+    )
+    if optional:
+        print(f"# optional config: {', '.join(optional)}")
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--from", dest="source", type=Path, help="build from a generated catalog.html")
@@ -136,6 +165,7 @@ def main(argv=None) -> None:
     find.add_argument("--limit", type=int, default=15)
     find.add_argument("--json", action="store_true")
     sub.add_parser("serve").add_argument("--port", type=int, default=8799)
+    sub.add_parser("recipe").add_argument("provider")
     args = parser.parse_args(argv)
 
     if args.command == "serve":
@@ -148,6 +178,9 @@ def main(argv=None) -> None:
         return
 
     db = connect(args)
+    if args.command == "recipe":
+        _print_recipe_node(db, args.provider)
+        return
     if args.command == "schema":
         for (text,) in db.execute(
             "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'search_%' "

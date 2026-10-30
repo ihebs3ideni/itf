@@ -43,6 +43,7 @@ py_library(
         "//score/itf/core",
         "//score/itf/core/adapters:pytest",
         "//score/itf/core/process",
+        "//score/itf/recipes",
     ],
 )
 

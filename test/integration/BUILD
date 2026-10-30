@@ -183,6 +183,34 @@ RECIPES = [
     target_compatible_with = ["@platforms//os:linux"],
 ) for name, recipe, packs, specific, data, env, tags in RECIPES]
 
+# The docker_ssh recipe written in Starlark: no ITF_RECIPE, the recipe target is the declarative
+# half; the same conftest still contributes the code half.
+py_itf_test(
+    name = "docker_ssh_starlark",
+    srcs = [CONFTEST] + SUITE + ["specific/test_container.py"],
+    recipe = "//test/integration/recipes:docker_ssh_starlark",
+    tags = DOCKER_TAGS,
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+py_itf_test(
+    name = "dlt_stream_starlark",
+    srcs = [CONFTEST] + SUITE + ["specific/test_dlt_on_target.py"],
+    plugins = ["//score/itf/packs/dlt:on_target"],
+    recipe = "//test/integration/recipes:dlt_stream_starlark",
+    tags = DOCKER_TAGS,
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+py_itf_test(
+    name = "recipe_equivalence_test",
+    srcs = ["recipe_equivalence_test.py"],
+    data = [
+        "//test/integration/recipes:docker_ssh.yaml",
+        "//test/integration/recipes:docker_ssh_starlark",
+    ],
+)
+
 test_suite(
     name = "linux_qemu_tests",
     tags = ["manual"],
