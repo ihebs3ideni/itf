@@ -24,7 +24,7 @@ concern each:
 | 4. Examples | `examples: recipes and contracts; a legacy infra project ...` | The legacy layer covers the original tests; examples module builds | medium |
 | 5. Removal | `feat!: ship the core and packs only; remove the original plugins and Target` | Breaking change; migration guide; release notes | medium (deletions) |
 | 6. Tests | `test(integration): one capability-gated suite ...` | Gating decisions per recipe (README matrix), recipes | medium |
-| 7. Starlark | `feat(bazel): Starlark recipes (DR-003, prototype)` | Optional; can be deferred behind DR-003 | small |
+| 7. Starlark | `feat(bazel): Starlark recipes (DR-003)` | Implemented and tested; optional, so it can be deferred until DR-003 is accepted | small |
 | 8. Docs | `docs: packs, recipes and contracts ...` | Accuracy against code; migration guide | medium |
 
 Notes for reviewers:

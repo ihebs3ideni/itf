@@ -25,9 +25,27 @@ Where the implementation stands, what is verified, and what is open. The code is
 | Failure reports | Bring-up, startup-check and teardown failures print a pytest-style `=== ITF: ... failed ===` section: what failed, how far the run got, the original cause, the run directory and hints. |
 | Hooks and logging | `itf_verify` and `itf_teardown` in every example and the integration suite (readiness checks, evidence saved at teardown). INFO is one line per milestone, DEBUG is detail; the convention is in the agent skill. |
 | One way to start a process | Every host process goes through `ProcessWrapper`: tracked, stopped on a test timeout and at session close, and reported if it leaked. A gate test fails the build on direct `subprocess`, `os.system`, `os.fork` or `pty.fork`. |
+| Starlark recipes ([DR-003](../decisions/DR-003-infra-starlark-recipes.md)) | Implemented as a prototype, see the section below. |
 | Examples | docker, qemu and dlt recipes; a legacy layer that runs the original tests with only their imports changed; `exec_everywhere`, one test file run against a container, SSH, a pty serial console and a serial device (a fake ECU in the container). |
 | Docs and agent skill | Concepts, how-to guides, migration guide, DR-002 and DR-003, and a skill that teaches an agent to discover and use ITF. |
 | CI | Build, then plan check, then tests; format and copyright checks pass. |
+
+## Starlark recipes (DR-003)
+
+Done, on the branch:
+
+- `itf_recipe`, `location` and the other helpers in `bazel/recipe.bzl`; `py_itf_test(recipe = ...)` takes a recipe target and leaves the conftest with `itf_verify`, `itf_teardown`, fixtures and bench-local actions (the conftest wins on conflicts).
+- A recipe is data and replaces only `itf_setup` and `itf_init`. Bazel evaluates it into the same recipe document the YAML frontend reads, so the core has no new loader.
+- Hermetic plan checks: `plan_test` validates a recipe with no hardware, and the two Starlark targets in `//test/integration` (`docker_ssh_starlark`, `dlt_stream_starlark`) run the shared suite from a recipe target.
+- `recipe_equivalence_test` proves a Starlark recipe and its YAML twin produce the same document.
+- Documented in the how-to guides, the README and the agent skill.
+
+Not done:
+
+- DR-003 is still Proposed: the community has not accepted it, and it can be deferred without affecting the rest of the series (PR 7 in the PR plan).
+- The examples (`examples/itf`, `examples/exec_everywhere`, `examples/legacy`) are all YAML; none is written as a Starlark recipe yet.
+- No downstream project has tried it.
+- Only the docker/ssh and DLT stream recipes exist in Starlark.
 
 ## Verified
 
