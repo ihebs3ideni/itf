@@ -14,6 +14,7 @@ load("@rules_python//python:defs.bzl", "py_library")
 load("@rules_python//python:pip.bzl", "compile_pip_requirements")
 load("@score_docs_as_code//:docs.bzl", "docs")
 load("@score_tooling//:defs.bzl", "copyright_checker")
+load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 
 compile_pip_requirements(
     name = "requirements_3_12",
@@ -42,10 +43,15 @@ py_library(
         "//score/itf/core",
         "//score/itf/core/adapters:pytest",
         "//score/itf/core/process",
-        "//score/itf/plugins/utils",
-        "//score/itf/plugins:core",
-        "//score/itf/plugins/com",
     ],
+)
+
+# score_tooling's attribute plugin: test properties in the JUnit report.
+py_itf_plugin(
+    name = "attribute_plugin",
+    enabled_plugins = ["attribute_plugin"],
+    py_library = "@score_tooling//python_basics/score_pytest:attribute_plugin",
+    visibility = ["//visibility:public"],
 )
 
 test_suite(

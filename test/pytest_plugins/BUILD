@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -10,18 +10,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-class Bunch:
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+load("//:defs.bzl", "py_itf_test")
 
-    def __repr__(self):
-        return str(self.__dict__)
-
-    def __str__(self):
-        return str(self.__dict__)
-
-    def get(self, *args, **kwargs):
-        return self.__dict__.get(*args, **kwargs)
-
-    def update(self, **kwargs):
-        self.__dict__.update(kwargs)
+# Plain pytest plugins work with py_itf_test as before: no recipe, no ITF target.
+py_itf_test(
+    name = "test_attribute_plugin",
+    srcs = ["test_attribute_plugin.py"],
+    plugins = ["//:attribute_plugin"],
+)
