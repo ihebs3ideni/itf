@@ -12,77 +12,74 @@
 # *******************************************************************************
 load("@score_itf//:defs.bzl", "py_itf_test")
 
-py_itf_test(
-    name = "test_docker",
-    srcs = [
-        "test_docker.py",
-    ],
-    args = [
-        "--docker-image-bootstrap=$(location //examples/docker:image_load)",
-        "--docker-image=score_itf_examples:latest",
-    ],
-    data = ["//examples/docker:image_load"],
-    plugins = [
-        "@score_itf//score/itf/plugins:docker_plugin",
-    ],
-)
-
-# py_itf_test(
-#     name = "test_dlt",
-#     srcs = [
-#         "test_dlt.py",
-#     ],
-#     args = [
-#         "--docker-image-bootstrap=$(location @score_itf//test/resources:image_tarball)",
-#         "--docker-image=score_itf_examples:latest",
-#     ],
-#     data = ["@score_itf//test/resources:image_tarball"],
-#     plugins = [
-#         "@score_itf//score/itf/plugins:dlt_plugin",
-#         "@score_itf//score/itf/plugins:docker_plugin",
-#     ],
-# )
+# `docker` and `qemu` run one test file on two machines; `dlt` receives a target's DLT logs.
+# Each target picks a recipe and the packs its providers come from.
 
 py_itf_test(
-    name = "test_qemu_ssh_bridge_network",
+    name = "docker",
     srcs = [
-        "test_qemu.py",
-    ],
-    args = [
-        "--qemu-config=$(location @score_itf//test/resources:qemu_bridge_config)",
-        "--qemu-image=$(location //examples/itf/qnx:init)",
+        "conftest.py",
+        "test_example_app.py",
     ],
     data = [
-        "//examples/itf/qnx:init",
-        "@score_itf//test/resources:qemu_bridge_config",
+        "docker.yaml",
+        "//examples/docker:image_load",
     ],
+    env = {
+        "ITF_IMAGE_LOAD": "$(location //examples/docker:image_load)",
+        "ITF_RECIPE": "docker.yaml",
+    },
+    plugins = ["@score_itf//score/itf/packs/docker"],
+)
+
+py_itf_test(
+    name = "dlt",
+    srcs = [
+        "conftest.py",
+        "test_dlt_logs.py",
+    ],
+    data = [
+        "dlt.yaml",
+        "//examples/docker:dlt_image_load",
+    ],
+    env = {
+        "ITF_DLT_IMAGE_LOAD": "$(location //examples/docker:dlt_image_load)",
+        "ITF_RECIPE": "dlt.yaml",
+    },
     plugins = [
-        "@score_itf//score/itf/plugins:qemu_plugin",
-        "@score_itf//score/itf/plugins:dlt_plugin",
-    ],
-    tags = [
-        "manual",
+        "@score_itf//score/itf/packs/dlt",
+        "@score_itf//score/itf/packs/docker",
     ],
 )
 
 py_itf_test(
-    name = "test_qemu_ssh_port_forwarding",
+    name = "qemu",
     srcs = [
-        "test_qemu.py",
-    ],
-    args = [
-        "--qemu-config=$(location @score_itf//test/resources:qemu_port_forwarding_config)",
-        "--qemu-image=$(location //examples/itf/qnx:init)",
+        "conftest.py",
+        "test_example_app.py",
     ],
     data = [
+        "qemu.yaml",
+        "qemu_bridge_config.json",
         "//examples/itf/qnx:init",
-        "@score_itf//test/resources:qemu_port_forwarding_config",
     ],
+    env = {
+        "ITF_QEMU_CONFIG": "$(location qemu_bridge_config.json)",
+        "ITF_QEMU_KERNEL": "$(location //examples/itf/qnx:init)",
+        "ITF_RECIPE": "qemu.yaml",
+    },
     plugins = [
-        "@score_itf//score/itf/plugins:qemu_plugin",
-        "@score_itf//score/itf/plugins:dlt_plugin",
+        "@score_itf//score/itf/packs/qemu",
+        "@score_itf//score/itf/packs/ssh",
     ],
-    tags = [
-        "manual",
+    tags = ["manual"],
+)
+
+# Bench configurations of this project (score_itf's test resources are not visible to consumers).
+exports_files(
+    [
+        "qemu_bridge_config.json",
+        "qemu_port_forwarding_config.json",
     ],
+    visibility = ["//examples/legacy:__pkg__"],
 )
