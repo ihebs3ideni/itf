@@ -12,7 +12,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Proposal: fewer identifiers, one name per thing
 
-**Status:** Draft for discussion. Not implemented.
+**Status:** Draft for discussion, second pass (attribute access and scopes). Not implemented.
 
 ## Problem
 
@@ -153,17 +153,114 @@ After:
 ```python
 @itf.requires("exec.command@1")
 def test_hello(target):
-    assert target["exec.command"].exec("echo hi")[0] == 0     # the same identifier as the requirement
+    assert target.exec.command.exec("echo hi")[0] == 0     # the requirement's own path
 ```
 
-`target.get("exec.command")` is the same call, `target["exec.command", "sftp"]` reaches a named instance, and
-`target["gw:exec.command"]` a device's. A requirement and an access use one identifier, so a suite works on any
-recipe that passes its gating, whatever the recipe calls things.
+The attribute path is the contract written with dots: what a test requires is literally what it types.
+`target["exec.command"]` is the same lookup for code that holds the contract in a variable.
 
 ### Plans and diagnostics
 
 Before: `:itf.states.platform.up`, `.command`, `__itf_root__.platform`, `docker.instance`.
 After: `platform.up`, `exec.command`, `platform.instance from docker`, `gw:exec.command`.
+
+## Reaching things on the target
+
+The target handle is a tree that mirrors the identifiers. Every level answers `dir()`, so a console (`itf up`)
+or an editor completes it.
+
+```
+target                          the root scope
+├── exec                        an area of the default namespace (itf)
+│   ├── command                 the exec.command instance
+│   └── shell                   the exec.shell instance
+├── platform
+│   ├── instance                the platform.instance instance
+│   └── up                      the platform.up state
+├── files
+│   └── transfer                the unnamed files.transfer instance
+├── sftp                        a named instance (files.transfer as sftp)
+├── acme                        a namespace prefix
+│   └── power
+│       └── relay               acme/power.relay
+└── gw                          a device scope: the same tree again
+    └── exec
+        └── command             gw:exec.command
+```
+
+### Capabilities
+
+`target.exec.command` is the instance of `exec.command` in the root scope; `target.gw.exec.command` the one in
+device scope `gw`. An area (`target.exec`) is a small view listing the contracts it holds; it has no other
+members, so it never hides a contract.
+
+### States
+
+A state is reachable the same way and returns a state view, not an object:
+
+```python
+target.platform.up.holds()      # the last probe's answer
+target.platform.up.probe()      # probe now
+target.platform.up.reach()      # plan and run what makes it true, through the planner
+target.gw.platform.up.reach()   # the same, in device scope gw
+```
+
+`target.reach("platform.up")` stays, for code holding the state in a variable.
+
+### Named instances
+
+A name given with `as:` becomes a top-level entry of its scope: `target.sftp`, `target.gw.sftp`. When a
+contract has an unnamed instance, `target.files.transfer` is that one. When every instance of a contract is
+named, `target.files.transfer` is an error that lists the names, so a test never silently gets the wrong one.
+
+### Vendor namespaces
+
+A registered prefix is a level of its own: `acme/power.relay` is `target.acme.power.relay`. `local/bench.door`
+is `target.local.bench.door`.
+
+### Scopes
+
+A device scope is an entry of the root, as today: `target.gw`. It holds the same kinds of entry as the root,
+and, as today, never falls back to the root. Sharing an instance is declared in the recipe:
+
+```yaml
+scopes:
+  gw:
+    provide:
+      - exec.command: ssh
+    share:
+      - platform.instance          # gw uses the root's platform instance
+```
+
+`target.gw.platform.instance is target.platform.instance`.
+
+### One name space per level, checked at plan time
+
+At each level of a scope, these share one name space: the handle's own members (`reach`, `renew`, `probe`,
+`plan`, `states`, `get`, `has`, `tokens`, `names`, `scope`, `scopes`), scope names, instance names, namespace
+prefixes and the default namespace's area names. Clashes are plan diagnostics, the way scope names that shadow
+handle members are rejected today:
+
+- a scope or instance named like an area (`exec`), a prefix (`acme`) or a handle member: rejected, with the
+  clashing entry named;
+- the namespace registry refuses a prefix equal to an `itf` area name, and the contracts gate refuses an area
+  named like a handle member.
+
+So `target.<name>` is never ambiguous, and the lookup order below only matters for error messages: handle
+member, scope, instance, namespace prefix, area.
+
+### Linking requirements and use
+
+Because a requirement and an access use the same path, ITF can check one against the other. A test that reaches
+`target.exec.shell` without requiring `exec.shell` passes on a recipe that happens to provide it and fails on
+one that does not. A lint (part of `itf plan` or a gate) reads each test's attribute paths and warns when one is
+not covered by its `@itf.requires`.
+
+### Types in an editor
+
+The tree is dynamic, so an editor does not know that `target.exec.command` has `exec()`. `itf stubs` can write a
+`.pyi` for a recipe from the contract definitions (one Protocol per contract, from its members), so completion
+and type checking work without changing the runtime.
 
 ## What stays, feature by feature
 
@@ -194,10 +291,11 @@ After: `platform.up`, `exec.command`, `platform.instance from docker`, `gw:exec.
 
 - **It is a breaking change of the surface**, even with shims: documentation, examples, starters, the skill and
   every downstream recipe change. It should land before ITF's first release on this design, not after.
-- **`target["exec.command"]` is less pleasant to type than `target.command`.** Attribute access by contract
-  (`target.exec.command`) reads well but collides with scope names and handle members unless scope names are
-  forbidden from being area names; this proposal keeps item access as the one canonical form and leaves
-  attribute sugar as an open question.
+- **Attribute access needs naming discipline.** Scope names, instance names, prefixes, area names and handle
+  members share one name space per level. The plan-time check makes clashes impossible, but it does forbid a
+  scope called `exec` or an instance called `platform`.
+- **Paths are one level longer than today's node names** (`target.exec.command` instead of `target.command`).
+  In exchange they mean the same thing on every recipe.
 - **One entrypoint per pack** makes every variant importable whenever the pack is loaded. Providers must keep
   heavy imports inside their factories, which a gate can check.
 - **Prefixes for namespaces** need the registry to stay authoritative; a project-local prefix for an
@@ -205,8 +303,8 @@ After: `platform.up`, `exec.command`, `platform.instance from docker`, `gw:exec.
 
 ## Open questions
 
-1. Attribute sugar (`target.exec.command`) or item access only?
-2. Should `provide:` list contracts the recipe does not need, so they are available to tests (lazily
+1. Should `provide:` list contracts the recipe does not need, so they are available to tests (lazily
    realised), or only what goals, bindings and requirements pull in?
-3. Do actions ever need a name of their own, or is `(state, pack[:variant])` always enough?
-4. How long do the old forms stay accepted?
+2. Do actions ever need a name of their own, or is `(state, pack[:variant])` always enough?
+3. How long do the old forms stay accepted?
+4. Is the requirement-and-use lint a warning or, under `--itf-strict-gating`, an error?
