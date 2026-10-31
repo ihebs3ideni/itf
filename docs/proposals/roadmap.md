@@ -36,6 +36,7 @@ phases 0, 5 and 6 depend on the community and downstream projects.
 - Project test kit: a runnable container/native bundle for suppliers (itf-core design note 11.3).
 - Pack kinds: separate capability packs from policy packs and pytest plugins, enforced by a gate and shown in the catalog.
 - Onboarding and contract discovery: contract definitions, a contracts reference, starter templates and a tutorial ([proposal](onboarding.md)).
+- ITF with and without Bazel: core and packs as wheels, entry-point discovery, `[tool.itf]` configuration ([plan](packaging.md)).
 - More packs: CAN, DoIP, UDS, power supplies, network management (itf-core has designs and code).
 - Remote resource reservation for shared benches.
 

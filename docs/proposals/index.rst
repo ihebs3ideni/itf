@@ -27,5 +27,6 @@ Roadmap and review material for the composable-targets proposal
    roadmap
    onboarding
    vision-comparison
+   packaging
    pr-plan
    discussion-post
