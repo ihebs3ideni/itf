@@ -38,6 +38,7 @@ phases 0, 5 and 6 depend on the community and downstream projects.
 - Onboarding and contract discovery: contract definitions, a contracts reference, starter templates and a tutorial ([proposal](onboarding.md)).
 - ITF with and without Bazel: core and packs as wheels, entry-point discovery, `[tool.itf]` configuration ([plan](packaging.md)).
 - Exclusive hardware in a plan: providers mark held config fields, conflicting nodes are rejected at plan time ([proposal](exclusive-hardware.md)).
+- ITF as target composition, OCTO first: parts, compositions, no-trust checks, a lifecycle CLI ([proposal](composition.md)).
 - The ITF model: member names owned by contracts, packs and variants instead of provider names, recipe and bench values, a single source of truth per fact ([proposal](model.md)).
 - More packs: CAN, DoIP, UDS, power supplies, network management (itf-core has designs and code).
 - Remote resource reservation for shared benches.

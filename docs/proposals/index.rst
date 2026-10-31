@@ -29,6 +29,7 @@ Roadmap and review material for the composable-targets proposal
    vision-comparison
    packaging
    exclusive-hardware
+   composition
    model
    identifiers
    pr-plan

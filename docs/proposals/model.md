@@ -12,7 +12,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # The ITF model: what things are called, where each fact lives, and who decides
 
-**Status:** Proposed. Supersedes [identifiers](identifiers.md). The foundation is implemented on the platform branch;
+**Status:** Partly superseded by [target composition](composition.md) (recipe and naming); its contracts, namespaces
+and governance stand. Supersedes [identifiers](identifiers.md). The foundation is implemented on the platform branch;
 the rest of the surface is being moved to it.
 
 ## Why a model, not more features
