@@ -38,6 +38,7 @@ phases 0, 5 and 6 depend on the community and downstream projects.
 - Onboarding and contract discovery: contract definitions, a contracts reference, starter templates and a tutorial ([proposal](onboarding.md)).
 - ITF with and without Bazel: core and packs as wheels, entry-point discovery, `[tool.itf]` configuration ([plan](packaging.md)).
 - Exclusive hardware in a plan: providers mark held config fields, conflicting nodes are rejected at plan time ([proposal](exclusive-hardware.md)).
+- Fewer identifiers: contracts as the address, packs instead of provider names, one entrypoint per pack ([proposal](identifiers.md)).
 - More packs: CAN, DoIP, UDS, power supplies, network management (itf-core has designs and code).
 - Remote resource reservation for shared benches.
 
