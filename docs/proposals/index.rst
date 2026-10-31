@@ -29,6 +29,7 @@ Roadmap and review material for the composable-targets proposal
    vision-comparison
    packaging
    exclusive-hardware
+   model
    identifiers
    pr-plan
    discussion-post

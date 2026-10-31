@@ -12,7 +12,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Proposal: fewer identifiers, one name per thing
 
-**Status:** Draft for discussion, second pass (attribute access and scopes). Not implemented.
+**Status:** Superseded by [the ITF model](model.md), which gives each capability a member name owned by its contract instead of addressing it by contract path.
 
 ## Problem
 
