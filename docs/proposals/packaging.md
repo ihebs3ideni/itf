@@ -74,7 +74,8 @@ A pack of kind `pytest-plugin` also declares a `pytest11` entry point for its py
 
 ## Configuration without Bazel
 
-The project's own `pyproject.toml` (or `pytest.ini`) chooses the recipe and the packs:
+The project's own `pyproject.toml` (or `pytest.ini`, or a runner's own flag) chooses the recipe and the
+packs; the same resolution serves pytest, the `itf` command and other runners:
 
 ```toml
 [tool.itf]
@@ -109,7 +110,17 @@ release:
    requirement.
 5. **No runfiles outside Bazel-specific helpers.** Code that looks up runfiles keeps a `PATH` fallback and
    lives in one helper per pack.
-6. **Every user-facing tool exists as a command.** Anything a Bazel rule offers (plan, bench, catalog,
+6. **The recipe comes from configuration, for every runner.** Which recipe a run uses is said once, in
+   the project's configuration: `--itf-recipe` (or a runner's own flag), `ITF_RECIPE`, `[tool.itf] recipe`
+   in `pyproject.toml`, or, under Bazel, `py_itf_test(recipe = ...)`. The resolution and the step that
+   turns a recipe into `itf_setup`/`itf_init` live in the runner-agnostic core
+   (`resolve()`, `recipe_contributor()`, `Session(recipe=...)`), so pytest, the `itf` command and any
+   other runner load a recipe the same way. A conftest holds only code (`itf_verify`, `itf_teardown`,
+   fixtures, local actions) and never loads the recipe itself. Generating a conftest from the recipe was
+   considered and rejected: it collides with the user's own `conftest.py` in Bazel's runfiles, merges
+   Python by text, loses the document that plans and tools read, and erases which declarations came from
+   the recipe and which from the project.
+7. **Every user-facing tool exists as a command.** Anything a Bazel rule offers (plan, bench, catalog,
    contracts reference) is also an `itf` subcommand, and the Bazel rule calls that subcommand.
 
 ## Verification to add
