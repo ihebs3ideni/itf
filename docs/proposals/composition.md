@@ -17,6 +17,11 @@ model](model.md).
 
 ## Decisions
 
+0. **Vocabulary.** Contracts are of two kinds: **capability contracts**, fulfilled by **capability factories**
+   (`@capability`), and **state contracts**, fulfilled by **action functions** (`@state`, with probes). A
+   composition lists capabilities by role and states as goals. Where this document says "part", read "a
+   capability factory or an action".
+
 1. **ITF knows no contracts.** A contract is whatever name two parts agree on, with whatever shape they publish
    and expect. ITF is the platform that lets projects discover, map, define and enforce their contracts; it does
    not ship a vocabulary everyone must follow. Plans and gates are the compiler: they tell you, from metadata,
@@ -81,14 +86,14 @@ their stable key. It is also what Docker Compose does (services keyed by name, `
 ```yaml
 include:
   - base.itf.yaml               # merged first; this file wins
-parts:
+capabilities:
   platform:
-    part: docker.platform       # pack.part
+    factory: docker.platform    # pack.name
     with:                       # the part's settings, checked against its schema
       image: my-ecu:latest
-  command: docker.exec          # short form: just the part
+  command: docker.exec          # short form: just the factory
   shell:
-    part: ssh.shell
+    factory: ssh.shell
     bind:                       # only when a slot has more than one candidate
       endpoint: lab_endpoint
 goals:
@@ -101,7 +106,7 @@ assume:
     reason: the rack keeps it on
 scopes:
   gw:
-    parts:
+    capabilities:
       command: ssh.exec
     share:
       - platform                # gw uses the root's platform role
@@ -123,11 +128,11 @@ class Shell(Protocol):              # the consumer's own Protocol, never shared 
     __contract__ = "exec.shell"     # which contract this shape describes
     def run(self, command: str) -> str: ...
 
-@part(offers="exec.command")        # label: <pack>.exec, from the function name
+@capability("exec.command")         # label: <pack>.exec, from the function name
 def exec(shell: Shell) -> SshExec:  # the parameter is a slot: contract and shape from its annotation
     return SshExec(shell)
 
-@part(makes="shell.open", after=("platform.up",))
+@state("shell.open", after=("platform.up",))
 def open_session(shell: Shell) -> None:
     shell.connect()
 
@@ -136,11 +141,12 @@ def session_open(shell: Shell) -> bool:
     return shell.connected()
 ```
 
-- `offers=` for a provider, `makes=` for an action; `after=` and `breaks=` for an action's state relations.
+- `@capability` wraps a capability factory, `@state` an action function; `after=` and `breaks=` are an action's
+  state relations.
 - A slot is a parameter; its annotation's `__contract__` names the contract, its members are the expected shape.
 - `config: <dataclass>` is the part's settings schema (`with:` in a composition).
 - The label is `<pack>.<function name>`, or `label=`. A part outside any pack belongs to `project`.
-- `@offers` and `@makes` accept `@major`; when both sides give one, they must agree.
+- Contract names accept `@major`; when both sides give one, they must agree.
 
 ## Contracts are discovered, defined and enforced by projects
 
