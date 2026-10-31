@@ -46,8 +46,8 @@ bench selection are computed from plans before anything runs.
 | Runtime | The pytest adapter owns the session | Runner-agnostic core; pytest, a bench CLI and a bench daemon all consume plans |
 | Working with a bench by hand | Not supported; write a test or drive `Session` from Python | `itf up`, `itf shell`, `itf down`, reusing whatever probes say already holds |
 | Shared hardware | One session per test run | A daemon keeps a bench in a known state and serves several runs |
-| Exclusive resources | Not modelled; conflicts appear at run time | A resources kind; the planner allocates and reports conflicts |
-| Observing during a test | DLT and pcap as capabilities a test or recipe wires itself | An observations kind; wired by the planner, turned into evidence |
+| Exclusive resources | Not modelled; conflicts appear at run time | Providers mark the config fields that hold something exclusive; a plan with two nodes holding the same key is rejected. A resources kind only if pools ("any free unit") are needed |
+| Observing during a test | DLT and pcap as capabilities and states a test or recipe wires itself | The same capabilities and states, plus a `window()` convention for per-test recordings and a helper that attaches them to evidence |
 | Evidence | Run directory with plans, probe results and logs; failure report sections; teardown evidence in examples | An evidence store and viewer across runs: timings, flaky probes, drift |
 | Coverage | Gating per run; a hand-written matrix in the integration README | A static matrix computed from plans: which tests run on which bench |
 | Bench selection | The test target names its recipe | Match a suite against an inventory of benches described as recipes |
@@ -118,6 +118,28 @@ bench selection are computed from plans before anything runs.
 - **Community buy-in.** Moving the centre of gravity away from pytest needs agreement from projects that
   are comfortable with the current model, and every new layer is review load.
 
+## Revisited: resources and observations
+
+An earlier version of this report proposed two new OCTO kinds. On reflection only one need justifies
+planning machinery.
+
+- **Observations are capabilities and states.** `observe.logs` and `observe.capture` are capabilities;
+  `logs.active` and `capture.running` are states with probes, ordered by the planner. What was missing is
+  per-test lifecycle (a recording per test, attached to that test's result), which is a convention: a
+  `window()` member on observe contracts and an evidence helper. No new kind.
+- **Exclusive hardware within one plan is a check, not a kind.** The provider author marks which config
+  fields hold something exclusive, in the config schema providers already publish (`device` of a serial
+  console, a fixed published host port, a relay channel), because exclusivity depends on the medium, not on
+  the contract: commands over SSH are shareable, over a serial line they are not. Each such field yields a
+  key (`serial:/dev/ttyUSB0`, `tcp:<host>:23230`); a recipe may add keys only the bench knows (a rack slot)
+  but never remove one; two nodes holding the same key is a plan diagnostic naming both. Keys compare as
+  written unless the provider supplies a normaliser, so the check catches clashes, not every alias.
+- **Pools are the only case for a resources kind.** When a recipe asks for "any free relay channel" the
+  planner must choose and bind units under an exclusivity constraint before Gate 1: a real allocation
+  problem. Add the kind when someone has pools.
+- **Sharing between runs is not planning.** Two jobs wanting the same board is for a reservation service in
+  front of ITF that pins concrete units into the recipe.
+
 ## Risks of each path
 
 | Path | Main risk | Mitigation |
@@ -137,7 +159,7 @@ this order:
 3. **`itf up` / `itf down`.** A thin CLI over the existing `Session`; immediate developer value.
 4. **Plans as build artifacts** with plan diffs, extending the Starlark recipe work (once DR-003 is
    accepted).
-5. **Evidence store, resources kind, bench matching**, when real labs need them.
+5. **Exclusive-hardware check**, then **evidence store** and **bench matching**, and a **resources kind** only once pools exist.
 
 Stop after any step if the cost outweighs the benefit: each step leaves ITF coherent and usable.
 
