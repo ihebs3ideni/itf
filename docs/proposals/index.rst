@@ -25,5 +25,6 @@ Roadmap and review material for the composable-targets proposal
 
    status
    roadmap
+   onboarding
    pr-plan
    discussion-post
