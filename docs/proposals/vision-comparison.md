@@ -25,8 +25,8 @@ checks, teardown hooks and unwind. A SQLite catalog and a generated marketplace 
 offer.
 
 **Reimagined platform.** The bench is data and ITF is its compiler. Five artifacts are first-class:
-versioned **contracts** with definitions and executable conformance suites; **packs** as separately
-versioned modules that pass those suites; **recipes**, Starlark by default; **plans**, produced at build
+versioned **contracts** with definitions and executable conformance suites; **packs** that declare and
+pass those suites; **recipes**, Starlark by default; **plans**, produced at build
 time, cached and diffed in review; and **evidence**, a structured record of every run. Pytest is one
 runtime among several: an interactive bench CLI (`itf up`, `itf shell`, `itf down`) and a daemon for
 shared hardware consume the same plans. OCTO's extensible kinds add **resources** (exclusive hardware,
@@ -39,7 +39,7 @@ bench selection are computed from plans before anything runs.
 |---|---|---|
 | Contracts | A token plus the shapes providers publish; no definition of its own; the marketplace borrows a provider's description | Versioned definition (meaning, members, guarantees) with an owner and an executable conformance suite |
 | Trust in a provider | Catalog conformance checks that some provider meets every declared expectation (member names) | Each provider passes the contract's behavioural conformance suite, against its sim variant in CI |
-| Packs | Directories in one module, released together | Separate Bazel modules, versioned, declaring contract versions |
+| Versioning | Planned: ITF and its packs get versions and releases | The same, plus contract versions that packs declare and are tested against |
 | Recipes | Python conftest, YAML, or Starlark (implemented, optional) | Starlark first; YAML as an interchange format |
 | When a recipe is checked | At test time, or opt-in with `--itf-plan` and `plan_test` targets | At build time, always; plans are cached artifacts |
 | Reviewing a change | Read the recipe and code | Also read the plan diff ("this adds a step before `platform.up`") |
@@ -79,7 +79,6 @@ bench selection are computed from plans before anything runs.
 - **Tied to pytest in practice.** Capability packs are runner-agnostic, but the session, options and
   some packs (`core_dump`, `dlt_on_target`) are pytest-bound, and there is no way to use a bench
   without a test.
-- **One release train.** Packs version with the core; a fix in one pack ships everything.
 - **Shared benches and exclusive hardware are not modelled.** That is fine for containers and VMs and
   becomes a problem with real labs.
 - **Discovery is weak.** See the onboarding proposal.
@@ -98,16 +97,18 @@ bench selection are computed from plans before anything runs.
   hardware: contention and scheduling.
 - **Better answers to management questions.** Static coverage and an evidence store answer "what is
   tested where" and "what is flaky" without running anything again.
-- **Independent packs.** Versioned modules let packs move at their own pace and let projects pin them.
+- **Versions with meaning.** Both paths get versioned releases; here a pack version also states which
+  contract versions it implements and has passed, so pinning a pack pins tested behaviour.
 
 ### Negatives
 
-- **Much larger scope.** Contract versioning, conformance suites, a CLI, a daemon, an evidence store and
+- **Much larger scope.** Conformance suites, contract versions, a CLI, a daemon, an evidence store and
   two new kinds are each a project. Realistically this is a multi-quarter effort with clear owners.
 - **More concepts.** Versions, conformance, resources, observations, runtimes: harder to learn and to
   explain, which works against the onboarding goal unless the start path hides them.
-- **Versioning has a cost.** Contract and pack versions need compatibility rules, deprecation policy and
-  release work; small teams often underestimate this.
+- **Contract versioning has a cost on top of release versioning.** Both paths version ITF and its packs;
+  versioning contracts as well needs compatibility rules between contract and pack versions and a
+  deprecation policy, which small teams often underestimate.
 - **Conformance suites are expensive to write well.** A weak suite gives false confidence; a strong one
   needs hardware-in-the-loop runs for real providers.
 - **Operational burden.** A bench daemon and an evidence store are services someone must run, secure
