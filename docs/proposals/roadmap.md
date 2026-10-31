@@ -37,6 +37,7 @@ phases 0, 5 and 6 depend on the community and downstream projects.
 - Pack kinds: separate capability packs from policy packs and pytest plugins, enforced by a gate and shown in the catalog.
 - Onboarding and contract discovery: contract definitions, a contracts reference, starter templates and a tutorial ([proposal](onboarding.md)).
 - ITF with and without Bazel: core and packs as wheels, entry-point discovery, `[tool.itf]` configuration ([plan](packaging.md)).
+- Exclusive hardware in a plan: providers mark held config fields, conflicting nodes are rejected at plan time ([proposal](exclusive-hardware.md)).
 - More packs: CAN, DoIP, UDS, power supplies, network management (itf-core has designs and code).
 - Remote resource reservation for shared benches.
 

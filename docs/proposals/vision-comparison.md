@@ -135,6 +135,7 @@ planning machinery.
   key (`serial:/dev/ttyUSB0`, `tcp:<host>:23230`); a recipe may add keys only the bench knows (a rack slot)
   but never remove one; two nodes holding the same key is a plan diagnostic naming both. Keys compare as
   written unless the provider supplies a normaliser, so the check catches clashes, not every alias.
+  The full design is in [Exclusive hardware in a plan](exclusive-hardware.md).
 - **Pools are the only case for a resources kind.** When a recipe asks for "any free relay channel" the
   planner must choose and bind units under an exclusivity constraint before Gate 1: a real allocation
   problem. Add the kind when someone has pools.
