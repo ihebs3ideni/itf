@@ -12,7 +12,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # The ITF model: what things are called, where each fact lives, and who decides
 
-**Status:** Proposed. Supersedes [identifiers](identifiers.md). Being applied on the platform branch.
+**Status:** Proposed. Supersedes [identifiers](identifiers.md). The foundation is implemented on the platform branch;
+the rest of the surface is being moved to it.
 
 ## Why a model, not more features
 
@@ -92,7 +93,8 @@ capabilities:
   command: docker
 ```
 
-A pack with several implementations of one contract names them as variants: `serial:pty` beside `serial`,
+A pack with several implementations of one contract names them as variants, declared explicitly on the
+provider (`@provides("console", variant="pty")`), never inferred from where the code lives: `serial:pty` beside `serial`,
 `net:password` beside `net:key`, `docker:sim`, `dlt:multicast`. *(contract, pack, variant)* is unique, which a
 gate checks. Today's provider names (`docker.exec`) stay accepted in old recipes.
 
@@ -129,6 +131,25 @@ when the plan is made. Two loaded contracts with the same member name (two vendo
 Provider names, action names, `module:qualname` references, `.name` and `:token` reference syntax, the
 `__itf_root__` scope and the `capabilities`/`states` segment of identifiers. Plans and diagnostics print
 `platform.up`, `command (docker)`, `gw.command`.
+
+### Declaring a provider: names and annotations carry the rest
+
+```python
+@provides("command")
+def make_exec(platform: Platform) -> Command: ...          # a parameter named after a member needs it;
+                                                            # its annotation is the shape expected
+
+@provides("platform", variant="sim")
+def make_platform(config: PlatformConfig) -> Platform: ...  # `config: <dataclass>` is the config schema
+
+@delivers("platform.up")
+def start(platform: Platform): ...
+```
+
+One rule, no inference beyond it: a parameter named after a member name is a slot for that capability; a
+parameter named `config` with a dataclass annotation is the configuration; anything else must be listed
+explicitly (`needs=`, `uses=`) or it is an error. The return annotation is what the provider gives. A provider
+outside any pack (a project's conftest) belongs to the pack named by its top-level module.
 
 ## Single source of truth
 
@@ -177,8 +198,8 @@ console:
 
 Bench values are configuration overrides keyed by member (and `scope.member`), validated by each provider's
 config schema like any recipe value, applied after `extends` and before planning. `${VAR}` keeps working for
-values that come from the environment (a CI job's image tag). Precedence, lowest to highest: pack defaults,
-recipe, bench values, the project's own code (conftest).
+values that come from the environment (a CI job's image tag). Precedence, lowest to highest: packs, the recipe
+(its own level, so a recipe's pin outranks a pack's default), bench values, the project's own code (conftest).
 
 ## Swapping a capability
 
