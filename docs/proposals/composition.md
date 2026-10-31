@@ -12,8 +12,148 @@ SPDX-License-Identifier: Apache-2.0
 
 # ITF as target composition: OCTO first
 
-**Status:** Proposed. Replaces the recipe and naming parts of [the ITF model](model.md); keeps its contracts,
-namespaces and governance.
+**Status:** Accepted direction; decisions below. Being implemented on the platform branch. Replaces [the ITF
+model](model.md).
+
+## Decisions
+
+1. **ITF knows no contracts.** A contract is whatever name two parts agree on, with whatever shape they publish
+   and expect. ITF is the platform that lets projects discover, map, define and enforce their contracts; it does
+   not ship a vocabulary everyone must follow. Plans and gates are the compiler: they tell you, from metadata,
+   whether a composition would work. The ITF team maintains the contracts its own packs use, with conformance
+   checks, as a supported set, not as a standard.
+2. **A composition is keyed by role**, chosen from the examples below.
+3. **Everything is explicit, and nothing is required.** Goals are listed, not inferred; no part enters a target
+   unless the composition lists it; an empty composition is valid.
+4. **The first command line is** `itf validate`, `plan`, `graph`, `up`, `down` and `test`, plus the contract
+   tools `itf contracts map|new|check`.
+
+## Choosing the composition format from examples
+
+Two candidates: keyed by part label, or keyed by role. Four cases:
+
+**A. A plain container target.**
+
+```yaml
+# keyed by part label                    # keyed by role
+parts:                                   parts:
+  docker.platform:                         platform:
+    image: my-ecu:latest                     part: docker.platform
+  docker.exec:                               with:
+                                               image: my-ecu:latest
+                                           command: docker.exec
+```
+
+**B. The same part twice** (two consoles on one board).
+
+```yaml
+parts:                                   parts:
+  serial.console:                          console:
+    device: /dev/ttyUSB0                     part: serial.console
+  serial.console:        # duplicate key     with:
+    as: debug            # not valid YAML      device: /dev/ttyUSB0
+    device: /dev/ttyUSB1                   debug:
+                                             part: serial.console
+                                             with:
+                                               device: /dev/ttyUSB1
+```
+
+**C. One bench changes a value** (an override file).
+
+```yaml
+# keyed by part label: which of the two   # keyed by role: unambiguous
+# serial.console entries?
+                                         parts:
+                                           debug:
+                                             with:
+                                               device: /dev/ttyUSB3
+```
+
+**D. A test reaches the part.** Keyed by part label, the test needs a second name to say which part it means;
+keyed by role, the key is that name: `target.debug`.
+
+Keyed by part label reads well in case A and breaks in B, C and D. **Keyed by role** costs one word per part in
+case A and works the same in every case: duplicates, overrides, includes, scopes and tests all use the role as
+their stable key. It is also what Docker Compose does (services keyed by name, `image:` as the value).
+
+### The format
+
+```yaml
+include:
+  - base.itf.yaml               # merged first; this file wins
+parts:
+  platform:
+    part: docker.platform       # pack.part
+    with:                       # the part's settings, checked against its schema
+      image: my-ecu:latest
+  command: docker.exec          # short form: just the part
+  shell:
+    part: ssh.shell
+    bind:                       # only when a slot has more than one candidate
+      endpoint: lab_endpoint
+goals:
+  - platform.up                 # explicit; the part that makes it true comes with the parts listed
+  - state: console.open
+    by: serial.open             # only when two listed packs could make it true
+assume:
+  - state: power.on
+    owner: lab
+    reason: the rack keeps it on
+scopes:
+  gw:
+    parts:
+      command: ssh.exec
+    share:
+      - platform                # gw uses the root's platform role
+```
+
+An override file is a composition with only what changes; it is merged by role like an include.
+
+### Tests ask for roles
+
+`@itf.requires("command")` means the target has a role `command`; `contract=` and `shape=` narrow it when a
+test wants to check more: `@itf.requires("command", contract="exec.command", shape=["exec"])`. The test then
+uses `target.command`. Which role names a project uses is the project's convention; `itf contracts check` can
+enforce it (role `command` is always an `exec.command`).
+
+## A part, declared
+
+```python
+class Shell(Protocol):              # the consumer's own Protocol, never shared code
+    __contract__ = "exec.shell"     # which contract this shape describes
+    def run(self, command: str) -> str: ...
+
+@part(offers="exec.command")        # label: <pack>.exec, from the function name
+def exec(shell: Shell) -> SshExec:  # the parameter is a slot: contract and shape from its annotation
+    return SshExec(shell)
+
+@part(makes="shell.open", after=("platform.up",))
+def open_session(shell: Shell) -> None:
+    shell.connect()
+
+@open_session.probe
+def session_open(shell: Shell) -> bool:
+    return shell.connected()
+```
+
+- `offers=` for a provider, `makes=` for an action; `after=` and `breaks=` for an action's state relations.
+- A slot is a parameter; its annotation's `__contract__` names the contract, its members are the expected shape.
+- `config: <dataclass>` is the part's settings schema (`with:` in a composition).
+- The label is `<pack>.<function name>`, or `label=`. A part outside any pack belongs to `project`.
+- `@offers` and `@makes` accept `@major`; when both sides give one, they must agree.
+
+## Contracts are discovered, defined and enforced by projects
+
+| Tool | Does |
+|---|---|
+| `itf contracts map` | every contract name in use, from the loaded parts and tests: who offers it (and with which shape), who needs it (and expecting which members), which tests ask for it, whether a definition exists, and every disagreement between them; as text, JSON or a browsable page |
+| `itf contracts new <name> --from-usage` | a definition skeleton built from the shapes observed in the map |
+| `itf contracts check --policy policy.yaml` | the project's rules: which namespaces need definitions, that every offering part passes its contract's conformance checks, a role-to-contract convention, forbidden stabilities; exit 1 on violations, for pipelines |
+| contract definitions | optional files (in a pack, a project, a distribution, `ITF_CONTRACTS_PATH`): meaning, members, version, stability, a suggested role, conformance |
+
+Without any definition, a composition still compiles: wiring and gating use names, and the no-trust checks use
+the shapes the parts themselves publish and expect. Definitions add meaning, versions and conformance where a
+project wants them.
 
 ## The idea, in one paragraph
 
