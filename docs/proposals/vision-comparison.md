@@ -47,7 +47,7 @@ bench selection are computed from plans before anything runs.
 | Working with a bench by hand | Not supported; write a test or drive `Session` from Python | `itf up`, `itf shell`, `itf down`, reusing whatever probes say already holds |
 | Shared hardware | One session per test run | A daemon keeps a bench in a known state and serves several runs |
 | Exclusive resources | Not modelled; conflicts appear at run time | Providers mark the config fields that hold something exclusive; a plan with two nodes holding the same key is rejected. A resources kind only if pools ("any free unit") are needed |
-| Observing during a test | DLT and pcap as capabilities and states a test or recipe wires itself | The same capabilities and states, plus a `window()` convention for per-test recordings and a helper that attaches them to evidence |
+| Observing during a test | DLT and pcap as capabilities and states a test or recipe wires itself | The same capabilities and states; per-test recording is the runner's job (a pytest fixture), not ITF's |
 | Evidence | Run directory with plans, probe results and logs; failure report sections; teardown evidence in examples | An evidence store and viewer across runs: timings, flaky probes, drift |
 | Coverage | Gating per run; a hand-written matrix in the integration README | A static matrix computed from plans: which tests run on which bench |
 | Bench selection | The test target names its recipe | Match a suite against an inventory of benches described as recipes |
@@ -124,9 +124,10 @@ An earlier version of this report proposed two new OCTO kinds. On reflection onl
 planning machinery.
 
 - **Observations are capabilities and states.** `observe.logs` and `observe.capture` are capabilities;
-  `logs.active` and `capture.running` are states with probes, ordered by the planner. What was missing is
-  per-test lifecycle (a recording per test, attached to that test's result), which is a convention: a
-  `window()` member on observe contracts and an evidence helper. No new kind.
+  `logs.active` and `capture.running` are states with probes, ordered by the planner. Per-test lifecycle
+  (a recording per test, attached to that test's result) belongs to the runner, the way pytest fixtures
+  scope setup and teardown; ITF provides the capability and the runner decides when to use it. No new kind
+  and no ITF convention.
 - **Exclusive hardware within one plan is a check, not a kind.** The provider author marks which config
   fields hold something exclusive, in the config schema providers already publish (`device` of a serial
   console, a fixed published host port, a relay channel), because exclusivity depends on the medium, not on
