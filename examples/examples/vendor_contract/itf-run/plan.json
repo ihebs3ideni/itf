@@ -1,0 +1,102 @@
+{
+  "action": {
+    "assumed": [],
+    "edges": [],
+    "goals": [],
+    "kinds": [
+      "capability",
+      "state"
+    ],
+    "observed_at_plan_time": [],
+    "steps": [],
+    "unprobed": []
+  },
+  "assumptions": [],
+  "config_issues": [],
+  "config_schemas": {},
+  "target": {
+    "aliases": {},
+    "construction_order": [
+      "led",
+      "power"
+    ],
+    "kinds": [
+      "capability",
+      "state"
+    ],
+    "nodes": [
+      {
+        "bindings": {},
+        "config": {},
+        "contract": "bench/led",
+        "derived": false,
+        "gives": {
+          "members": [
+            {
+              "kind": "attr",
+              "name": "light",
+              "signature": null
+            },
+            {
+              "kind": "attr",
+              "name": "lit",
+              "signature": null
+            }
+          ],
+          "protocols": []
+        },
+        "impl": "conftest:status_led",
+        "label": "led (project.status_led)",
+        "name": "led",
+        "provider": "project.status_led",
+        "scope": "target",
+        "why": {
+          "bindings": {},
+          "provider": "explicit-using"
+        }
+      },
+      {
+        "bindings": {},
+        "config": {},
+        "contract": "acme/power.relay",
+        "derived": false,
+        "gives": {
+          "members": [
+            {
+              "kind": "attr",
+              "name": "is_on",
+              "signature": null
+            },
+            {
+              "kind": "attr",
+              "name": "off",
+              "signature": null
+            },
+            {
+              "kind": "attr",
+              "name": "on",
+              "signature": null
+            },
+            {
+              "kind": "attr",
+              "name": "toggle",
+              "signature": null
+            }
+          ],
+          "protocols": []
+        },
+        "impl": "acme.providers:simulated_relay",
+        "label": "power (acme.simulated_relay)",
+        "name": "power",
+        "provider": "acme.simulated_relay",
+        "scope": "target",
+        "why": {
+          "bindings": {},
+          "provider": "explicit-using"
+        }
+      }
+    ],
+    "scopes": {},
+    "seams": []
+  }
+}

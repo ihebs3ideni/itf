@@ -1,0 +1,61 @@
+# *******************************************************************************
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+# Descriptor contracts: plain data saying where a service listens and how to log in.
+contracts:
+  - contract: descriptor.endpoint
+    kind: capability
+    role: endpoint
+    version: 1
+    summary: "Where a service listens: a host and a TCP port."
+    description: >
+      Data, not behaviour. Clients (SSH, DLT, ping) take an endpoint and connect to it. Providers may
+      derive it from configuration (static), from a container's address or published port, or from a
+      virtual machine's port forwarding, so a client never knows which.
+    members:
+      - name: host
+        signature: ": str"
+        semantics: Address or name reachable from the test host.
+      - name: port
+        signature: ": int"
+        semantics: TCP port, 1 to 65535.
+    guarantees:
+      - host is a non-empty string and port an integer in 1..65535.
+    see_also:
+      - descriptor.credentials
+      - net.ping
+    conformance: score.itf.packs.net.conformance_descriptor
+
+  - contract: descriptor.credentials
+    kind: capability
+    role: credentials
+    version: 1
+    summary: "How to log in: a user and a password or a key file."
+    description: >
+      Data, not behaviour. Secrets are never printed: password and key_path are marked sensitive in
+      config and redacted from plans. An empty password is a valid login on some development images.
+    members:
+      - name: user
+        signature: ": str"
+        semantics: Account name.
+      - name: password
+        signature: ": str | None"
+        semantics: Password, or None when a key is used.
+      - name: key_path
+        signature: ": str | None"
+        semantics: Path of a private key file, or None when a password is used.
+    guarantees:
+      - user is a non-empty string.
+    see_also:
+      - descriptor.endpoint
+      - exec.shell
+    conformance: score.itf.packs.net.conformance_descriptor

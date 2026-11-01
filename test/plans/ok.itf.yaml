@@ -1,0 +1,8 @@
+capabilities:
+  platform:
+    factory: sim.docker_platform
+    with:
+      name: bench
+  command: sim.docker_exec
+goals:
+  - platform.up

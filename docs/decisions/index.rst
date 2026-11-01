@@ -31,3 +31,13 @@ Infrastructure
    :glob:
 
    DR-*-infra*
+
+Architecture
+------------
+
+.. toctree::
+   :maxdepth: 1
+
+   DR-004-contract-namespaces
+   DR-005-member-names-and-recipe-model
+   DR-006-target-composition

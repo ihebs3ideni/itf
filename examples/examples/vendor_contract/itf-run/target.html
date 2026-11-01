@@ -1,0 +1,317 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>itf target · itf-run</title><style>
+:root { --bg:#07090c; --panel:#0c1117; --line:#1c2731; --text:#eef2f6; --muted:#8597a8;
+  --orange:#f2a65a; --green:#57c98d; --teal:#54c8c8; --violet:#a88cf0; --red:#f07178; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text);
+  background-image:radial-gradient(circle, #121a22 1px, transparent 1px); background-size:24px 24px;
+  font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+main { margin-right:400px; padding:34px 36px 60px; }
+h1 { margin:0; font-size:24px; font-weight:650; letter-spacing:.01em; }
+.subtitle { color:var(--muted); font-size:13.5px; margin:6px 0 18px; max-width:760px; line-height:1.5; }
+.summary { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.summary span { background:#111a22; border:1px solid var(--line); border-radius:999px; padding:4px 11px;
+  font-size:12px; color:#c7d3de; }
+.legend { display:flex; gap:20px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:12px; }
+.legend span { display:inline-flex; align-items:center; gap:7px; }
+.sw { display:inline-block; width:22px; height:13px; border-radius:4px; border:1.6px solid; }
+.sw.state { border-color:var(--orange); background:#2a1d10; border-radius:8px; }
+.sw.node { border-color:var(--green); background:#10241b; }
+.sw.derived { border-color:var(--green); border-style:dashed; background:#10241b; }
+.sw.target { border-color:var(--teal); background:#0f2526; border-radius:8px; }
+.ln { display:inline-block; width:24px; border-top:1.8px solid #4d6476; }
+.ln.uses { border-top:1.8px dashed #9fb3c4; }
+.toggle { display:inline-flex; gap:8px; align-items:center; margin-top:14px; color:var(--muted);
+  font-size:12.5px; cursor:pointer; user-select:none; }
+section.scope { margin-top:28px; background:var(--panel); border:1px solid var(--line); border-radius:16px;
+  box-shadow:0 18px 40px -24px #000; overflow:hidden; }
+.scope-h { display:flex; align-items:baseline; gap:14px; padding:16px 22px 12px; border-bottom:1px solid var(--line); }
+.scope-h h2 { margin:0; font-size:16px; letter-spacing:.06em; text-transform:uppercase; }
+.scope-h .meta { color:var(--muted); font-size:12.5px; }
+.scope-err { color:var(--red); font-size:12.5px; font-weight:600; }
+.state.blocked .box { fill:#211316; stroke:var(--red); }
+.state.pending .box { fill:#111820; stroke:#4a5a68; stroke-dasharray:4 4; }
+.st-blocked { fill:var(--red); }
+.node.missing .box { fill:#211316; stroke:var(--red); stroke-width:2; stroke-dasharray:7 5;
+  animation:gap-dash 1.2s linear infinite; }
+.node.missing .cross line { stroke:var(--red); stroke-width:3; stroke-linecap:round;
+  animation:gap-pulse 1.4s ease-in-out infinite; }
+.node.missing .gap-t { fill:var(--red); }
+.node.missing:hover .box, .node.missing.sel .box { filter:drop-shadow(0 0 8px rgba(240,113,120,.6)); }
+.tree.root.gap path { stroke:var(--red); stroke-dasharray:6 5; }
+.uses.gap { opacity:.9; }
+.uses.gap path { stroke:var(--red); stroke-width:1.8; }
+.b-missing, .b-blocked { color:var(--red); border-color:#6b2f35; }
+@keyframes gap-pulse { 0%, 100% { opacity:.25; } 50% { opacity:.85; } }
+@keyframes gap-dash { to { stroke-dashoffset:-24; } }
+.failure { background:#211316; border:1px solid #6b2f35; border-radius:12px; padding:12px 16px;
+  margin:0 0 16px; max-width:1000px; color:var(--red); font-size:13px; }
+.failure pre { color:#f2d0d3; white-space:pre-wrap; margin:8px 0 0; font-size:12px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; }
+.canvas { overflow-x:auto; padding:6px 0 4px; }
+svg { display:block; margin:0 auto; }
+svg text { font-family:inherit; }
+.lane { fill:#5f7385; font-size:10.5px; letter-spacing:.14em; font-weight:600; }
+.empty { fill:var(--muted); font-size:12px; font-style:italic; }
+.item { cursor:pointer; transition:opacity .15s ease; outline:none; }
+.item .box { stroke-width:1.6; transition:stroke-width .15s ease, filter .15s ease; }
+.item text { pointer-events:none; text-anchor:middle; }
+.t1 { fill:var(--text); font-size:13px; font-weight:600; }
+.t2 { fill:var(--muted); font-size:11px; }
+.t3 { fill:var(--teal); font-size:9.5px; letter-spacing:.18em; font-weight:700; }
+.idx { fill:var(--orange); font-weight:800; }
+.node .box { fill:#10241b; stroke:var(--green); }
+.node.derived .box { stroke-dasharray:5 4; }
+.node.external .box { fill:#111820; stroke:#4a5a68; stroke-dasharray:3 4; }
+.state .box { fill:#2a1d10; stroke:var(--orange); }
+.target .box { fill:#0f2526; stroke:var(--teal); stroke-width:2; }
+.item:hover .box, .item:focus .box, .item.sel .box { stroke-width:3; }
+.node:hover .box, .node.sel .box { filter:drop-shadow(0 0 7px rgba(87,201,141,.55)); }
+.state:hover .box, .state.sel .box { filter:drop-shadow(0 0 7px rgba(242,166,90,.55)); }
+.target:hover .box, .target.sel .box { filter:drop-shadow(0 0 7px rgba(84,200,200,.55)); }
+.status { font-size:10.5px; text-anchor:middle; font-weight:600; letter-spacing:.03em; }
+.st-ran { fill:var(--green); } .st-held { fill:var(--teal); } .st-planned { fill:var(--orange); }
+.st-pending { fill:var(--muted); }
+.link { transition:opacity .15s ease; }
+.link path, .link line { fill:none; }
+.flow line { stroke:var(--orange); stroke-width:2; }
+.tree path { stroke:#3f5566; stroke-width:1.7; }
+.tree.root path { stroke:#2f7273; }
+.tree rect { fill:#0b1015; stroke:#243240; }
+.tree text { fill:var(--muted); font-size:10.5px; text-anchor:middle; }
+.uses path { stroke:#9fb3c4; stroke-width:1.5; stroke-dasharray:5 5; }
+.uses { opacity:0; pointer-events:none; }
+body.show-uses .uses { opacity:.3; }
+svg.focus .item:not(.on) { opacity:.2; }
+svg.focus .link:not(.on) { opacity:.08; }
+svg.focus .status { opacity:.35; }
+svg.focus .uses.on { opacity:.95; }
+svg.focus .link.on path, svg.focus .link.on line { stroke-width:2.6; }
+#panel { position:fixed; top:0; right:0; width:400px; height:100vh; overflow-y:auto; background:#0a0f14;
+  border-left:1px solid var(--line); padding:26px 24px 40px; font-size:13px; line-height:1.45; }
+#panel h3 { margin:6px 0 2px; font-size:19px; word-break:break-word; }
+#panel .ref { color:var(--muted); font-size:12px; font-family:ui-monospace,Menlo,Consolas,monospace;
+  word-break:break-all; }
+.badges { display:flex; gap:6px; flex-wrap:wrap; }
+.badge { font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border-radius:999px;
+  padding:3px 9px; border:1px solid; }
+.b-node { color:var(--green); border-color:#2c6b4c; } .b-derived { color:var(--violet); border-color:#4e3f7a; }
+.b-external { color:var(--muted); border-color:#3a4a58; }
+.b-state { color:var(--orange); border-color:#7a5530; } .b-target { color:var(--teal); border-color:#2b6a6a; }
+.b-ran { color:var(--green); border-color:#2c6b4c; } .b-held { color:var(--teal); border-color:#2b6a6a; }
+.b-planned { color:var(--orange); border-color:#7a5530; } .b-pending { color:var(--muted); border-color:#3a4a58; }
+.grid { display:grid; grid-template-columns:118px 1fr; gap:6px 12px; margin:16px 0 4px; }
+.grid .k { color:var(--muted); } .grid .v { word-break:break-word; }
+.mono { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; }
+.sec { margin-top:20px; } .sec h4 { margin:0 0 9px; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:#6f8496; border-bottom:1px solid var(--line); padding-bottom:6px; }
+.chips { display:flex; gap:5px; flex-wrap:wrap; }
+.chip { background:#121c25; border:1px solid #22313e; border-radius:6px; padding:2px 7px; font-size:12px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; }
+.chip.missing { color:var(--red); border-color:#6b2f35; background:#211316; }
+.none { color:#5d6f80; font-style:italic; }
+.entry { background:#0e151c; border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:8px; }
+.entry-h { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.slot-name { font-weight:700; color:#dfe8f0; font-family:ui-monospace,Menlo,Consolas,monospace; }
+.arrow { color:#5d6f80; }
+.why { color:var(--muted); font-size:12px; margin-top:4px; }
+.shape { display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap; }
+.shape .lbl { color:#6f8496; font-size:11px; width:52px; }
+button.jump { background:none; border:0; padding:0; color:#7fc8ff; cursor:pointer; font:inherit;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; text-align:left; }
+button.jump:hover { text-decoration:underline; } button.jump:disabled { color:var(--muted); cursor:default; }
+.intro p { color:var(--muted); margin:8px 0; } .intro b { color:var(--text); }
+.hint { color:#5d6f80; font-size:11.5px; margin-top:18px; }
+@media (max-width:1100px) { main { margin-right:0; } #panel { position:static; width:auto; height:auto;
+  border-left:0; border-top:1px solid var(--line); } }
+</style></head><body><main><header><h1>itf target · itf-run</h1><p class="subtitle">What ITF resolved and how it brought it up: the states it reached in order, and the capabilities the target is made of. Hover or click anything for its provenance.</p><div class="summary"><span>1 scope(s)</span><span>2 capabilities</span><span>0 derived</span><span>0 bring-up steps</span></div><div class="legend"><span><i class="sw state"></i>state</span><span><i class="sw target"></i>target</span><span><i class="sw node"></i>capability</span><span><i class="sw derived"></i>derived capability</span><span><i class="ln"></i>consumes (labeled by slot)</span><span><i class="ln uses"></i>state uses capability</span></div><label class="toggle"><input type="checkbox" id="show-uses" /> show every state → capability link</label></header><section class="scope"><div class="scope-h"><h2>target</h2><span class="meta">2 capabilities · 0 derived · 0 bring-up steps · 1 level(s) deep</span></div><div class="canvas"><svg data-graph="1" viewBox="0 0 476 382" width="476" height="382" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mf-g0" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f2a65a" /></marker><marker id="mt-g0" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f7273" /></marker><marker id="me-g0" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f5566" /></marker><marker id="mu-g0" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9fb3c4" /></marker><marker id="mx-g0" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f07178" /></marker></defs><text class="lane" x="36" y="26">BRING-UP ORDER</text><text class="lane" x="36" y="154">COMPOSITION</text><g class="link tree root" data-a="t|target" data-b="n|led"><path d="M238.0,224.0 C238.0,256.0 128.0,256.0 128.0,286.0" marker-end="url(#mt-g0)" /></g><g class="link tree root" data-a="t|target" data-b="n|power"><path d="M238.0,224.0 C238.0,256.0 348.0,256.0 348.0,286.0" marker-end="url(#mt-g0)" /></g><text class="empty" x="36" y="72">no bring-up steps were planned for this scope</text><g class="item target" data-id="t|target" tabindex="0"><rect class="box" x="154.0" y="174" width="168" height="50" rx="25" /><text class="t3" x="238.0" y="193">TARGET</text><text class="t1" x="238.0" y="211">target</text></g><g class="item node" data-id="n|led" tabindex="0"><rect class="box" x="36.0" y="288.0" width="184" height="58" rx="12" /><text class="t1" x="128.0" y="313.0">led</text><text class="t2" x="128.0" y="331.0">bench/led</text></g><g class="item node" data-id="n|power" tabindex="0"><rect class="box" x="256.0" y="288.0" width="184" height="58" rx="12" /><text class="t1" x="348.0" y="313.0">power</text><text class="t2" x="348.0" y="331.0">acme/power.relay</text></g></svg></div></section></main><aside id="panel"><div id="panel-body"></div></aside><script type="application/json" id="itf-data">{"items": {"n|led": {"config": [], "config_issues": [], "config_schema": [], "consumed_by": [], "contract": "bench/led", "derived": false, "impl": "conftest:status_led", "kind": "node", "provider": "project.status_led", "ref": "led", "related": ["t|target"], "scope": "target", "slots": [], "title": "led", "used_by": [], "why_provider": "named by the composition"}, "n|power": {"config": [], "config_issues": [], "config_schema": [], "consumed_by": [], "contract": "acme/power.relay", "derived": false, "impl": "acme.providers:simulated_relay", "kind": "node", "provider": "acme.simulated_relay", "ref": "power", "related": ["t|target"], "scope": "target", "slots": [], "title": "power", "used_by": [], "why_provider": "named by the composition"}, "t|target": {"aliases": [], "assumed": [], "counts": [["capabilities", "2"], ["derived", "0"], ["bring-up steps", "0"]], "goals": [], "held": [], "kind": "target", "ref": "target", "related": ["n|led", "n|power"], "title": "target", "top_level": [{"id": "n|led", "label": "led"}, {"id": "n|power", "label": "power"}]}}}</script><script>
+(function () {
+  var DATA = JSON.parse(document.getElementById("itf-data").textContent);
+  var ITEMS = DATA.items;
+  var body = document.getElementById("panel-body");
+  var pinned = null;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = String(text);
+    return e;
+  }
+  function clear() { while (body.firstChild) body.removeChild(body.firstChild); }
+  function section(title) {
+    var s = el("div", "sec"); s.appendChild(el("h4", null, title)); body.appendChild(s); return s;
+  }
+  function none(parent) { parent.appendChild(el("div", "none", "none")); }
+  function chips(parent, items, cls) {
+    var w = el("div", "chips");
+    if (!items || !items.length) { w.appendChild(el("span", "none", "none")); }
+    (items || []).forEach(function (t) { w.appendChild(el("span", "chip " + (cls || ""), t)); });
+    parent.appendChild(w);
+  }
+  function grid(parent, rows) {
+    var g = el("div", "grid");
+    rows.forEach(function (r) {
+      if (r[1] === undefined || r[1] === null || r[1] === "") return;
+      g.appendChild(el("div", "k", r[0]));
+      g.appendChild(el("div", "v" + (r[2] ? " mono" : ""), r[1]));
+    });
+    parent.appendChild(g);
+  }
+  function jump(parent, id, text) {
+    var b = el("button", "jump", text);
+    if (ITEMS[id]) { b.addEventListener("click", function () { pin(id); }); } else { b.disabled = true; }
+    parent.appendChild(b);
+  }
+  function header(badges, title, ref) {
+    var b = el("div", "badges");
+    badges.forEach(function (x) { b.appendChild(el("span", "badge b-" + x[0], x[1])); });
+    body.appendChild(b);
+    body.appendChild(el("h3", null, title));
+    body.appendChild(el("div", "ref", ref));
+  }
+  function shapes(parent, e) {
+    [["expects", e.expected, ""], ["gets", e.given, ""], ["missing", e.missing, "missing"]].forEach(function (s) {
+      if (!s[1] || !s[1].length) return;
+      var r = el("div", "shape"); r.appendChild(el("span", "lbl", s[0])); chips(r, s[1], s[2]); parent.appendChild(r);
+    });
+  }
+  function refList(title, list, withSlot, extra) {
+    var s = section(title);
+    if (!list.length) { none(s); return; }
+    list.forEach(function (x) {
+      var e = el("div", "entry"); var h = el("div", "entry-h");
+      if (withSlot) { h.appendChild(el("span", "slot-name", x.slot)); h.appendChild(el("span", "arrow", "\u2192")); }
+      jump(h, x.id, x.label); e.appendChild(h);
+      if (extra) extra(e, x);
+      s.appendChild(e);
+    });
+  }
+
+  var RENDER = {
+    node: function (it) {
+      var badges = [["node", "capability"]];
+      if (it.derived) badges.push(["derived", "derived"]);
+      header(badges, it.title, it.ref);
+      grid(body, [["contract", it.contract, 1], ["provider", it.provider, 1], ["chosen because", it.why_provider],
+                  ["implementation", it.impl, 1], ["scope", it.scope]]);
+      var s = section("configuration");
+      if (it.config.length) { grid(s, it.config.map(function (p) { return [p[0], p[1], 1]; })); } else { none(s); }
+      if (it.config_schema && it.config_schema.length) {
+        s = section("provider config schema");
+        it.config_schema.forEach(function (f) {
+          var entry = el("div", "entry");
+          entry.appendChild(el("div", "slot-name", f.name));
+          entry.appendChild(el("div", "why", f.type + " · " +
+            (f.required ? "required" : "optional" + (Object.hasOwn(f, "default") ? " · default " + f.default : "")) +
+            (f.sensitive ? " · sensitive" : "")));
+          s.appendChild(entry);
+        });
+      }
+      if (it.config_issues && it.config_issues.length) {
+        s = section("config errors");
+        it.config_issues.forEach(function (message) { s.appendChild(el("div", "entry", message)); });
+      }
+      refList("slots \u2014 what it consumes", it.slots, true, function (e, x) {
+        if (x.why) e.appendChild(el("div", "why", x.why));
+        shapes(e, x);
+      });
+      refList("consumed by", it.consumed_by, false, function (e, x) {
+        e.appendChild(el("div", "why", "through its \u201c" + x.slot + "\u201d slot"));
+      });
+      refList("used by bring-up steps", it.used_by, false, function (e, x) {
+        e.appendChild(el("div", "why", "through its \u201c" + x.slot + "\u201d slot"));
+      });
+    },
+    state: function (it) {
+      header([["state", "state"], [it.status, it.status_text]], it.title, it.ref);
+      grid(body, [["bring-up order", "#" + it.order + " of " + it.total], ["implementation", it.impl, 1],
+                  ["probe", it.probe || "none (unprobed)", 1], ["scope", it.scope]]);
+      var s = section("delivers"); chips(s, it.delivers);
+      s = section("requires"); chips(s, it.requires);
+      s = section("invalidates"); chips(s, it.invalidates);
+      refList("uses capabilities", it.uses, true, function (e, x) { shapes(e, x); });
+      var why = function (e, x) { e.appendChild(el("div", "why", x.reason + " \u00b7 " + x.state)); };
+      refList("runs after", it.after, false, why);
+      refList("runs before", it.before, false, why);
+    },
+    target: function (it) {
+      header([["target", "target"]], it.title, "scope " + it.ref);
+      grid(body, it.counts);
+      var s = section("goals"); chips(s, it.goals);
+      s = section("already held at plan time"); chips(s, it.held);
+      s = section("assumed without evidence"); chips(s, it.assumed);
+      refList("made of", it.top_level, false);
+      s = section("aliases");
+      if (it.aliases.length) { grid(s, it.aliases.map(function (a) { return [a[0], "\u2192 " + a[1], 1]; })); }
+      else { none(s); }
+    },
+    wanted: function (it) {
+      header([["state", "state"], [it.status, it.status_text]], it.title, it.ref);
+      grid(body, [["scope", it.scope], ["why", it.why]]);
+      refList("missing capabilities", it.uses, true);
+    },
+    missing: function (it) {
+      header([["missing", "missing capability"]], it.title, it.ref);
+      grid(body, [["contract", it.contract, 1], ["scope", it.scope], ["needed by", it.action, 1],
+                  ["slot", it.slot, 1], ["why", it.why]]);
+      refList("blocks", it.blocks, false);
+      refList("exists in other scopes", it.elsewhere, false);
+      var s = section("fix"); s.appendChild(el("div", "entry mono", it.fix));
+    }
+  };
+
+  function intro() {
+    clear();
+    var d = el("div", "intro");
+    d.appendChild(el("h3", null, "How to read this"));
+    [["Bring-up order", " \u2014 every state ITF had to reach, left to right in the order it executed them, with what happened to each underneath."],
+     ["Composition", " \u2014 the target at the top, the capabilities it is made of below it, and what each of those consumes, nested as deep as the plan goes. Edge labels name the slot."],
+     ["Dashed border", " \u2014 a derived capability: nobody declared it, ITF created it to satisfy a slot."],
+     ["Hover", " to preview, click to pin. Click any reference in this panel to jump to it."]].forEach(function (p) {
+      var e = el("p"); e.appendChild(el("b", null, p[0])); e.appendChild(document.createTextNode(p[1])); d.appendChild(e);
+    });
+    body.appendChild(d);
+    body.appendChild(el("div", "hint", "Esc or a click on empty space clears the selection."));
+  }
+
+  function show(id) {
+    var it = ITEMS[id];
+    if (!it) { intro(); return; }
+    clear(); RENDER[it.kind](it); body.scrollTop = 0;
+  }
+
+  function focus(id) {
+    var on = {};
+    if (id) { on[id] = true; ((ITEMS[id] || {}).related || []).forEach(function (r) { on[r] = true; }); }
+    document.querySelectorAll("svg[data-graph]").forEach(function (svg) {
+      var has = false;
+      svg.querySelectorAll(".item").forEach(function (n) {
+        var i = n.getAttribute("data-id");
+        n.classList.toggle("on", !!on[i]); n.classList.toggle("sel", i === id);
+        if (i === id) has = true;
+      });
+      svg.querySelectorAll(".link").forEach(function (l) {
+        var a = l.getAttribute("data-a"), b = l.getAttribute("data-b");
+        l.classList.toggle("on", !!id && (a === id || b === id) && !!on[a] && !!on[b]);
+      });
+      svg.classList.toggle("focus", has);
+    });
+  }
+
+  function pin(id) { pinned = id; show(id); focus(id); }
+  function unpin() { pinned = null; intro(); focus(null); }
+
+  document.querySelectorAll(".item").forEach(function (n) {
+    var id = n.getAttribute("data-id");
+    n.addEventListener("mouseenter", function () { show(id); focus(id); });
+    n.addEventListener("mouseleave", function () { if (pinned) { show(pinned); focus(pinned); } else { intro(); focus(null); } });
+    n.addEventListener("click", function (ev) { ev.stopPropagation(); if (pinned === id) { unpin(); } else { pin(id); } });
+    n.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pin(id); } });
+  });
+  document.querySelector("main").addEventListener("click", function () { if (pinned) unpin(); });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") unpin(); });
+  var toggle = document.getElementById("show-uses");
+  toggle.addEventListener("click", function (ev) { ev.stopPropagation(); });
+  toggle.addEventListener("change", function () { document.body.classList.toggle("show-uses", toggle.checked); });
+  intro();
+})();
+</script></body></html>

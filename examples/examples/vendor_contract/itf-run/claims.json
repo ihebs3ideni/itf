@@ -1,0 +1,83 @@
+{
+  "init": [],
+  "setup": [
+    {
+      "_kind": "NodeClaim",
+      "alias": null,
+      "bind": {},
+      "config": {},
+      "contract": null,
+      "name": "led",
+      "origin": "composition",
+      "scope": "__itf_root__",
+      "using": "project.status_led"
+    },
+    {
+      "_kind": "NodeClaim",
+      "alias": null,
+      "bind": {},
+      "config": {},
+      "contract": null,
+      "name": "power",
+      "origin": "composition",
+      "scope": "__itf_root__",
+      "using": "acme.simulated_relay"
+    },
+    {
+      "_kind": "ProviderClaim",
+      "gives": {
+        "members": [
+          {
+            "kind": "attr",
+            "name": "is_on",
+            "signature": null
+          },
+          {
+            "kind": "attr",
+            "name": "off",
+            "signature": null
+          },
+          {
+            "kind": "attr",
+            "name": "on",
+            "signature": null
+          },
+          {
+            "kind": "attr",
+            "name": "toggle",
+            "signature": null
+          }
+        ],
+        "protocols": []
+      },
+      "impl": "acme.providers:simulated_relay",
+      "implements": "acme/power.relay",
+      "name": "acme.simulated_relay",
+      "needs": [],
+      "origin": "plugin"
+    },
+    {
+      "_kind": "ProviderClaim",
+      "gives": {
+        "members": [
+          {
+            "kind": "attr",
+            "name": "light",
+            "signature": null
+          },
+          {
+            "kind": "attr",
+            "name": "lit",
+            "signature": null
+          }
+        ],
+        "protocols": []
+      },
+      "impl": "conftest:status_led",
+      "implements": "bench/led",
+      "name": "project.status_led",
+      "needs": [],
+      "origin": "conftest"
+    }
+  ]
+}
