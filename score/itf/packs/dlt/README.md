@@ -12,32 +12,32 @@ SPDX-License-Identifier: Apache-2.0
 
 # DLT pack
 
-DLT logs from the target: a stdlib TCP stream or UDP multicast receiver, the bundled `dlt-receive` with python-dlt queries, and `dlt-receive` run on the target.
+DLT logs over a TCP stream, UDP multicast or the bundled dlt-receive. Every variant has its own action making `logs.active` true: name one with `by:` in a goal.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/dlt` | TCP stream, stdlib framing |
-| `//score/itf/packs/dlt:multicast` | UDP multicast, stdlib framing |
-| `//score/itf/packs/dlt:receive` | the Bazel-built dlt-receive, recorded to a file |
-| `//score/itf/packs/dlt:on_target` | the `dlt_on_target` fixture |
-| `//score/itf/packs/dlt:sim` | in-memory logs |
+**Bazel:** `//score/itf/packs/dlt`. Packs load from the labels of a composition (`dlt.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `dlt.stream` | capability | `observe.logs` | a TCP stream from an endpoint |
+| `dlt.subscribe` | state | `logs.active` | subscribe to the stream (after `platform.up`) |
+| `dlt.multicast` | capability | `observe.logs` | UDP multicast |
+| `dlt.join` | state | `logs.active` | join the multicast groups |
+| `dlt.receive` | capability | `observe.logs` | dlt-receive recorded to a file |
+| `dlt.receive_tcp` | capability | `observe.logs` | dlt-receive over an endpoint |
+| `dlt.start_receive` | state | `logs.active` | start dlt-receive |
 
-- `dlt.stream`, `dlt.multicast`, `dlt.receive`, `dlt.receive_tcp` (observe.logs): `lines()`, `filter(apid, ctid)`; dlt-receive variants add `record()` (python-dlt `find(query)`) and per-test `window()`
+**Host prerequisites**
 
-**Actions**
+- none beyond the build (dlt-receive and libdlt are built from source)
+- the patched DLT build listens on TCP 13490
 
-- `dlt.subscribe_stream`, `dlt.join_multicast`, `dlt.start_receive` → `itf.states.logs.active` (load one variant)
-
-**Host prerequisites:** None: dlt-receive and libdlt are built from source. The patched DLT build listens on TCP 13490.
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-    - name: logs
-      contract: itf.capabilities.observe.logs
-      using: dlt.stream
+capabilities:
+  endpoint: docker.endpoint
+  logs: dlt.stream
+goals:
+  - state: logs.active
+    by: dlt.subscribe
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'dlt.%'"`.

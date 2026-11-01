@@ -13,18 +13,13 @@
 """Entrypoint providers for DLT over a TCP stream."""
 
 from collections.abc import Iterator
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .stream import DltReceiver, EndpointLike, StreamConfig
 
 
-@provides(
-    "itf.capabilities.observe.logs",
-    name="dlt.stream",
-    config_schema=StreamConfig,
-    needs={"endpoint": "itf.capabilities.descriptor.endpoint"},
-)
-def make_stream(endpoint: EndpointLike, config: dict[str, object]) -> Iterator[DltReceiver]:
+@capability("observe.logs", label="stream")
+def make_stream(endpoint: EndpointLike, config: StreamConfig) -> Iterator[DltReceiver]:
     stream = DltReceiver(
         endpoint,
         ecu_id=config.get("ecu_id", ""),

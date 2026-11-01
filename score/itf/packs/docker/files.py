@@ -38,7 +38,7 @@ def download(container, remote_path: str, local_path: str) -> None:
 
 
 class DockerFiles:
-    """`itf.capabilities.files.transfer` through the Docker archive API: works with any image."""
+    """`files` through the Docker archive API: works with any image."""
 
     def __init__(self, platform: Platform):
         self.platform = platform

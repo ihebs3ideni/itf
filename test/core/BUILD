@@ -10,7 +10,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+load("@itf_pip//:requirements.bzl", "requirement")
 load("//:defs.bzl", "py_itf_unittest")
+
+PACKS = [
+    "core_dump",
+    "dlt",
+    "docker",
+    "local",
+    "net",
+    "pcap",
+    "ping",
+    "qemu",
+    "serial",
+    "sim",
+    "ssh",
+]
 
 exports_files(["pytest.ini"])
 
@@ -31,13 +46,18 @@ py_itf_unittest(
 
 py_itf_unittest(
     name = "itf_test",
-    srcs = ["conftest.py"] + glob(["itf/*.py"]),
-    data = glob(["itf/fixtures/**"]),
+    srcs = ["conftest.py"] + glob([
+        "itf/*.py",
+        "itf/fixtures/*.py",
+    ]),
     # Stands in for the pytest11 entry point a pip install would register: every pytest run in the
     # suite, including pytester's inner ones, loads the adapter.
     env = {"PYTEST_PLUGINS": "score.itf.core.adapters.pytest.plugin"},
     pytest_config = "pytest.ini",
-    deps = ["//score/itf/core/adapters:pytest"],
+    deps = [
+        "//score/itf/core/adapters:pytest",
+        "//score/itf/packs/local",
+    ],
 )
 
 py_itf_unittest(
@@ -46,8 +66,14 @@ py_itf_unittest(
     data = [
         "//score/itf/core/octo:README.md",
         "//tools/gates:wordlists",
-    ] + glob(["octo/*.py"]),
+    ] + glob(["octo/*.py"]) + [
+        "//score/itf/packs/%s:sources" % pack
+        for pack in PACKS
+    ],
     pytest_config = "pytest.ini",
+    deps = [
+        requirement("pyyaml"),
+    ],
 )
 
 test_suite(

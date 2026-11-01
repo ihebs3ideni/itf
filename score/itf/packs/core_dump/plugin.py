@@ -10,9 +10,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Entrypoint: with --extract-core-dumps, copy core files off every scope that offers
-`itf.capabilities.exec.command` and `itf.capabilities.files.transfer`, at teardown while the target
-still runs. Scopes lacking either are skipped with a warning."""
+"""Entrypoint: with ITF_CORE_DUMPS=1, copy core files off every scope that offers
+`command` and `files`, at teardown while the target
+still runs. Scopes lacking either are skipped with a warning.
+
+Runner-agnostic: settings come from the environment (ITF_CORE_DUMPS, ITF_CORE_DUMPS_DIR). The pytest
+entrypoint (`pytest_plugin`) maps --extract-core-dumps / --core-dumps-output-dir onto them."""
 
 import logging
 import os
@@ -23,28 +26,16 @@ from .extract import extract_core_dumps
 
 logger = logging.getLogger(__name__)
 
-COMMAND = "itf.capabilities.exec.command"
-FILES = "itf.capabilities.files.transfer"
-_options: dict = {}
+COMMAND = "exec.command"  # contract identifiers: a plan lists nodes by these
+FILES = "files.transfer"
+ENABLE_ENV = "ITF_CORE_DUMPS"
+DIR_ENV = "ITF_CORE_DUMPS_DIR"
 
 
-def pytest_addoption(parser):
-    group = parser.getgroup("itf-core-dump")
-    group.addoption(
-        "--extract-core-dumps",
-        action="store_true",
-        default=False,
-        help="copy core dump files from the target to the host before teardown",
-    )
-    group.addoption(
-        "--core-dumps-output-dir",
-        default=os.path.join(os.environ.get("TEST_UNDECLARED_OUTPUTS_DIR", "/tmp"), "coredumps"),
-        help="where extracted core dumps go (default: $TEST_UNDECLARED_OUTPUTS_DIR/coredumps)",
-    )
-
-
-def pytest_configure(config):
-    _options.update(enabled=config.getoption("extract_core_dumps"), out=config.getoption("core_dumps_output_dir"))
+def _settings() -> tuple[bool, str]:
+    """Enabled flag and output directory, from the environment (the pytest entrypoint sets them from its options)."""
+    default_dir = os.path.join(os.environ.get("TEST_UNDECLARED_OUTPUTS_DIR", "/tmp"), "coredumps")
+    return os.environ.get(ENABLE_ENV) == "1", os.environ.get(DIR_ENV) or default_dir
 
 
 def _first(view, token: str):
@@ -55,13 +46,14 @@ def _first(view, token: str):
 
 @hookimpl
 def itf_teardown(session):
-    if not _options.get("enabled"):
+    enabled, out = _settings()
+    if not enabled:
         return
     target = session.target
     for label, view in [("target", target)] + [(name, getattr(target, name)) for name in target.scopes()]:
         if not (view.has(COMMAND) and view.has(FILES)):
             logger.warning("%s offers no %s and %s: skipping core dump extraction", label, COMMAND, FILES)
             continue
-        output = _options["out"] if view.scope is None else os.path.join(_options["out"], view.scope)
+        output = out if view.scope is None else os.path.join(out, view.scope)
         os.makedirs(output, exist_ok=True)
         extract_core_dumps(_first(view, COMMAND), _first(view, FILES), output)

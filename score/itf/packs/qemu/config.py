@@ -169,7 +169,7 @@ def load_configuration(config_file: str) -> QemuConfigModel:
     """
     logger.info(f"Loading configuration from {config_file}")
 
-    with open(config_file, "r") as f:
+    with open(config_file, "r", encoding="utf-8") as f:
         config_data = json.load(f)
 
     try:

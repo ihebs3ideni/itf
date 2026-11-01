@@ -12,8 +12,11 @@
 # *******************************************************************************
 """The target's unnamed root scope and the reference syntax around it.
 
-Users never type ROOT: a top-level `ctx` verb writes to it, `.name` names one of its nodes and
-`:token` one of its states. Device scopes are named, and nothing falls back from one to the root.
+Users never type ROOT: top-level keys of a composition are the root scope, `.name` names one of its roles and
+`:token` one of its states. Scopes are named, and nothing falls back from one to the root.
+
+`display` is the one place the engine's internal strings become what people read: the root scope is not
+shown (`command`, `platform.up`, `gw.command`, `gw:platform.up`).
 """
 
 from __future__ import annotations
@@ -27,7 +30,8 @@ ROOT = "__itf_root__"
 VIEW_MEMBERS = frozenset({"scope", "tokens", "has", "names", "get", "states", "probe", "plan", "reach", "renew"})
 TARGET_MEMBERS = VIEW_MEMBERS | {"scopes"}
 
-_ROOT_REF = re.compile(rf"(?<!\w){ROOT}(?=[.:]|\b)")
+_ROOT_QUALIFIER = re.compile(rf"(?<!\w){ROOT}[.:]")
+_ROOT_BARE = re.compile(rf"(?<!\w){ROOT}\b")
 
 
 class InvalidScopeName(ValueError):
@@ -67,8 +71,8 @@ def state_ref(ref: str) -> str:
 
 
 def display(text: str) -> str:
-    """Render ROOT the way users write it: `.name`, `:token`, and `target` for the scope itself."""
-    return _ROOT_REF.sub(lambda m: "" if text[m.end() : m.end() + 1] in (".", ":") else "target", text)
+    """Render ROOT the way people read it: no root qualifier, `target` for the scope itself."""
+    return _ROOT_BARE.sub("target", _ROOT_QUALIFIER.sub("", text))
 
 
 def display_json(data):

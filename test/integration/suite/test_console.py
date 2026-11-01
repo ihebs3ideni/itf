@@ -10,13 +10,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Any target with a recorded console (itf.capabilities.exec.console): UART, an emulator's serial port."""
+"""Any target with a recorded console (`console`): UART, an emulator's serial port."""
 
 import score.itf as itf
 
-CONSOLE = "itf.capabilities.exec.console"
 
-
-@itf.requires(CONSOLE)
+@itf.requires("console")
 def test_the_console_recorded_output_since_it_opened(target):
     assert target.console.lines(), "the console recorded nothing since before boot"

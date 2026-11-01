@@ -28,6 +28,7 @@ py_library(
     srcs = glob(["**/*.py"]) + ["//score/itf/packs:init"],
     data = [
         "README.md",
+        "pack.yaml",
         ":tcpdump_bin",
     ],
     visibility = ["//test/packs:__subpackages__"],
@@ -46,16 +47,14 @@ py_itf_plugin(
 )
 
 # Capture on a host interface, started first (records a whole boot).
-py_itf_plugin(
-    name = "host",
-    enabled_plugins = ["score.itf.packs.pcap.host"],
-    py_library = ":lib",
+# For tools and gates that read the pack's metadata and sources from runfiles.
+exports_files(
+    ["pack.yaml"],
     visibility = ["//visibility:public"],
 )
 
-py_itf_plugin(
-    name = "sim",
-    enabled_plugins = ["score.itf.packs.pcap.sim.plugin"],
-    py_library = ":lib",
-    visibility = ["//visibility:public"],
+filegroup(
+    name = "sources",
+    srcs = ["pack.yaml"] + glob(["**/*.py"]),
+    visibility = ["//test/core:__pkg__"],
 )

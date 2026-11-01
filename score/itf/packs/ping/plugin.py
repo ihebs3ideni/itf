@@ -10,6 +10,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Entrypoint: ICMP ping only, for a platform another pack starts."""
+"""Entrypoint: ICMP ping, and `ping.await_boot` making platform.up true for hardware nobody here starts."""
 
-pytest_plugins = ["score.itf.packs.ping.providers"]
+pytest_plugins = ["score.itf.packs.ping.providers", "score.itf.packs.ping.steps"]

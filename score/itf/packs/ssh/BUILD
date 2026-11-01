@@ -17,7 +17,10 @@ load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 py_library(
     name = "lib",
     srcs = glob(["**/*.py"]) + ["//score/itf/packs:init"],
-    data = ["README.md"],
+    data = [
+        "README.md",
+        "pack.yaml",
+    ],
     visibility = ["//test/packs:__subpackages__"],
     deps = [
         "//score/itf/core",
@@ -33,9 +36,14 @@ py_itf_plugin(
     visibility = ["//visibility:public"],
 )
 
-py_itf_plugin(
-    name = "sim",
-    enabled_plugins = ["score.itf.packs.ssh.sim.plugin"],
-    py_library = ":lib",
+# For tools and gates that read the pack's metadata and sources from runfiles.
+exports_files(
+    ["pack.yaml"],
     visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "sources",
+    srcs = ["pack.yaml"] + glob(["**/*.py"]),
+    visibility = ["//test/core:__pkg__"],
 )

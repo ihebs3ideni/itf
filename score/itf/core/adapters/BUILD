@@ -16,11 +16,27 @@ load("@rules_python//python:defs.bzl", "py_library")
 # Weaves the ITF lifecycle into pytest; the runner-specific part of the core.
 py_library(
     name = "pytest",
-    srcs = glob(["**/*.py"]),
+    srcs = glob(
+        ["**/*.py"],
+        exclude = ["definitions.py"],
+    ),
     visibility = ["//visibility:public"],
     deps = [
+        ":definitions",
         "//score/itf/core",
         requirement("pluggy"),
         requirement("pytest"),
+    ],
+)
+
+# The facts a session is handed about the contract definitions (the core never imports them): shared by the
+# pytest adapter, the planner and the command line.
+py_library(
+    name = "definitions",
+    srcs = ["definitions.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//score/itf/contracts",
+        "//score/itf/core",
     ],
 )

@@ -77,7 +77,7 @@ class DockerAsyncProcess(AsyncProcess):
 
 
 class DockerProcess:
-    """`itf.capabilities.exec.process` through the Docker exec API."""
+    """`process` through the Docker exec API."""
 
     def __init__(self, platform: Platform):
         self.platform = platform

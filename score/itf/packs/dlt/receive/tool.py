@@ -135,6 +135,8 @@ class DltLogRecord:
 
 
 class Endpoint(Protocol):
+    __contract__ = "descriptor.endpoint"
+
     host: str
 
 
@@ -148,7 +150,7 @@ class ReceiveConfig:
 
 
 class DltReceive:
-    """`itf.capabilities.observe.logs` through dlt-receive: UDP on `host_ip` joining `multicast_ips`,
+    """`logs` through dlt-receive: UDP on `host_ip` joining `multicast_ips`,
     or TCP to an endpoint's host. Everything is recorded to `path()`."""
 
     def __init__(self, config: dict, endpoint: Endpoint | None = None):

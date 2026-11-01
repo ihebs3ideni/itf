@@ -30,6 +30,7 @@ compile_pip_requirements(
 
 exports_files([
     "docs/_generated/catalog.html",
+    "docs/reference/contracts.md",
     "main.py",
     "pytest.ini",
 ])
@@ -42,9 +43,9 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//score/itf/core",
+        "//score/itf/core/adapters:definitions",
         "//score/itf/core/adapters:pytest",
         "//score/itf/core/process",
-        "//score/itf/recipes",
     ],
 )
 

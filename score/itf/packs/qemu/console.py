@@ -23,12 +23,14 @@ from score.itf.core.process import PipeConsole
 
 
 class ConsolePlatform(Protocol):
+    __contract__ = "platform.instance"
+
     console: PipeConsole | None
 
 
 class QemuConsole:
-    """`itf.capabilities.exec.console` on the VM's serial port. Recording starts at `open` (the
-    itf.states.console.open action) and follows the platform across restarts."""
+    """`console` on the VM's serial port. Recording starts at `open` (the
+    console.open action) and follows the platform across restarts."""
 
     def __init__(self, platform: ConsolePlatform):
         self.platform = platform

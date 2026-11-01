@@ -537,7 +537,7 @@ def resolve_contract_to_node(
             prov = providers_by_name.get(claim.using)
             if prov is None:
                 if ref not in provider_diag_emitted:
-                    diags.append(Diagnostic("PROVIDER_UNKNOWN", ref, 1))
+                    diags.append(Diagnostic("PROVIDER_UNKNOWN", ref, 1, (("provider", claim.using),)))
                     provider_diag_emitted.add(ref)
                 result = (None, None)
             elif claim.contract is not None and prov.implements != claim.contract:

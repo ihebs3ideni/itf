@@ -12,17 +12,11 @@
 # *******************************************************************************
 """ICMP ping provider."""
 
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .pinger import Endpoint, PingConfig, Pinger
 
 
-@provides(
-    "itf.capabilities.net.ping",
-    name="icmp.ping",
-    config_schema=PingConfig,
-    gives=("host", "ping", "wait_up", "wait_down"),
-    needs={"endpoint": "itf.capabilities.descriptor.endpoint"},
-)
-def make_pinger(endpoint: Endpoint, config: dict) -> Pinger:
+@capability("net.ping", label="pinger", gives=("host", "ping", "wait_up", "wait_down"))
+def make_pinger(endpoint: Endpoint, config: PingConfig) -> Pinger:
     return Pinger(endpoint, config)

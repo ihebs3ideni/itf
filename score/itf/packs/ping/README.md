@@ -12,31 +12,25 @@ SPDX-License-Identifier: Apache-2.0
 
 # Ping pack
 
-ICMP reachability without a ping binary (unprivileged or raw ICMP sockets, the system `ping` as a last resort).
+ICMP echo to an address; also how a machine nobody here starts counts as up.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/ping` | `score.itf.packs.ping.plugin` (provider only) |
-| `//score/itf/packs/ping:boot` | `score.itf.packs.ping.boot` (adds `icmp.await_boot`) |
+**Bazel:** `//score/itf/packs/ping`. Packs load from the labels of a composition (`ping.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `ping.pinger` | capability | `net.ping` | ping an endpoint, wait for it to come up or go down |
+| `ping.await_boot` | state | `platform.up` | up once the address answers; not beside another platform start |
 
-- `icmp.ping` (net.ping): `ping()`, `wait_up(timeout)`, `wait_down(timeout)` for the bound endpoint's host
+**Host prerequisites**
 
-**Actions**
+- net.ipv4.ping_group_range covering the user, or CAP_NET_RAW, or a ping binary
 
-- `icmp.await_boot` → `itf.states.platform.up` (`:boot` only): for machines no pack starts, e.g. hardware
-
-**Host prerequisites:** `net.ipv4.ping_group_range` covering the user, or `CAP_NET_RAW`, or a `ping` binary.
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-    - name: ping
-      contract: itf.capabilities.net.ping
-      using: icmp.ping
-      config:
-        boot_timeout: 180
+capabilities:
+  endpoint: net.endpoint
+  ping: ping.pinger
+goals:
+  - platform.up
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'ping.%'"`.

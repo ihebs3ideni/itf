@@ -10,16 +10,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Any target whose DLT logs the session receives (itf.capabilities.observe.logs).
+"""Any target whose DLT logs the session receives (`logs`).
 Messages are emitted with dlt-adaptor-stdin, which DLT targets ship."""
 
 import re
 import time
 
 import score.itf as itf
-
-LOGS = "itf.capabilities.observe.logs"
-COMMAND = "itf.capabilities.exec.command"
 
 
 def send(target, message: str) -> None:
@@ -36,15 +33,15 @@ def wait_for_text(logs, needle: str, timeout: float = 10.0) -> list:
     return []
 
 
-@itf.requires(LOGS)
-@itf.requires(COMMAND)
+@itf.requires("logs")
+@itf.requires("command")
 def test_a_message_sent_on_the_target_is_received(target):
     send(target, "secret-session-message")
     assert wait_for_text(target.logs, "secret-session-message"), "message never arrived in the session logs"
 
 
-@itf.requires(LOGS, shape=["window", "record"])
-@itf.requires(COMMAND)
+@itf.requires("logs", shape=["window", "record"])
+@itf.requires("command")
 def test_a_window_records_only_its_own_block_and_answers_queries(target):
     send(target, "before-window")
     with target.logs.window() as window:

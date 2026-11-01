@@ -10,35 +10,29 @@ SPDX-License-Identifier: Apache-2.0
 *******************************************************************************
 -->
 
-# Serial console pack
+# Serial pack
 
-A line-oriented UART console over pyserial, recording every line from when it opens.
+A serial console, commands over it, and a pseudo-terminal console for benches without hardware.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/serial` | `score.itf.packs.serial.plugin` |
+**Bazel:** `//score/itf/packs/serial`. Packs load from the labels of a composition (`serial.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `serial.console` | capability | `exec.console` | a serial device (`device`, `baudrate`, ...) |
+| `serial.pty_console` | capability | `exec.console` | a shell on a pseudo-terminal, same object and members |
+| `serial.exec` | capability | `exec.command` | run a command on the console |
+| `serial.open` | state | `console.open` | open the console |
 
-- `serial.console` (exec.console): `device` (any pyserial URL, e.g. `loop://`), `baudrate`, `logfile`; `lines(since)`, `mark()`, `wait_for(pattern)`, `write()`, `run()`
-- `serial.pty_console` (exec.console): the same console on a shell over a pseudo-terminal (`shell`, `banner`), a UART with something answering, for benches without hardware
-- `serial.exec` (exec.command) over the console; the command's output, including a last line without newline, comes back with its exit code
+**Host prerequisites**
 
-**Actions**
+- the serial device
 
-- `serial.open_console` → `itf.states.console.open`
-
-**Host prerequisites:** The serial device.
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-    - name: console
-      contract: itf.capabilities.exec.console
-      using: serial.console
-      config:
-        device: /dev/ttyUSB0
-        baudrate: 115200
+capabilities:
+  console: serial.console
+  command: serial.exec
+goals:
+  - console.open
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'serial.%'"`.

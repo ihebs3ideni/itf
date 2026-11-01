@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 class Shell(Protocol):
+    __contract__ = "exec.shell"
+
     def exec(self, command: str, timeout: float = 30.0) -> tuple[int, str]: ...
     def client(self) -> paramiko.SSHClient: ...
 
@@ -34,7 +36,7 @@ def _short(text: str, limit: int = 200) -> str:
 
 
 class SshExec:
-    """`itf.capabilities.exec.command` through an SSH session node; the session owns the connection."""
+    """`command` through an SSH session node; the session owns the connection."""
 
     def __init__(self, shell: Shell):
         self.shell = shell

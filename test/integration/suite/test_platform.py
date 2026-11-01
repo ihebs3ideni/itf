@@ -14,20 +14,17 @@
 
 import score.itf as itf
 
-PLATFORM = "itf.capabilities.platform.instance"
-COMMAND = "itf.capabilities.exec.command"
 
-
-@itf.requires(PLATFORM, shape=["restart"])
-@itf.requires(COMMAND)
+@itf.requires("platform", shape=["restart"])
+@itf.requires("command")
 def test_after_a_restart_reach_brings_every_goal_back(target):
     target.platform.restart()
     target.reach()  # re-plans every goal from what the probes now observe
     assert target.command.exec("echo -n back") == (0, "back")
 
 
-@itf.requires(PLATFORM)
-@itf.requires(COMMAND)
+@itf.requires("platform")
+@itf.requires("command")
 def test_renew_gives_a_new_platform_and_reaches_the_goals_again(target):
     old = target.platform
     target.renew("platform")

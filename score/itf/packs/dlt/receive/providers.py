@@ -13,26 +13,24 @@
 """dlt-receive providers. Constructing one starts nothing: `dlt.start_receive` (steps.py) does."""
 
 from collections.abc import Iterator
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .tool import DltReceive, Endpoint, ReceiveConfig
 
 
-@provides("itf.capabilities.observe.logs", name="dlt.receive", config_schema=ReceiveConfig)
-def make_receive(config: dict) -> Iterator[DltReceive]:
+@capability("observe.logs", label="receive")
+def make_receive(config: ReceiveConfig) -> Iterator[DltReceive]:
     receive = DltReceive(config)
     yield receive
     receive.close()
 
 
-@provides(
-    "itf.capabilities.observe.logs",
-    name="dlt.receive_tcp",
-    config_schema=ReceiveConfig,
+@capability(
+    "observe.logs",
+    label="receive_tcp",
     gives=("subscribe", "close", "active", "path", "record", "lines", "filter", "window"),
-    needs={"endpoint": "itf.capabilities.descriptor.endpoint"},
 )
-def make_receive_tcp(endpoint: Endpoint, config: dict) -> Iterator[DltReceive]:
+def make_receive_tcp(endpoint: Endpoint, config: ReceiveConfig) -> Iterator[DltReceive]:
     receive = DltReceive(config, endpoint)
     yield receive
     receive.close()

@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 class Platform(Protocol):
+    __contract__ = "platform.instance"
+
     root: Path | None
 
 

@@ -10,25 +10,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Any target that runs commands (itf.capabilities.exec.command): container API, SSH, serial, host."""
+"""Any target that runs commands (`command`): container API, SSH, serial, host."""
 
 import score.itf as itf
 
-COMMAND = "itf.capabilities.exec.command"
 
-
-@itf.requires(COMMAND)
+@itf.requires("command")
 def test_output_and_exit_code_are_returned(target):
     assert target.command.exec("echo -n hello") == (0, "hello")
 
 
-@itf.requires(COMMAND)
+@itf.requires("command")
 def test_a_failing_command_reports_its_exit_code_without_raising(target):
     # A child shell: on a console the session itself persists, and a bare `exit` would end it.
     assert target.command.exec("sh -c 'exit 3'")[0] == 3
 
 
-@itf.requires(COMMAND)
+@itf.requires("command")
 def test_stderr_is_part_of_the_output(target):
     code, output = target.command.exec("echo oops >&2")
     assert code == 0 and "oops" in output

@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 
 from .scopes import ROOT, display, display_json
+from .labels import node_label
 
 logger = logging.getLogger("score.itf.core")
 logger.addHandler(logging.NullHandler())  # a library emits; the runner decides whether anything lands
@@ -83,9 +84,10 @@ def log_target_summary(target_plan) -> None:
         derived = sum(1 for n in nodes if n.derived)
         tokens = target_plan.tokens(scope)
         label = display(scope) if scope == ROOT else f"target.{scope}"
+        shown = [node_label(n.name, n.provider) for n in nodes] or ["(no nodes)"]
         _emit(
             logging.INFO,
-            f"{label}: {len(nodes)} node(s) ({derived} derived) \u2014 tokens: {', '.join(tokens)}",
+            f"{label}: {len(nodes)} node(s) ({derived} derived) \u2014 {', '.join(shown)}",
             "target_summary",
             scope=display(scope),
             nodes=len(nodes),
@@ -98,7 +100,7 @@ def log_config_issues(issues) -> None:
     for ref, provider, message in issues:
         _emit(
             logging.ERROR,
-            f"{ref} ({provider}): {message}",
+            f"{node_label(ref, provider)}: {message}",
             "config_invalid",
             ref=ref,
             provider=provider,
@@ -133,6 +135,11 @@ def log_gating(decisions: dict) -> None:
                 test=test_id,
                 reason=decision.reason,
             )
+
+
+def log_plan_warnings(messages) -> None:
+    for message in messages:
+        _emit(logging.WARNING, f"plan warning: {message}", "plan_warning", message=message)
 
 
 def log_checks(results) -> None:

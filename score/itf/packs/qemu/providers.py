@@ -10,49 +10,35 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""QEMU providers. Constructing the platform starts nothing: `qemu.start_platform` (steps.py) does;
+"""QEMU providers. Constructing the platform starts nothing: `qemu.start` (steps.py) does;
 teardown stops QEMU and deletes the copy-on-write overlays it booted from."""
 
 from collections.abc import Iterator
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .platform import PlatformConfig, QemuPlatform
 from .descriptors import ConfiguredPlatform, QemuCredentials, QemuEndpoint
 from .console import ConsolePlatform, QemuConsole
 
 
-@provides("itf.capabilities.platform.instance", name="qemu.instance", config_schema=PlatformConfig)
-def make_platform(config: dict) -> Iterator[QemuPlatform]:
+@capability("platform.instance", label="platform")
+def make_platform(config: PlatformConfig) -> Iterator[QemuPlatform]:
     platform = QemuPlatform(config)
     yield platform
     platform.stop()
 
 
-@provides(
-    "itf.capabilities.descriptor.endpoint",
-    name="qemu.endpoint",
-    gives=("host", "port"),
-    needs={"platform": "itf.capabilities.platform.instance"},
-)
+@capability("descriptor.endpoint", label="endpoint", gives=("host", "port"))
 def make_endpoint(platform: ConfiguredPlatform) -> QemuEndpoint:
     return QemuEndpoint(platform)
 
 
-@provides(
-    "itf.capabilities.descriptor.credentials",
-    name="qemu.credentials",
-    gives=("user", "password", "key_path"),
-    needs={"platform": "itf.capabilities.platform.instance"},
-)
+@capability("descriptor.credentials", label="credentials", gives=("user", "password", "key_path"))
 def make_credentials(platform: ConfiguredPlatform) -> QemuCredentials:
     return QemuCredentials(platform)
 
 
-@provides(
-    "itf.capabilities.exec.console",
-    name="qemu.console",
-    needs={"platform": "itf.capabilities.platform.instance"},
-)
+@capability("exec.console", label="console")
 def make_console(platform: ConsolePlatform) -> Iterator[QemuConsole]:
     console = QemuConsole(platform)
     yield console

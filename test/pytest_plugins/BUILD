@@ -12,7 +12,7 @@
 # *******************************************************************************
 load("//:defs.bzl", "py_itf_test")
 
-# Plain pytest plugins work with py_itf_test as before: no recipe, no ITF target.
+# Plain pytest plugins work with py_itf_test as before: no composition, no ITF target.
 py_itf_test(
     name = "test_attribute_plugin",
     srcs = ["test_attribute_plugin.py"],

@@ -272,9 +272,12 @@ def _emit_itf_header(config, contributors, session) -> None:
         f"on_exit={session.on_exit}, gating={session.gating}, strict_shapes={session.strict_shapes}",
         f"artifacts: {session.run_dir}",
     ]
+    if session.target_source is not None:
+        lines.append(f"composition: {session.target_source.describe()}")
+    lines += [f"override: {source.describe()}" for source in session.override_sources]
     for module, origin in sorted(contributors, key=lambda item: item[0].__name__):
         if origin == "conftest":
-            lines.append(f"recipe: {getattr(module, '__file__', module.__name__)}")
+            lines.append(f"conftest: {getattr(module, '__file__', module.__name__)}")
     lines.append("plugins (pack / version / entrypoints):")
     for root in sorted(roots):
         entrypoints = sorted(

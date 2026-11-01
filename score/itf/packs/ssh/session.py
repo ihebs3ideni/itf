@@ -22,11 +22,15 @@ from . import client as ssh_client
 
 
 class Endpoint(Protocol):
+    __contract__ = "descriptor.endpoint"
+
     host: str
     port: int
 
 
 class Credentials(Protocol):
+    __contract__ = "descriptor.credentials"
+
     user: str
     password: str | None
     key_path: str | None
@@ -43,7 +47,7 @@ class ShellConfig:
 
 
 class SshSession:
-    """`itf.capabilities.exec.shell` over paramiko; commands run in a login shell."""
+    """`shell` over paramiko; commands run in a login shell."""
 
     endpoint: Endpoint
     credentials: Credentials

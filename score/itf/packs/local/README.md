@@ -10,34 +10,30 @@ SPDX-License-Identifier: Apache-2.0
 *******************************************************************************
 -->
 
-# Local host pack
+# Local pack
 
-The test host itself as the platform: commands, processes and files through subprocess. Runs anywhere; useful for host-side binaries and for capability suites without a daemon.
+The test host as the platform: commands, processes and files through subprocess.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/local` | `score.itf.packs.local.plugin` |
+**Bazel:** `//score/itf/packs/local`. Packs load from the labels of a composition (`local.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `local.platform` | capability | `platform.instance` | a working directory on the host |
+| `local.exec` | capability | `exec.command` | run a command on the host |
+| `local.process` | capability | `exec.process` | start a program on the host |
+| `local.files` | capability | `files.transfer` | copy files |
+| `local.start` | state | `platform.up` | the working directory exists |
 
-- `local.instance` (platform.instance): a working directory (`root`, default temporary)
-- `local.exec` (exec.command), `local.process` (exec.process), `local.files` (files.transfer)
+**Host prerequisites**
 
-**Actions**
+- none
 
-- `local.start_platform` → `itf.states.platform.up`
-
-**Host prerequisites:** None.
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-    - name: platform
-      contract: itf.capabilities.platform.instance
-      using: local.instance
-    - name: command
-      contract: itf.capabilities.exec.command
-      using: local.exec
+capabilities:
+  platform: local.platform
+  command: local.exec
+goals:
+  - platform.up
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'local.%'"`.

@@ -10,35 +10,28 @@ SPDX-License-Identifier: Apache-2.0
 *******************************************************************************
 -->
 
-# Packet capture pack
+# Pcap pack
 
-tcpdump captures, built from source with libpcap and shipped with the pack.
+A tcpdump capture of an interface.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/pcap` | capture started after `platform.up` |
-| `//score/itf/packs/pcap:host` | capture on a host interface, started first |
-| `//score/itf/packs/pcap:sim` | in-memory capture |
+**Bazel:** `//score/itf/packs/pcap`. Packs load from the labels of a composition (`pcap.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `pcap.capture` | capability | `observe.capture` | the capture object |
+| `pcap.start` | state | `capture.running` | start it once the platform is up |
+| `pcap.start_on_host` | state | `capture.running` | start it on a host interface that already exists, before anything else |
 
-- `tcpdump.capture` (observe.capture): `interface`, `filter`, `out_dir`; `path()`, `running()`, per-test `window(name)`
+**Host prerequisites**
 
-**Actions**
+- CAP_NET_RAW (or root) and the interface on the host
 
-- `tcpdump.start_capture` / `tcpdump.start_host_capture` → `itf.states.capture.running`
-
-**Host prerequisites:** `CAP_NET_RAW` (or root) and the interface on the host.
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-    - name: capture
-      contract: itf.capabilities.observe.capture
-      using: tcpdump.capture
-      config:
-        interface: docker0
-        filter: tcp port 22
+capabilities:
+  capture: pcap.capture
+goals:
+  - state: capture.running
+    by: pcap.start
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'pcap.%'"`.

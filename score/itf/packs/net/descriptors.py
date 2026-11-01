@@ -25,7 +25,7 @@ class Endpoint:
 
 @dataclass(frozen=True)
 class Credentials:
-    """A login. `key_path` names a private key file; key material never goes into a recipe."""
+    """A login. `key_path` names a private key file; key material never goes into a composition."""
 
     user: str
     password: str | None = field(default=None, metadata={"sensitive": True})

@@ -12,15 +12,17 @@
 # *******************************************************************************
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Console(Protocol):
+    __contract__ = "exec.console"
+
     def open(self) -> None: ...
     def is_open(self) -> bool: ...
 
 
-@delivers("itf.states.console.open", name="serial.open_console", uses={"console": "itf.capabilities.exec.console"})
+@state("console.open", label="open")
 def open_console(console: Console) -> None:
     console.open()
 

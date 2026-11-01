@@ -11,13 +11,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 """Opening the session: one connection that establishes two states, each with its own evidence.
-`itf.states.shell.open` holds while the session is connected; `itf.states.network.reachable` holds
+`shell.open` holds while the session is connected; `network.reachable` holds
 while its endpoint accepts TCP connections. Works with any shell provider that can connect."""
 
 import socket
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Endpoint(Protocol):
@@ -26,6 +26,8 @@ class Endpoint(Protocol):
 
 
 class Shell(Protocol):
+    __contract__ = "exec.shell"
+
     endpoint: Endpoint
 
     def connect(self) -> None: ...
@@ -40,13 +42,7 @@ def accepts_connections(endpoint: Endpoint, timeout: float = 1.0) -> bool:
         return False
 
 
-@delivers(
-    "itf.states.shell.open",
-    name="ssh.open_session",
-    requires=("itf.states.platform.up",),
-    also_delivers=("itf.states.network.reachable",),
-    uses={"shell": "itf.capabilities.exec.shell"},
-)
+@state("shell.open", after=("platform.up",), also=("network.reachable",), label="open")
 def open_session(shell: Shell) -> None:
     shell.connect()
 
@@ -56,6 +52,6 @@ def is_session_open(shell: Shell) -> bool:
     return shell.is_connected()
 
 
-@open_session.probe_for("itf.states.network.reachable")
+@open_session.probe_for("network.reachable")
 def is_reachable(shell: Shell) -> bool:
     return accepts_connections(shell.endpoint)

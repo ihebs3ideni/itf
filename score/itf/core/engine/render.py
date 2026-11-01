@@ -10,10 +10,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""One template per OCTO diagnostic code (docs/octo-kit/11-spec-itf-engine.md §11).
+"""One template per OCTO diagnostic code, worded for a composition: roles, factory labels, contract names.
 
-`CODES` is the closed set (`score.itf.core.octo.CODES`: core codes plus every standard relation's); a test enumerates it against `TEMPLATES`
-so a code with no template fails the build (A-3.6).
+`CODES` is the closed set (`score.itf.core.octo.CODES`: core codes plus every standard relation's); a test
+enumerates it against `TEMPLATES` so a code with no template fails the build.
 """
 
 from __future__ import annotations
@@ -26,178 +26,222 @@ def _evidence(d: Diagnostic) -> dict:
     return dict(d.evidence)
 
 
+class Context:
+    """What the templates may look up: the catalog (who offers what) and each scope's roles."""
+
+    def __init__(self, catalog=None, roles=None):
+        self.catalog = catalog
+        self.roles = roles or {}
+
+    def factory_of(self, ref: str) -> str | None:
+        scope, _, name = ref.rpartition(".")
+        return self.roles.get(scope, {}).get(name)
+
+    def need(self, subject: str):
+        """(role, slot, contract, candidate labels) of a `<scope>.<role>#<slot>` subject, when known."""
+        ref, _, slot = subject.partition("#")
+        label = self.factory_of(ref)
+        factory = self.catalog.factories.get(label) if (self.catalog and label) else None
+        if factory is None:
+            return None
+        contract = next((n.contract for n in factory.needs if n.slot == slot), None)
+        if contract is None:
+            return None
+        return ref.rpartition(".")[2], label, slot, contract, self.catalog.offering(contract)
+
+
 def _t(summary: str, fix: str):
-    def render_one(d: Diagnostic) -> str:
+    def render_one(d: Diagnostic, ctx: Context) -> str:
         ev = _evidence(d)
         return f"{d.subject}: {summary.format(d=d, ev=ev)}\n  Fix: {fix.format(d=d, ev=ev)}"
 
     return render_one
 
 
-def _uses_unsatisfied(d: Diagnostic) -> str:
+def _slot_missing(d: Diagnostic, ctx: Context) -> str:
+    found = ctx.need(d.subject)
+    if found is None:
+        return (
+            f"{d.subject}: a slot has no capability in this scope, and nothing outside the composition is added\n"
+            "  Fix: list a capability that fulfils it under `capabilities:`, or point `bind:` at one"
+        )
+    role, label, slot, contract, offering = found
+    lines = [
+        f"{d.subject}: {role} ({label}) needs a {contract!r} for its slot {slot!r}, and the composition lists none",
+    ]
+    if offering:
+        lines.append(f"  Candidates: {', '.join(offering)}")
+        lines.append(f"  Fix: list one, for example\n    capabilities:\n      {slot}: {offering[0]}")
+    else:
+        lines.append("  No loaded pack has a capability factory for it.")
+        lines.append(f"  Fix: list a factory that fulfils {contract!r} (from a pack, or your own @capability)")
+    return "\n".join(lines)
+
+
+def _slot_ambiguous(d: Diagnostic, ctx: Context) -> str:
+    candidates = [display(v).rpartition(".")[2] for k, v in d.evidence if k == "candidate"]
+    slot = d.subject.partition("#")[2]
+    role = display(d.subject.partition("#")[0])
+    return (
+        f"{d.subject}: more than one role could fill slot {slot!r} of {role}: {', '.join(candidates)}\n"
+        f"  Fix: say which with `bind:`\n    {role}:\n      bind:\n        {slot}: {candidates[0] if candidates else '<role>'}"
+    )
+
+
+def _uses_unsatisfied(d: Diagnostic, ctx: Context) -> str:
     ev = _evidence(d)
     if "contract" not in ev:
         return (
             f"{d.subject}: the action at '{d.subject}' needs a capability the target plan does not have\n"
-            "  Fix: add the needed node in this scope, or bind it explicitly"
+            "  Fix: list a capability that fulfils it under `capabilities:`"
         )
     scope, slot, contract = ev["scope"], ev["slot"], ev["contract"]
     state = d.subject.split("#", 1)[0]
     where = "the root scope" if scope == ROOT else f"scope '{scope}'"
     why = f"{state} is required by {ev['required_by']} (a goal)" if ev.get("required_by") else f"{state} is a goal"
-    verb = "ctx" if scope == ROOT else f"ctx.scope('{scope}')"
+    offering = ctx.catalog.offering(contract) if ctx.catalog else ()
     lines = [
-        f"{d.subject}: {where} has no '{contract}' node, and reaching {state} needs one",
-        f"  Needed by: {ev['action']}, slot '{slot}' (uses={{'{slot}': '{contract}'}})",
+        f"{d.subject}: {where} has no {contract!r} capability, and reaching {state} needs one",
+        f"  Needed by: {ev['action']}, slot '{slot}'",
         f"  Why: {why}",
     ]
     if ev.get("elsewhere"):
         lines.append(f"  Exists in: {ev['elsewhere']}")
         lines.append(
-            f"  Fix: share one into this scope, {verb}.alias('{slot}', "
-            f"'{ev['elsewhere'].split(', ')[0]}'); or add a '{contract}' node here; "
-            f"or drop {state} from this scope's goals"
+            f"  Fix: share it into this scope (`share:` the root role), or list one here; or drop {state} from the goals"
         )
     else:
+        if offering:
+            lines.append(f"  Candidates: {', '.join(offering)}")
         lines.append(
-            f"  Fix: add a node in this scope, {verb}.add('{slot}', '{contract}', using=...); "
-            f"or drop {state} from this scope's goals"
+            f"  Fix: list a capability that fulfils {contract!r} in this scope; or drop {state} from the goals"
         )
     return "\n".join(lines)
 
 
 TEMPLATES = {
     "CONTRACT_CONFLICT": _t(
-        "two contracts claim the token '{d.subject}' at the same precedence",
-        "declare ctx.contract('{d.subject}', ...) once, or give one claim a higher origin",
+        "two contract declarations claim '{d.subject}' at the same precedence",
+        "declare it once",
     ),
     "PROVIDER_CONFLICT": _t(
-        "two providers publish the name '{d.subject}'",
-        "rename one provider's name=; provider names must be unique per session",
+        "two capability factories have the label '{d.subject}'",
+        "give one a different label (`@capability(..., label=...)`); labels are unique per pack",
     ),
     "NAME_COLLISION": _t(
-        "two claims collide on '{d.subject}' with no precedence to break the tie",
-        "give one of them a higher origin, or use scope.rebind(...) to change one wire",
+        "two entries collide on '{d.subject}' with no precedence to break the tie",
+        "a role is declared once; merge the entries or rename one role",
     ),
     "ALIAS_UNRESOLVED": _t(
-        "alias '{d.subject}' points at a node that does not exist",
-        "check the target of scope.alias(name, 'scope.name'); the target must be add()-ed somewhere",
+        "the shared role '{d.subject}' points at a role that does not exist",
+        "`share:` names roles of the root; check the spelling under the root's `capabilities:`",
     ),
     "ALIAS_CYCLE": _t(
-        "alias '{d.subject}' is part of a cycle of aliases",
-        "break the cycle: an alias must eventually resolve to a real scope.add(...) node",
+        "the shared role '{d.subject}' is part of a cycle",
+        "a shared role must eventually be a role of the root",
     ),
     "REBIND_ORPHAN": _t(
-        "scope.rebind('{d.subject}') targets a node that was never scope.add()-ed",
-        "add the node first, or remove the rebind",
+        "'{d.subject}' binds something that is not a role or a slot of its factory",
+        "check the role and the slot names under `bind:`",
     ),
     "PROVIDER_UNKNOWN": _t(
-        "using='{d.subject}' names a provider nobody published",
-        "check the provider's name=, and that its pack is listed in pytest_plugins",
+        "the factory '{ev[provider]}' is not published by any loaded pack",
+        "check the label (<pack>.<factory>) and that the pack is installed",
     ),
     "PROVIDER_CONTRACT_MISMATCH": _t(
-        "using='{d.subject}' implements a different contract than the node declares",
-        "match scope.add(name, contract, using=...) so contract equals the provider's implements",
+        "the factory of '{d.subject}' fulfils another contract than the role declares",
+        "pick a factory for the contract the role needs",
     ),
     "NO_PROVIDER": _t(
-        "no provider implements the contract needed at '{d.subject}'",
-        "publish or select a provider for this contract with using=",
+        "no capability factory fulfils the contract needed at '{d.subject}'",
+        "list a factory that does, under `capabilities:`",
     ),
     "PROVIDER_AMBIGUOUS": _t(
-        "more than one provider implements the contract needed at '{d.subject}'",
-        "name one explicitly: scope.add(name, contract, using='<provider name>')",
+        "more than one capability factory fulfils the contract needed at '{d.subject}'",
+        "list the one you want under `capabilities:`; nothing is chosen for you",
     ),
     "BINDING_UNKNOWN": _t(
-        "scope.rebind names a slot '{d.subject}' the node does not have",
-        "check the provider's needs= for the correct slot name",
+        "`bind:` at '{d.subject}' names a role the target does not have",
+        "bind the slot to a role listed under `capabilities:`",
     ),
     "BINDING_CONTRACT_MISMATCH": _t(
-        "the node bound to slot '{d.subject}' does not satisfy the slot's contract",
-        "bind the slot to a node of the expected contract, via bind={{'slot': 'scope.name'}}",
+        "the role bound to '{d.subject}' does not fulfil the slot's contract",
+        "bind the slot to a role whose factory fulfils the contract the slot names",
     ),
-    "SLOT_AMBIGUOUS": _t(
-        "two candidates fill slot '{d.subject}': {ev}",
-        "name one: scope.add(name, contract, using=..., bind={{'slot': '<one of the candidates>'}})",
-    ),
-    "SLOT_UNSATISFIED": _t(
-        "slot '{d.subject}' has no candidate in scope and none could be derived",
-        "add a node of the needed contract in this scope, or bind={{'slot': 'scope.name'}} explicitly",
-    ),
-    "DERIVATION_RUNAWAY": _t(
-        "deriving a node for '{d.subject}' exceeded max_derivation_depth",
-        "add the missing node explicitly instead of relying on derivation",
-    ),
+    "SLOT_AMBIGUOUS": _slot_ambiguous,
+    "SLOT_UNSATISFIED": _slot_missing,
+    "DERIVATION_RUNAWAY": _slot_missing,
     "CYCLE": _t(
         "a construction cycle passes through '{d.subject}'",
         "break the cycle: one of these bindings must point elsewhere",
     ),
     "STATE_CONFLICT": _t(
-        "two state contracts claim the token '{d.subject}' at the same precedence",
-        "choose one by name: ctx.state('{d.subject}', using='<action name>')",
+        "two actions make the state '{d.subject}' true at the same precedence",
+        "choose one: `- state: {d.subject}` with `by: <action label>` under `goals:`",
     ),
     "RELATION_ORPHAN": _t(
-        "scope.relate('{d.subject}', ...) amends a state contract nobody published",
-        "check the state token, or publish/select it first with ctx.state(...)",
+        "a relation amends the state '{d.subject}', which no action makes true",
+        "check the state name in the action's `after=`/`breaks=`",
     ),
     "USES_UNSATISFIED": _uses_unsatisfied,
     "USES_AMBIGUOUS": _t(
-        "more than one node could fill the action's use at '{d.subject}': {ev}",
-        "name the node explicitly with scope.rebind or scope.add(bind=...)",
+        "more than one role could fill the action's slot at '{d.subject}': {ev}",
+        "name the role: give the action's slot a single candidate in this scope",
     ),
     "STATE_UNREACHABLE": _t(
-        "the state '{d.subject}' cannot be reached: no action delivers it and it was not observed",
-        "publish or select an action delivering this state: ctx.state('{d.subject}', using=...)",
+        "the state '{d.subject}' cannot be reached: no action of the listed packs makes it true and it was not observed",
+        "list a capability of a pack whose action makes it true, or `assume:` it with an owner and a reason",
     ),
     "STATE_CYCLE": _t(
         "a temporal cycle passes through '{d.subject}'",
-        "one of these requires/invalidates relations must be removed with scope.relate(...)",
+        "one of the actions' `after=`/`breaks=` must change",
     ),
     "ORDER_AMBIGUOUS": _t(
-        "two actions mutually invalidate each other's state near '{d.subject}' with no derivable order",
-        "add a third-party relation: scope.relate(state, requires=(...)) to break the tie",
+        "two actions mutually break each other's state near '{d.subject}' with no derivable order",
+        "change an action's `after=` so one must run first",
     ),
     "ASSUMPTION_CONFLICT": _t(
-        "two assume() declarations for '{d.subject}' disagree at the same precedence",
-        "give one a higher origin, or align their owner=/reason= so they are identical",
+        "two `assume:` entries for '{d.subject}' disagree",
+        "state it once, with one owner and reason",
     ),
     "SHAPE_MISSING_MEMBER": _t(
         "the seam at '{d.subject}' is missing member(s): {ev}",
-        "either the provider's gives= must include them, or lower the consumer's expect(...) shape",
+        "pick a factory that offers them, or lower what the consumer's slot annotation expects",
     ),
     "SHAPE_SIGNATURE_DRIFT": _t(
         "the seam at '{d.subject}' has a signature mismatch: {ev}",
-        "align the provider's gives= signature with the consumer's expect(...) shape",
+        "align the factory's return type with the consumer's slot annotation",
     ),
     "SHAPE_PROTOCOL_MISSING": _t(
         "the seam at '{d.subject}' does not satisfy the expected protocol: {ev}",
-        "have the provider's gives= declare the protocol, or lower the consumer's expect(...) shape",
+        "have the factory's return type declare the protocol, or lower the consumer's annotation",
     ),
     "SHAPE_UNDECLARED": _t(
         "the seam at '{d.subject}' declares no shape under strict_shapes=True",
-        "wrap the need in expect(contract, shape), naming at least the members this consumer relies on",
+        "give the slot's annotation the members the consumer relies on",
     ),
     "CLAIM_WRONG_GATE": _t(
         "a claim for '{d.subject}' was offered to the wrong gate",
-        "capability claims (contract/add/alias/rebind) belong to itf_setup; state claims "
-        "(goal/relate/state) belong to itf_init",
+        "this is a defect in ITF's compiler, not in the composition; report it",
     ),
     "UNKNOWN_KIND": _t(
         "a '{d.subject}' was offered to the planner, but no registered contract kind owns that claim type",
-        "only ctx verbs produce claims; pass claims from score.itf.core.octo, or register the kind that owns it",
+        "this is a defect in ITF's compiler, not in the composition; report it",
     ),
     "RELATION_FAILED": _t(
         "the planner for '{d.subject}' contracts failed instead of answering: {ev}",
-        "this is a defect in that kind's relation, not in your recipe; report it with the evidence above",
+        "this is a defect in that kind's relation, not in your composition; report it with the evidence above",
     ),
 }
 
 
-def render(diagnostics, *, gate: int, hook: str) -> str:
-    lines = [f"Gate {gate} · {hook}"]
+def render(diagnostics, *, gate: int, hook: str, catalog=None, roles=None) -> str:
+    ctx = Context(catalog, roles)
+    lines = [f"Gate {gate} \u00b7 {hook}"]
     for d in diagnostics:
         template = TEMPLATES.get(d.code)
         if template is None:
             lines.append(f"{d.subject}: {d.code} (no template)")
         else:
-            lines.append(template(d))
+            lines.append(template(d, ctx))
     return display("\n".join(lines))

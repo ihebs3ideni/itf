@@ -12,22 +12,22 @@
 # *******************************************************************************
 """Static descriptor providers: where a service listens and how to log in."""
 
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .descriptors import Credentials, Endpoint, KeyCredentials, PasswordCredentials
 
 
-@provides("itf.capabilities.descriptor.endpoint", name="static.endpoint", config_schema=Endpoint)
-def static_endpoint(config: dict[str, object]) -> Endpoint:
+@capability("descriptor.endpoint", label="endpoint")
+def static_endpoint(config: Endpoint) -> Endpoint:
     return Endpoint(config["host"], config["port"])
 
 
-@provides("itf.capabilities.descriptor.credentials", name="key.credentials", config_schema=KeyCredentials)
-def key_credentials(config: dict[str, object]) -> Credentials:
+@capability("descriptor.credentials", label="key")
+def key_credentials(config: KeyCredentials) -> Credentials:
     return Credentials(config["user"], key_path=config["key_path"])
 
 
-@provides("itf.capabilities.descriptor.credentials", name="password.credentials", config_schema=PasswordCredentials)
-def password_credentials(config: dict[str, object]) -> Credentials:
+@capability("descriptor.credentials", label="password")
+def password_credentials(config: PasswordCredentials) -> Credentials:
     """An empty password is a valid login on many images (e.g. root on a development build)."""
     return Credentials(config["user"], password=config.get("password", ""))

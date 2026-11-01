@@ -13,8 +13,8 @@
 """The target handle: one per session, a thin view over the realization
 (docs/octo-kit/12-spec-itf-core.md §4).
 
-`target.x` is a node of the root scope, `target.dev1.x` a node of device scope `dev1`. A device
-never falls back to the root: what `dev1` should share, its recipe aliases (`dev1.alias("x", ".x")`).
+`target.<role>` is a role of the root scope, `target.dev1.<role>` a role of scope `dev1`. A device
+never falls back to the root: what `dev1` should share, the composition lists under `share:`.
 Aliased names share the underlying node rather than creating another instance.
 """
 
@@ -22,7 +22,8 @@ from __future__ import annotations
 
 from .engine.bringup import observe
 from .engine.config import redact_target
-from .engine.scopes import ROOT, TARGET_MEMBERS, VIEW_MEMBERS, display_json
+from .engine.scopes import ROOT, TARGET_MEMBERS, VIEW_MEMBERS, display, display_json
+from .engine.labels import label_steps, node_label
 
 
 # The handle is a view, not a store: attribute access fetches (lazily constructing) the node from the
@@ -44,8 +45,9 @@ class ScopeView:
     def tokens(self) -> tuple[str, ...]:
         return self._session._target_plan.tokens(self._scope)
 
-    def has(self, token: str) -> bool:
-        return token in self.tokens()
+    def has(self, role: str) -> bool:
+        """Whether this scope has the role `role`."""
+        return role in self.names()
 
     def names(self) -> tuple[str, ...]:
         return self._session._target_plan.names(self._scope)
@@ -73,8 +75,8 @@ class ScopeView:
 
     def probe(self, *states: str) -> frozenset[str]:
         prefix = f"{self._scope}:"
-        wanted = frozenset(f"{prefix}{s}" for s in states) if states else None
         session = self._session
+        wanted = frozenset(f"{prefix}{s}" for s in states) if states else None
         meter = session._meter()
         observation = observe(
             session._full_plan, session._realization, states=wanted, observer=meter, resolver=session._resolver
@@ -101,11 +103,13 @@ class ScopeView:
         return display_json(
             {
                 "target": {k: v for k, v in tp.to_json().items() if k != "nodes"}
-                | {"nodes": [n for n in tp.to_json()["nodes"] if n["scope"] == self._scope]},
+                | {"nodes": [n for n in _labelled(tp.to_json()["nodes"]) if n["scope"] == self._scope]},
                 "action": {k: v for k, v in ap.to_json().items() if k != "steps"}
                 | {
                     "steps": [
-                        s for s in ap.to_json()["steps"] if any(d.startswith(f"{self._scope}:") for d in s["delivers"])
+                        s
+                        for s in label_steps(ap.to_json(), self._session._catalog)["steps"]
+                        if any(d.startswith(f"{self._scope}:") for d in s["delivers"])
                     ]
                 },
             }
@@ -148,7 +152,7 @@ class Target(ScopeView):
     def plan(self) -> dict:
         return {
             "target": target_view(_redacted(self._session), self._scopes),
-            "action": display_json(self._session._action_plan.to_json()),
+            "action": display_json(label_steps(self._session._action_plan.to_json(), self._session._catalog)),
         }
 
 
@@ -156,10 +160,15 @@ def _redacted(session):
     return redact_target(session._target_plan, getattr(session._catalog, "config_schemas", {}))
 
 
+def _labelled(nodes: list) -> list:
+    """Each node of a plan with its `label` (`command (store)`, `gw.command (store:sim)`): how a person reads it."""
+    return [{**n, "label": node_label(display(f"{n['scope']}.{n['name']}"), n["provider"])} for n in nodes]
+
+
 def target_view(target_plan, scopes=()) -> dict:
     """The target plan shaped like the handle: root nodes, then one entry per device scope."""
     data = target_plan.to_json()
-    nodes = data.pop("nodes")
+    nodes = _labelled(data.pop("nodes"))
     root = [n for n in nodes if n["scope"] == ROOT]
     by_scope: dict = {name: {"nodes": []} for name in scopes}
     for n in nodes:

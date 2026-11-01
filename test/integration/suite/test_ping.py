@@ -10,21 +10,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Any target the host can ping (itf.capabilities.net.ping)."""
+"""Any target the host can ping (`ping`)."""
 
 import score.itf as itf
 
-PING = "itf.capabilities.net.ping"
-COMMAND = "itf.capabilities.exec.command"
 
-
-@itf.requires(PING)
+@itf.requires("ping")
 def test_the_host_pings_the_target(target):
     assert target.ping.ping()
 
 
-@itf.requires(COMMAND)
-@itf.requires(PING)
+@itf.requires("command")
+@itf.requires("ping")
 def test_the_target_pings_its_gateway(target):
     code, output = target.command.exec(
         'gw=$(ip route | awk \'/default/ {print $3; exit}\'); [ -n "$gw" ] && ping -c 1 -W 5 "$gw"'

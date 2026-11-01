@@ -32,6 +32,8 @@ class StreamConfig:
 
 
 class EndpointLike(Protocol):
+    __contract__ = "descriptor.endpoint"
+
     host: str
     port: int
 

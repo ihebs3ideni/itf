@@ -30,14 +30,6 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 class ITFHookSpecs:
     @hookspec
-    def itf_setup(self, ctx):
-        """What must exist: contracts, nodes, providers, bindings, aliases, rebinds."""
-
-    @hookspec
-    def itf_init(self, ctx):
-        """What must happen: goals, relations, which action delivers a state."""
-
-    @hookspec
     def itf_verify(self, session):
         """Startup checks. Run after bring-up, before the first test."""
 

@@ -10,22 +10,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Virtual machines booted with a second disk (qemu.instance `disk`): it shows up as /dev/vdb."""
+"""Virtual machines booted with a second disk (the `platform` option `disk`): it shows up as /dev/vdb."""
 
 import pytest
 
 import score.itf as itf
 
-PLATFORM = "itf.capabilities.platform.instance"
-COMMAND = "itf.capabilities.exec.command"
 MOUNT = "/mnt/qemu_disk"
 
 
-@itf.requires(PLATFORM, shape=["disk"])
-@itf.requires(COMMAND)
+@itf.requires("platform", shape=["disk"])
+@itf.requires("command")
 def test_the_second_disk_mounts_with_expected_content_and_is_writable(target):
     if not target.platform.disk:
-        pytest.skip("the recipe boots no second disk")
+        pytest.skip("the composition boots no second disk")
     assert target.command.exec("test -b /dev/vdb")[0] == 0, "expected block device /dev/vdb"
     assert target.command.exec(f"mkdir -p {MOUNT} && mount /dev/vdb {MOUNT}")[0] == 0
     try:

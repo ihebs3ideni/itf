@@ -15,19 +15,17 @@ can record a target's whole boot. Same capture object as steps.py; load one of t
 
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Capture(Protocol):
+    __contract__ = "observe.capture"
+
     def start(self) -> None: ...
     def running(self) -> bool: ...
 
 
-@delivers(
-    "itf.states.capture.running",
-    name="tcpdump.start_host_capture",
-    uses={"capture": "itf.capabilities.observe.capture"},
-)
+@state("capture.running", label="start_on_host")
 def start_host_capture(capture: Capture) -> None:
     capture.start()
 

@@ -10,40 +10,33 @@ SPDX-License-Identifier: Apache-2.0
 *******************************************************************************
 -->
 
-# Network descriptors pack
+# Net pack
 
-Static endpoints and credentials other capabilities bind to.
+Static descriptors: where a service listens and how to log in.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/net` | `score.itf.packs.net.plugin` |
+**Bazel:** `//score/itf/packs/net`. Packs load from the labels of a composition (`net.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `net.endpoint` | capability | `descriptor.endpoint` | `host` and `port` |
+| `net.key` | capability | `descriptor.credentials` | a user and a private key file |
+| `net.password` | capability | `descriptor.credentials` | a user and a password |
 
-- `static.endpoint` (descriptor.endpoint): `host`, `port`
-- `key.credentials`, `password.credentials` (descriptor.credentials): `user` with `key_path` or `password` (sensitive: redacted from artifacts)
+**Host prerequisites**
 
-**Actions**
+- none
 
-- —
-
-**Host prerequisites:** None.
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-    - name: endpoint
-      contract: itf.capabilities.descriptor.endpoint
-      using: static.endpoint
-      config:
-        host: 192.0.2.10
-        port: 22
-    - name: creds
-      contract: itf.capabilities.descriptor.credentials
-      using: key.credentials
-      config:
-        user: root
-        key_path: keys/id_ed25519
+capabilities:
+  endpoint:
+    factory: net.endpoint
+    with:
+      host: 192.168.0.10
+      port: 22
+  credentials:
+    factory: net.password
+    with:
+      user: score
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'net.%'"`.

@@ -12,35 +12,30 @@ SPDX-License-Identifier: Apache-2.0
 
 # SSH pack
 
-A paramiko session to the target, and commands, processes and SFTP file transfer over it.
+An SSH session to a machine, commands, processes and SFTP over it.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/ssh` | `score.itf.packs.ssh.plugin` |
-| `//score/itf/packs/ssh:sim` | in-memory shell for offline runs |
+**Bazel:** `//score/itf/packs/ssh`. Packs load from the labels of a composition (`ssh.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `ssh.shell` | capability | `exec.shell` | the session; needs an endpoint and credentials |
+| `ssh.exec` | capability | `exec.command` | run a command over the session |
+| `ssh.process` | capability | `exec.process` | start a program over the session |
+| `ssh.files` | capability | `files.transfer` | SFTP |
+| `ssh.open` | state | `shell.open, network.reachable` | connect; each state has its own probe |
 
-- `ssh.shell` (exec.shell): password or key login, retries, keep-alive; `run`, `exec`, `exec_lines` (separate stderr, start and run timeouts), `client()`
-- `ssh.exec` (exec.command), `ssh.process` (exec.process), `sftp.files` (files.transfer, plus `exists`, `listdir`, `remove`, `upload_dir`, `download_dir`)
+**Host prerequisites**
 
-**Actions**
+- paramiko (pip, locked)
 
-- `ssh.open_session` → `itf.states.shell.open` and `itf.states.network.reachable`, each with its own probe (connected; endpoint accepts TCP)
-
-**Host prerequisites:** None beyond paramiko (pip, locked).
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-    - name: shell
-      contract: itf.capabilities.exec.shell
-      using: ssh.shell
-      config:
-        n_retries: 20
-    - name: command
-      contract: itf.capabilities.exec.command
-      using: ssh.exec
+capabilities:
+  endpoint: net.endpoint
+  credentials: net.password
+  shell: ssh.shell
+  command: ssh.exec
+goals:
+  - shell.open
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'ssh.%'"`.

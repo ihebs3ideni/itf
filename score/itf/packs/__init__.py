@@ -10,5 +10,5 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF packs. Recipes select them only through `pytest_plugins` (or a py_itf_plugin target) and
-tests reach what they provide only by contract token; no pack is imported by another."""
+"""ITF packs. A composition names their capability factories and actions by label (`<pack>.<name>`) and
+tests reach what they provide through roles; no pack is imported by another."""

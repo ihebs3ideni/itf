@@ -17,7 +17,10 @@ load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 py_library(
     name = "lib",
     srcs = glob(["**/*.py"]) + ["//score/itf/packs:init"],
-    data = ["README.md"],
+    data = [
+        "README.md",
+        "pack.yaml",
+    ],
     visibility = ["//test/packs:__subpackages__"],
     deps = ["//score/itf/core"],
 )
@@ -43,7 +46,10 @@ string_flag(
 
 py_itf_plugin(
     name = "core_dump",
-    enabled_plugins = ["score.itf.packs.core_dump.plugin"],
+    enabled_plugins = [
+        "score.itf.packs.core_dump.plugin",
+        "score.itf.packs.core_dump.pytest_plugin",
+    ],
     plugin_args = select({
         ":extract_core_dumps_enabled": ["--extract-core-dumps"],
         "//conditions:default": [],
@@ -51,4 +57,16 @@ py_itf_plugin(
     py_library = ":lib",
     string_flag_args = {":core_dumps_output_dir": "--core-dumps-output-dir={}"},
     visibility = ["//visibility:public"],
+)
+
+# For tools and gates that read the pack's metadata and sources from runfiles.
+exports_files(
+    ["pack.yaml"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "sources",
+    srcs = ["pack.yaml"] + glob(["**/*.py"]),
+    visibility = ["//test/core:__pkg__"],
 )

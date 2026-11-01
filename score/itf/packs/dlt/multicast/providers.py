@@ -13,13 +13,13 @@
 """Providers for DLT over UDP multicast."""
 
 from collections.abc import Iterator
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .receiver import MulticastConfig, MulticastDltReceiver
 
 
-@provides("itf.capabilities.observe.logs", name="dlt.multicast", config_schema=MulticastConfig)
-def make_multicast(config: dict) -> Iterator[MulticastDltReceiver]:
+@capability("observe.logs", label="multicast")
+def make_multicast(config: MulticastConfig) -> Iterator[MulticastDltReceiver]:
     receiver = MulticastDltReceiver(
         config["sources"],
         port=config.get("port", 3490),

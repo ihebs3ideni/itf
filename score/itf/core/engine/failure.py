@@ -27,6 +27,7 @@ import shutil
 from dataclasses import dataclass
 
 from .scopes import display
+from .labels import node_label
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ _HINTS = (
     ),
     (
         ("no such file", "not found"),
-        "a file or program is missing: check the path in the recipe and what the environment provides",
+        "a file or program is missing: check the path in the composition and what the environment provides",
     ),
 )
 
@@ -122,7 +123,7 @@ def bring_up_failure(error, action_plan, target_plan, run_dir) -> Failure:
     rows.append(("Not run", ", ".join(pending) or "-"))
     if step is not None and step.uses:
         rows.append(("Used nodes", ", ".join(f"{slot}={ref}" for slot, ref in step.uses)))
-    rows.append(("Target", ", ".join(f"{n.ref} ({n.provider})" for n in target_plan.nodes) or "-"))
+    rows.append(("Target", ", ".join(node_label(n.ref, n.provider) for n in target_plan.nodes) or "-"))
     rows.append(("Evidence", f"{run_dir}  (log, plans and probe results of this run)"))
     return Failure("ITF: bring-up failed", tuple(rows), hints_for(str(error.cause or error)))
 

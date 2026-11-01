@@ -28,10 +28,13 @@ import pluggy
 import pytest
 
 from ... import gating as itf_gating
-from ...engine.contexts import WrongPhase
 from ...engine.failure import banner
 from ...engine.hooks import HOOK_NAMES, ITFHookSpecs, implements_itf_hooks
+from ...engine.metadata import PROJECT_PACK, contributor_metadata, pack_name
 from ...engine.registry import CrossContributorImport, is_contributor
+from ...frontends import target_source
+from ...frontends.composition import CompositionError
+from .. import definitions as contract_definitions
 from ...session import (
     ConfigValidationFailed,
     DescribeResult,
@@ -106,12 +109,23 @@ def pytest_addoption(parser):
         "under Bazel, else itf-run/ in the pytest root directory)",
     )
     group.addoption(
-        "--itf-config",
+        "--itf-target",
         action="store",
         default=None,
-        dest="itf_config",
-        help="path to a YAML config (or inline YAML/JSON text); also settable via the ITF_CONFIG env var",
+        dest="itf_target",
+        help="the composition: a YAML/JSON file (or inline text); also the ITF_TARGET env var, the itf_target ini "
+        "option or [tool.itf] target in pyproject.toml",
     )
+    group.addoption(
+        "--itf-override",
+        action="append",
+        default=None,
+        dest="itf_override",
+        help="an override file: a composition holding only what changes, merged by role over the target "
+        "(repeatable); also ITF_OVERRIDE, the itf_override ini option or [tool.itf] override",
+    )
+    parser.addini("itf_target", "the composition: a YAML/JSON file, relative to the project", default="")
+    parser.addini("itf_override", "override files, relative to the project (one per line)", type="linelist", default=[])
 
 
 def _conftest_dir(module: ModuleType) -> Path | None:
@@ -119,11 +133,16 @@ def _conftest_dir(module: ModuleType) -> Path | None:
     return Path(file).resolve().parent if file and Path(file).name == "conftest.py" else None
 
 
-def contributors_from_pytest(pluginmanager) -> list[tuple[ModuleType, str]]:
-    """The root conftest ranks as `conftest`; every other ITF-capable plugin as `plugin`."""
-    modules = [p for p in pluginmanager.get_plugins() if isinstance(p, ModuleType)]
+def _root_conftest_dir(modules) -> Path | None:
     conftest_dirs = [d for d in map(_conftest_dir, modules) if d is not None]
-    root = min(conftest_dirs, key=lambda d: len(d.parts), default=None)
+    return min(conftest_dirs, key=lambda d: len(d.parts), default=None)
+
+
+def contributors_from_pytest(pluginmanager) -> list[tuple[ModuleType, str]]:
+    """The project's own code: the root conftest, and any plugin that implements an ITF hook or declares
+    capabilities and actions outside a pack. Packs load from the labels of the composition, not from pytest."""
+    modules = [p for p in pluginmanager.get_plugins() if isinstance(p, ModuleType)]
+    root = _root_conftest_dir(modules)
     entries = []
     for module in modules:
         where = _conftest_dir(module)
@@ -131,10 +150,48 @@ def contributors_from_pytest(pluginmanager) -> list[tuple[ModuleType, str]]:
             if where == root:
                 entries.append((module, "conftest"))
             elif implements_itf_hooks(module):
-                warnings.warn(f"itf: ignoring ITF hooks in {module.__file__}; only the root conftest is a recipe")
-        elif is_contributor(module):
+                warnings.warn(f"itf: ignoring ITF hooks in {module.__file__}; only the root conftest holds them")
+        elif implements_itf_hooks(module):
+            entries.append((module, "plugin"))
+        elif is_contributor(module) and pack_name(contributor_metadata(module)) == PROJECT_PACK:
             entries.append((module, "plugin"))
     return entries
+
+
+def _sources(config):
+    """The composition and the override files from options, ini, environment and pyproject, in that order."""
+    modules = [p for p in config.pluginmanager.get_plugins() if isinstance(p, ModuleType)]
+    conftest_dir = _root_conftest_dir(modules)
+    search = [d for d in (conftest_dir, config.inipath.parent if config.inipath else None) if d is not None]
+    option, ini = config.getoption("itf_target"), config.getini("itf_target")
+    if option:
+        explicit, origin = option, "--itf-target"
+    elif ini:
+        explicit, origin = ini, f"{config.inipath.name if config.inipath else 'ini'} itf_target"
+    else:
+        explicit, origin = None, "explicit"
+    options = config.getoption("itf_override") or []
+    inis = config.getini("itf_override")
+    values, where = (options, "--itf-override") if options else (inis, "itf_override")
+    try:
+        target = target_source.resolve(explicit, root=config.rootpath, search=search, explicit_origin=origin)
+        overrides = target_source.resolve_overrides(values, root=config.rootpath, search=search, explicit_origin=where)
+    except target_source.TargetSourceError as exc:
+        logger.error("itf: %s", exc)
+        raise pytest.UsageError(_section("ITF: no usable composition", str(exc))) from exc
+    if overrides and target is None:
+        message = "override files need a composition, and none is configured (--itf-target, ITF_TARGET, ...)"
+        raise pytest.UsageError(_section("ITF: no usable composition", message))
+    return target, overrides
+
+
+def _definitions() -> dict:
+    """contract name -> Definition from the optional contract library, when it is installed; else nothing."""
+    try:
+        return contract_definitions.definitions()
+    except ValueError as exc:  # the library found definitions that do not merge
+        logger.error("itf: contract definitions rejected: %s", exc)
+        raise pytest.UsageError(_section("ITF: contract definitions rejected", str(exc))) from exc
 
 
 def _run_dir(config) -> Path:
@@ -151,24 +208,22 @@ def _run_dir(config) -> Path:
 def pytest_configure(config):
     config._itf_session = None
 
-    # --itf-config pre-fills the same environment variable that recipes already read.
-    cli_config = config.getoption("itf_config")
-    if cli_config:
-        os.environ["ITF_CONFIG"] = cli_config
-
     contributors = contributors_from_pytest(config.pluginmanager)
-    if not any(implements_itf_hooks(module) for module, _ in contributors):
+    target, overrides = _sources(config)
+    if target is None and not any(implements_itf_hooks(module) for module, _ in contributors):
         return
 
-    run_dir = _run_dir(config)
     session = Session(
         contributors=contributors,
+        target=target,
+        overrides=overrides,
         plan_only=bool(config.getoption("itf_plan")),
         gating="fail" if config.getoption("itf_strict_gating") else "skip",
         reuse="fresh" if config.getoption("itf_fresh") else "probe",
         on_exit="keep" if config.getoption("itf_keep") else "unwind",
         strict_shapes=bool(config.getoption("itf_strict_shapes")),
-        run_dir=run_dir,
+        definitions=_definitions(),
+        run_dir=_run_dir(config),
     )
     config._itf_session = session
     config.hook.pytest_itf_session_created(config=config, session=session, contributors=contributors)
@@ -178,10 +233,10 @@ def pytest_configure(config):
         raise pytest.UsageError(_section(f"ITF: plan failed at gate {exc.gate}", exc.rendered)) from exc
     except (ConfigValidationFailed, TargetNameClash) as exc:
         logger.error("itf: %s", exc)
-        raise pytest.UsageError(_section("ITF: recipe rejected", str(exc))) from exc
-    except (CrossContributorImport, WrongPhase, TypeError, ValueError) as exc:
+        raise pytest.UsageError(_section("ITF: composition rejected", str(exc))) from exc
+    except (CrossContributorImport, CompositionError, TypeError, ValueError) as exc:
         logger.error("itf: %s: %s", type(exc).__name__, exc)
-        raise pytest.UsageError(_section("ITF: recipe rejected", f"{type(exc).__name__}: {exc}")) from exc
+        raise pytest.UsageError(_section("ITF: composition rejected", f"{type(exc).__name__}: {exc}")) from exc
 
 
 def _section(title: str, body: str) -> str:
@@ -229,6 +284,8 @@ def pytest_collection_modifyitems(config, items):
             config.hook.pytest_deselected(items=deselected)
 
     if config.getoption("itf_plan"):
+        if session.target_source is not None:
+            print(f"Composition: {session.target_source.describe()}")
         print(DescribeResult(session).render())
         print("Gating:")
         for test_id, decision in session._gating_decisions:
@@ -250,7 +307,8 @@ def _itf_session_of(request):
     session = getattr(request.config, "_itf_session", None)
     if session is None:
         pytest.fail(
-            "itf: no recipe: the root conftest implements no itf_setup/itf_init hook, so there is no target",
+            "itf: no composition: none is configured (--itf-target, ITF_TARGET, the itf_target ini option or "
+            "[tool.itf] target), so there is no target",
             pytrace=False,
         )
     return session

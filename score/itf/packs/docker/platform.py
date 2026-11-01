@@ -70,7 +70,7 @@ def parse_environment(spec: str | None) -> dict:
 
 
 class DockerPlatform:
-    """`itf.capabilities.platform.instance`: one container, and its own bridge network unless told otherwise."""
+    """`platform`: one container, and its own bridge network unless told otherwise."""
 
     container: object  # the docker SDK container, once started
 

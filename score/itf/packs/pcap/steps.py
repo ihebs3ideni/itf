@@ -14,20 +14,17 @@
 
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Capture(Protocol):
+    __contract__ = "observe.capture"
+
     def start(self) -> None: ...
     def running(self) -> bool: ...
 
 
-@delivers(
-    "itf.states.capture.running",
-    name="tcpdump.start_capture",
-    requires=("itf.states.platform.up",),
-    uses={"capture": "itf.capabilities.observe.capture"},
-)
+@state("capture.running", after=("platform.up",), label="start")
 def start_capture(capture: Capture) -> None:
     capture.start()
 

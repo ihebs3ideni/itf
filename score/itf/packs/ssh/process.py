@@ -80,7 +80,7 @@ class SshAsyncProcess(AsyncProcess):
 
 
 class SshProcess:
-    """`itf.capabilities.exec.process`: `spawn` starts a command on a new channel and returns at once."""
+    """`process`: `spawn` starts a command on a new channel and returns at once."""
 
     def __init__(self, shell: Shell):
         self.shell = shell

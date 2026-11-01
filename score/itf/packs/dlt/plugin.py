@@ -10,7 +10,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Entrypoint: DLT over a TCP stream, stdlib only. Load one logs entrypoint: each delivers
-itf.states.logs.active."""
+"""Entrypoint: DLT over a TCP stream, UDP multicast and dlt-receive, stdlib only apart from dlt-receive.
+Each variant has its own action making `logs.active` true; name one with `by:` in a goal."""
 
-pytest_plugins = ["score.itf.packs.dlt.providers", "score.itf.packs.dlt.steps"]
+pytest_plugins = [
+    "score.itf.packs.dlt.providers",
+    "score.itf.packs.dlt.steps",
+    "score.itf.packs.dlt.multicast.providers",
+    "score.itf.packs.dlt.multicast.steps",
+    "score.itf.packs.dlt.receive.providers",
+    "score.itf.packs.dlt.receive.steps",
+]

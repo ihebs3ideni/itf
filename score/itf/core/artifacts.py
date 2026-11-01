@@ -24,6 +24,7 @@ from pathlib import Path
 from .engine.render import render
 from .engine.report import render_target_html
 from .engine.config import redact_target
+from .engine.labels import label_steps, node_label
 from .engine.scopes import display, display_json
 from .octo import GoalClaim, claims_to_json
 from .target import target_view
@@ -92,7 +93,9 @@ def write_artifacts(run_dir: Path, session, *, cache: dict | None = None) -> Non
                 "target": target_view(target_plan, handle.scopes() if handle else ())
                 if target_plan is not None
                 else None,
-                "action": display_json(action_plan.to_json()) if action_plan is not None else None,
+                "action": display_json(label_steps(action_plan.to_json(), catalog))
+                if action_plan is not None
+                else None,
                 "assumptions": display_json(list(assumed)),
                 "config_schemas": {name: schema.describe() for name, schema in sorted(schemas.items())},
                 "config_issues": [
@@ -124,10 +127,13 @@ def write_artifacts(run_dir: Path, session, *, cache: dict | None = None) -> Non
     if _changed(cache, "diagnostics.txt", failure, config_issues):
         diagnostics_text = ""
         if failure is not None:
-            diagnostics_text = render(failure.diagnostics, gate=failure.gate, hook=failure.hook)
+            roles = session._compiled.roles if getattr(session, "_compiled", None) is not None else {}
+            diagnostics_text = render(
+                failure.diagnostics, gate=failure.gate, hook=failure.hook, catalog=catalog, roles=roles
+            )
         if config_issues:
             diagnostics_text += "\n".join(
-                f"{display(ref)} ({provider}): {message}" for ref, provider, message in config_issues
+                f"{node_label(display(ref), provider)}: {message}" for ref, provider, message in config_issues
             )
         (run_dir / "diagnostics.txt").write_text(diagnostics_text, encoding="utf-8")
 

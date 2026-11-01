@@ -36,6 +36,8 @@ class PingConfig:
 
 
 class Endpoint(Protocol):
+    __contract__ = "descriptor.endpoint"
+
     host: str
 
 
@@ -49,7 +51,7 @@ def checked_host(host: str) -> str:
 
 
 class Pinger:
-    """`itf.capabilities.net.ping` for the endpoint's host."""
+    """`ping` for the endpoint's host."""
 
     def __init__(self, endpoint: Endpoint, config: dict):
         self.endpoint = endpoint

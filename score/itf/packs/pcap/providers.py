@@ -10,17 +10,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Capture provider. Constructing it starts nothing: `tcpdump.start_capture` does."""
+"""Capture provider. Constructing it starts nothing: `pcap.start` does."""
 
 from collections.abc import Iterator
 
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .capture import CaptureConfig, TcpdumpCapture
 
 
-@provides("itf.capabilities.observe.capture", name="tcpdump.capture", config_schema=CaptureConfig)
-def make_capture(config: dict) -> Iterator[TcpdumpCapture]:
+@capability("observe.capture", label="capture")
+def make_capture(config: CaptureConfig) -> Iterator[TcpdumpCapture]:
     capture = TcpdumpCapture(config)
     yield capture
     capture.stop()

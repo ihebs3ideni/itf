@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class SftpFiles:
-    """`itf.capabilities.files.transfer` over SFTP on the session's connection, plus directory helpers."""
+    """`files` over SFTP on the session's connection, plus directory helpers."""
 
     def __init__(self, shell: Shell):
         self.shell = shell

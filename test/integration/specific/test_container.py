@@ -10,22 +10,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Containers only: selected wherever the platform offers a `container` (docker.instance)."""
+"""Containers only: selected wherever the platform offers a `container` (the docker pack)."""
 
 import score.itf as itf
 
-PLATFORM = "itf.capabilities.platform.instance"
-COMMAND = "itf.capabilities.exec.command"
 
-
-@itf.requires(PLATFORM, shape=["container"])
-@itf.requires(COMMAND)
-def test_the_recipe_volume_is_mounted(target):
+@itf.requires("platform", shape=["container"])
+@itf.requires("command")
+def test_the_composition_volume_is_mounted(target):
     assert target.command.exec("ls /extra/mount")[0] == 0
 
 
-@itf.requires(PLATFORM, shape=["container"])
-@itf.requires(COMMAND)
+@itf.requires("platform", shape=["container"])
+@itf.requires("command")
 def test_renew_starts_from_a_clean_container(target):
     target.command.exec("touch /tmp/marker")
     old_id = target.platform.container.id

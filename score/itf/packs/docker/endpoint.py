@@ -26,12 +26,14 @@ class EndpointConfig:
 
 
 class EndpointPlatform(Protocol):
+    __contract__ = "platform.instance"
+
     def ip(self, network: str | None = None) -> str: ...
     def host_port(self, container_port: str) -> int | None: ...
 
 
 class DockerEndpoint:
-    """`itf.capabilities.descriptor.endpoint` for a service in the container, read when used (the
+    """`endpoint` for a service in the container, read when used (the
     container's address exists only once it runs). `via`: "ip" (the container's own address),
     "published" (127.0.0.1 and the published host port; needed with rootless Podman), or "auto"
     (published when the port is published, else ip)."""

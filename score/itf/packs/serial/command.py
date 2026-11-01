@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 class ConsoleLike(Protocol):
+    __contract__ = "exec.console"
+
     def run(self, command: str, timeout: float = 30.0) -> tuple[int, str]: ...
 
 
@@ -32,7 +34,7 @@ def _short(text: str, limit: int = 200) -> str:
 
 
 class SerialExec:
-    """`itf.capabilities.exec.command` over a console node; the console owns the port."""
+    """`command` over a console node; the console owns the port."""
 
     def __init__(self, console: ConsoleLike):
         self.console = console

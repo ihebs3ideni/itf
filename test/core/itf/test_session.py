@@ -10,164 +10,124 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""P5: session, targets, gating, artifacts (docs/octo-kit/21-acceptance.md A-5.*)."""
+"""One run: resolve, bring up, use, close."""
 
-from __future__ import annotations
-
-import json
-
+import kv_hooks
+import kv_parts
 import pytest
 
-from score.itf.core import gating as itf_gating
-from score.itf.core.engine.bringup import Observation, execute, observe
-from score.itf.core.engine.collect import collect_setup
-from score.itf.core.engine.publish import publish
-from score.itf.core.engine.realize import Realization
-from score.itf.core.engine.registry import register
-from score.itf.core import octo
-from score.itf.core.session import PRECEDENCE, NotReady, ResolutionFailed, Session, describe
+from score.itf.core import NotReady, ResolutionFailed, Session, compose
+
+TARGET = """
+capabilities:
+  store: project.store
+  view: project.view
+goals:
+  - state: kv.ready
+  - state: kv.seeded
+    by: project.seed_a
+"""
 
 
-def test_a_5_1_gate_failure_is_one_rendered_error(tmp_path):
-    session = Session(["broken_recipe"], run_dir=tmp_path)
-    with pytest.raises(ResolutionFailed) as exc_info:
-        session.resolve()
-    exc = exc_info.value
-    assert exc.gate == 1
-    assert exc.hook == "itf_setup"
-    assert "Gate 1 · itf_setup" in exc.rendered
+@pytest.fixture(autouse=True)
+def events():
+    kv_parts.EVENTS.clear()
+    return kv_parts.EVENTS
 
 
-def test_a_5_2_deselection_precedes_construction(tmp_path):
-    session = Session(["shell_recipe"], run_dir=tmp_path)
-    session.resolve()
-    before = session._realization.construction_order
-    reqs = (itf_gating.Requirement("nonexistent.token", scope="main"),)
-    decisions = session.select({"test_x": reqs})
-    assert decisions["test_x"].selected is False
-    assert session._realization.construction_order == before  # select() itself builds nothing
+def run(tmp_path, target=TARGET, roots=(kv_parts,), **options):
+    return Session(list(roots), target=target, run_dir=tmp_path / "run", **options)
 
 
-def test_a_5_3_deselection_reason_names_token_and_scope_contents(tmp_path):
-    session = Session(["shell_recipe"], run_dir=tmp_path)
-    session.resolve()
-    reqs = (itf_gating.Requirement("nonexistent.token", scope="main"),)
-    decisions = session.select({"test_x": reqs})
-    reason = decisions["test_x"].reason
-    assert "nonexistent.token" in reason
-    assert "itf.capabilities.exec.shell" in reason
-
-
-def test_a_5_4_strict_gating_is_a_session_option(tmp_path):
-    session = Session(["shell_recipe"], run_dir=tmp_path, gating="fail")
-    assert session.gating == "fail"
-
-
-def test_a_5_5_one_resolution_shared_alias_is_one_object(tmp_path):
-    session = Session(["two_scope_recipe"], run_dir=tmp_path)
-    session.resolve()
+def test_bring_up_runs_the_actions_in_dependency_order_and_close_unwinds(tmp_path, events):
+    session = run(tmp_path, reuse="fresh").resolve()
+    assert events == []  # resolving constructs nothing when nothing is probed
     session.bring_up()
-    assert session.target.a.world is session.target.b.world
+    assert events == ["store built", "seed_a", "ready"]
+    assert session.target.view.read("seeded") == "a"
+    assert session.target.store.name == "mem"
+    session.close()
+    assert events[-1] == "store closed"
+
+
+def test_the_target_is_a_handle_of_roles(tmp_path):
+    session = run(tmp_path).resolve()
+    assert session.target.names() == ("store", "view")
+    assert session.target.has("view") and not session.target.has("shell")
+    assert "kv.view" in session.target.tokens()
+    with pytest.raises(AttributeError, match="no node or scope 'shell'"):
+        session.target.shell
+
+
+def test_hooks_of_the_project_run_after_bring_up_and_before_unwind(tmp_path, events):
+    session = run(tmp_path, roots=(kv_parts, kv_hooks)).resolve()
+    session.bring_up()
+    assert session._check_results[0].ok
+    store = session.target.store
+    session.close()
+    assert store.get("teardown") == "store, view"  # the teardown hook ran while the target still lived
+    assert events[-1] == "store closed"
+
+
+def test_probes_make_a_second_run_reuse_what_holds(tmp_path, events):
+    session = run(tmp_path).resolve()
+    session.bring_up()
+    done = len(events)
+    session.reach("kv.ready")  # everything holds: nothing runs again
+    assert events[done:] == []
     session.close()
 
 
-def test_a_5_6_reach_probes_replans_and_executes_the_delta(tmp_path):
-    session = Session(["shell_recipe"], run_dir=tmp_path)
-    session.resolve()
-    session.bring_up()
-    world = session.target.main.world
-    assert world.image_present and world.session_open
-    report = session.reach("main:itf.states.shell.open")
-    assert report.executed == () and report.skipped == ()  # already true; nothing to do
+def test_a_failing_action_is_not_ready_and_the_report_names_the_action(tmp_path):
+    session = run(tmp_path, "capabilities:\n  store: project.store\ngoals:\n  - kv.broken\n").resolve()
+    with pytest.raises(NotReady) as error:
+        session.bring_up()
+    assert "the store refused" in str(error.value.failure.render())
     session.close()
 
 
-def test_a_5_7_six_artifacts_always_written(tmp_path):
-    for policies in (["shell_recipe"], ["broken_recipe"]):
-        run_dir = tmp_path / policies[0]
-        session = Session(list(policies), run_dir=run_dir)
-        try:
-            session.resolve()
-            session.bring_up()
-            session.close()
-        except ResolutionFailed:
-            pass
-        for name in ("claims.json", "plan.json", "diagnostics.txt", "gating.json", "run.json", "unwind.json"):
-            assert (run_dir / name).exists(), f"{policies}: missing {name}"
+def test_a_plan_only_session_does_not_bring_up(tmp_path, events):
+    session = run(tmp_path, plan_only=True).resolve()
+    with pytest.raises(RuntimeError, match="plan_only"):
+        session.bring_up()
+    assert events == []
 
 
-def test_a_5_8_observed_states_come_from_probing_not_dry_run(tmp_path):
-    registry = register(["shell_recipe"])
-    catalog = publish(registry)
-    setup_claims = collect_setup(registry, catalog) | frozenset(catalog.providers)
-    target_res = octo.resolve_target(setup_claims, precedence=PRECEDENCE)
-    from score.itf.core.engine.collect import collect_init
-
-    init_claims = collect_init(registry, catalog, target_res.plan) | frozenset(catalog.actions)
-    full = octo.resolve_actions(init_claims, target_res.plan, precedence=PRECEDENCE, observed_states=frozenset())
-    realization = Realization(target_res.plan)
-    world = realization.get("main.world")
-    world.reachable = True  # the bench is already partly up
-    observation = observe(full.plan, realization)
-    delta = octo.resolve_actions(init_claims, target_res.plan, precedence=PRECEDENCE, observed_states=observation.holds)
-    delivered = {d for s in delta.plan.steps for d in s.delivers}
-    assert "main:itf.states.network.reachable" not in delivered
+def test_resolution_failure_carries_the_gate_and_the_rendered_diagnostics(tmp_path):
+    with pytest.raises(ResolutionFailed) as error:
+        run(tmp_path, "capabilities:\n  view: project.view\n").resolve()
+    assert error.value.gate == 1 and error.value.hook == "capabilities"
+    assert "Gate 1" in error.value.rendered
 
 
-def test_a_5_9_ready_requires_probed_goals_and_essential_checks(tmp_path):
-    session = Session(["shell_recipe"], run_dir=tmp_path)
+def test_plans_print_roles_factory_labels_and_contract_names(tmp_path):
+    session = run(tmp_path, plan_only=True).resolve()
+    plan = session.target.plan()
+    labels = [n["label"] for n in plan["target"]["nodes"]]
+    assert labels == ["store (project.store)", "view (project.view)"]
+    assert plan["target"]["nodes"][0]["contract"] == "kv.store"
+    assert [s["delivers"] for s in plan["action"]["steps"]] == [["kv.seeded"], ["kv.ready"]]
+    assert [s["by"] for s in plan["action"]["steps"]] == ["project.seed_a", "project.ready"]
+
+
+def test_compose_is_a_context_manager(tmp_path, events):
+    with compose([kv_parts], target=TARGET, run_dir=tmp_path / "run") as session:
+        assert session.target.store.get("seeded") == "a"
+    assert events[-1] == "store closed"
+
+
+def test_score_itf_session_loads_optional_definitions_and_needs_none(tmp_path):
+    import score.itf as itf
+
+    session = itf.Session([kv_parts], target=TARGET, plan_only=True, run_dir=tmp_path / "run", definitions={})
     session.resolve()
-    session.bring_up()
-    assert session._ready is True
-    session.close()
-
-    session2 = Session(["unprobed_recipe"], run_dir=tmp_path / "unprobed")
-    session2.resolve()
-    assert "main:mystery_state" in session2._action_plan.unprobed
+    assert session.definitions == {}
+    assert itf.Session([kv_parts], target=TARGET, plan_only=True, run_dir=tmp_path / "run2").resolve()
 
 
-def test_a_5_10_an_unreferenced_module_contributes_nothing(tmp_path):
-    session = Session(["fake_kv_recipe"], run_dir=tmp_path)
-    session.resolve()
-    assert "unreferenced_pack" not in session._registry.origins
-    assert "ghost" not in session._target_plan.scopes()
+def test_a_deprecated_contract_in_the_definitions_warns(tmp_path):
+    from score.itf.core.gating import Definition
 
-
-def test_a_5_11_plan_only_builds_nothing(tmp_path):
-    result = describe(["shell_recipe"], run_dir=tmp_path)
-    assert result.target_plan is not None
-    assert result.action_plan.observed_at_plan_time == ()
-
-
-def test_a_5_12_fresh_reuse_runs_every_action_even_if_it_holds(tmp_path):
-    session = Session(["shell_recipe"], run_dir=tmp_path, reuse="fresh")
-    session.resolve()
-    session.bring_up()
-    executed = set(session._run_report.executed)
-    assert {
-        "main:itf.states.network.reachable",
-        "main:itf.states.image.present",
-        "main:itf.states.shell.open",
-    } <= executed
-    session.close()
-
-
-def test_a_5_13_keep_skips_unwind(tmp_path):
-    session = Session(["shell_recipe"], run_dir=tmp_path, on_exit="keep")
-    session.resolve()
-    session.bring_up()
-    session.close()
-    assert session._unwind_report.kept is True
-    assert session._unwind_report.dismantled == ()
-
-
-def test_a_5_14_a_declared_unresolvable_node_fails_under_every_option(tmp_path):
-    for kwargs in (
-        {},
-        {"plan_only": True},
-        {"reuse": "fresh"},
-        {"strict_shapes": True},
-    ):
-        session = Session(["broken_recipe"], run_dir=tmp_path / repr(kwargs), **kwargs)
-        with pytest.raises(ResolutionFailed):
-            session.resolve()
+    definitions = {"kv.store": Definition("kv.store", 1, "deprecated", "kv.map")}
+    session = run(tmp_path, plan_only=True, definitions=definitions).resolve()
+    assert any("kv.store" in w and "deprecated" in w and "kv.map" in w for w in session.warnings)

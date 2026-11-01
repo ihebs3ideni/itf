@@ -20,6 +20,8 @@ from .config import QemuConfigModel
 
 
 class ConfiguredPlatform(Protocol):
+    __contract__ = "platform.instance"
+
     qemu_config: QemuConfigModel
 
 

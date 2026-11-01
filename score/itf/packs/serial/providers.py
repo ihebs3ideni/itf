@@ -10,18 +10,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Serial console providers. Constructing a console opens nothing: `serial.open_console` (steps.py) does."""
+"""Serial console providers. Constructing a console opens nothing: `serial.open` (steps.py) does."""
 
 from collections.abc import Iterator
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .console import ConsoleConfig, SerialConsole
 from .command import ConsoleLike, SerialExec
 from .pty import PtyConsoleConfig, pty_opener
 
 
-@provides("itf.capabilities.exec.console", name="serial.console", config_schema=ConsoleConfig)
-def make_console(config: dict) -> Iterator[SerialConsole]:
+@capability("exec.console", label="console")
+def make_console(config: ConsoleConfig) -> Iterator[SerialConsole]:
     console = SerialConsole(
         config["device"],
         baudrate=config.get("baudrate", 115200),
@@ -36,8 +36,8 @@ def make_console(config: dict) -> Iterator[SerialConsole]:
         console.close()
 
 
-@provides("itf.capabilities.exec.console", name="serial.pty_console", config_schema=PtyConsoleConfig)
-def make_pty_console(config: dict) -> Iterator[SerialConsole]:
+@capability("exec.console", label="pty_console")
+def make_pty_console(config: PtyConsoleConfig) -> Iterator[SerialConsole]:
     """A console on a shell over a pseudo-terminal: a UART with something answering, for benches without
     hardware. Same object and members as `serial.console`."""
     console = SerialConsole(
@@ -54,6 +54,6 @@ def make_pty_console(config: dict) -> Iterator[SerialConsole]:
         console.close()
 
 
-@provides("itf.capabilities.exec.command", name="serial.exec", needs={"console": "itf.capabilities.exec.console"})
+@capability("exec.command", label="exec")
 def make_exec(console: ConsoleLike) -> SerialExec:
     return SerialExec(console)

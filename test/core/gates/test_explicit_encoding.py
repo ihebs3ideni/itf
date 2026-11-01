@@ -36,6 +36,8 @@ def _implicit_encoding(call: ast.Call) -> bool:
     name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
     if name in ("read_text", "write_text"):
         return True
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "tarfile":
+        return False  # tar archives are bytes, whatever the mode string says
     # open(path, ...) and path.open(...): only text mode decodes; binary modes have no encoding
     return name == "open" and bool(call.args or call.keywords) and "b" not in _mode(call)
 

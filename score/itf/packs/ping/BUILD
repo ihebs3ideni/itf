@@ -16,9 +16,15 @@ load("//bazel:py_itf_plugin.bzl", "py_itf_plugin")
 py_library(
     name = "lib",
     srcs = glob(["**/*.py"]) + ["//score/itf/packs:init"],
-    data = ["README.md"],
+    data = [
+        "README.md",
+        "pack.yaml",
+    ] + glob(["contracts/*.yaml"]),
     visibility = ["//test/packs:__subpackages__"],
-    deps = ["//score/itf/core"],
+    deps = [
+        "//score/itf/contracts",
+        "//score/itf/core",
+    ],
 )
 
 py_itf_plugin(
@@ -28,10 +34,14 @@ py_itf_plugin(
     visibility = ["//visibility:public"],
 )
 
-# Platform up = answers ping; for machines no pack starts (hardware, an externally run VM).
-py_itf_plugin(
-    name = "boot",
-    enabled_plugins = ["score.itf.packs.ping.boot"],
-    py_library = ":lib",
+# For tools and gates that read the pack's metadata and sources from runfiles.
+exports_files(
+    ["pack.yaml"],
     visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "sources",
+    srcs = ["pack.yaml"] + glob(["**/*.py"]),
+    visibility = ["//test/core:__pkg__"],
 )

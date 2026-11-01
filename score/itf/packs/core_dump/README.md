@@ -10,22 +10,14 @@ SPDX-License-Identifier: Apache-2.0
 *******************************************************************************
 -->
 
-# Core dumps pack
+# Core dump pack
 
-Copies core files off every scope that offers `exec.command` and `files.transfer`, at teardown while the target still runs.
+Copies core files off every scope that has `exec.command` and `files.transfer`, at teardown. It declares no capabilities or actions, so it has no labels; enable it with its Bazel flag.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/core_dump` | `score.itf.packs.core_dump.plugin` (an `itf_teardown` hook) |
+**Bazel:** `//score/itf/packs/core_dump`. Packs load from the labels of a composition (`core_dump.<name>`); never import one pack from another.
 
-**Providers**
+**Host prerequisites**
 
-- —
+- enable with --//score/itf/packs/core_dump:extract_core_dumps
+- output in $TEST_UNDECLARED_OUTPUTS_DIR/coredumps or --//score/itf/packs/core_dump:core_dumps_output_dir
 
-**Actions**
-
-- —
-
-**Host prerequisites:** Enable with `--//score/itf/packs/core_dump:extract_core_dumps`; output in `$TEST_UNDECLARED_OUTPUTS_DIR/coredumps` or `--//score/itf/packs/core_dump:core_dumps_output_dir`.
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'core.%'"`.

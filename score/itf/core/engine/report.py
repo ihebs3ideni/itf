@@ -48,11 +48,11 @@ _MARGIN = 36
 _STATE_TOP = 46
 
 _WHY_PROVIDER = {
-    "explicit-using": "named explicitly by the recipe (using=)",
+    "explicit-using": "named by the composition",
     "sole-implementation": "the only provider implementing this contract",
 }
 _WHY_BINDING = {
-    "explicit": "bound explicitly by the recipe (bind=)",
+    "explicit": "bound by the composition (bind:)",
     "rebind": "rebound by a higher-precedence contributor",
     "sole-candidate-in-scope": "the only node offering this contract in the scope",
     "derived": "created automatically to satisfy this slot",

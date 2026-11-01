@@ -12,48 +12,35 @@ SPDX-License-Identifier: Apache-2.0
 
 # QEMU pack
 
-An emulated machine as the target platform, configured by ITF's QEMU JSON (networks, SSH port, login, machine type).
+A QEMU machine as the platform, with its console, endpoint and login.
 
-| Bazel label | Loads |
-|---|---|
-| `//score/itf/packs/qemu` | `score.itf.packs.qemu.plugin` |
+**Bazel:** `//score/itf/packs/qemu`. Packs load from the labels of a composition (`qemu.<name>`); never import one pack from another.
 
-**Providers**
+| Label | Kind | Contract | What |
+|---|---|---|---|
+| `qemu.platform` | capability | `platform.instance` | the machine |
+| `qemu.endpoint` | capability | `descriptor.endpoint` | where the machine is reached |
+| `qemu.credentials` | capability | `descriptor.credentials` | the machine's login |
+| `qemu.console` | capability | `exec.console` | the serial console |
+| `qemu.start` | state | `platform.up` | boot the machine |
+| `qemu.open_console` | state | `console.open` | open the console |
 
-- `qemu.instance` (platform.instance): `config_file`, `kernel`, `rootfs`, `disk`; images boot through temporary qcow2 overlays
-- `qemu.console` (exec.console): the serial port, recorded from `console.open`
-- `qemu.endpoint`, `qemu.credentials` (descriptors): the SSH endpoint and login the JSON names
+**Host prerequisites**
 
-**Actions**
+- qemu-system-* and qemu-img
+- /dev/kvm for acceleration
+- tap networking runs under //scripts:run_under_qemu
 
-- `qemu.start_platform` → `itf.states.platform.up`
-- `qemu.open_console` → `itf.states.console.open` (relate `platform.up` to it to record the boot)
-
-**Host prerequisites:** `qemu-system-*`, `qemu-img`, `/dev/kvm` for acceleration; tap networking runs under `//scripts:run_under_qemu`.
-
-**Recipe excerpt**
+**Composition excerpt**
 
 ```yaml
-setup:
-  nodes:
-    - name: platform
-      contract: itf.capabilities.platform.instance
-      using: qemu.instance
-      config:
-        config_file: ${QEMU_CONFIG}
-        kernel: ${QEMU_KERNEL}
-    - name: endpoint
-      contract: itf.capabilities.descriptor.endpoint
-      using: qemu.endpoint
-    - name: credentials
-      contract: itf.capabilities.descriptor.credentials
-      using: qemu.credentials
-    - name: shell
-      contract: itf.capabilities.exec.shell
-      using: ssh.shell
-init:
-  goals:
-    - itf.states.shell.open
+capabilities:
+  platform:
+    factory: qemu.platform
+    with:
+      config_file: qemu.json
+  console: qemu.console
+goals:
+  - console.open
+  - platform.up
 ```
-
-Members, signatures and config keys: `bazel run //tools/catalog:query -- sql "SELECT * FROM v_recipe_node WHERE provider LIKE 'qemu.%'"`.

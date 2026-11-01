@@ -10,12 +10,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""`@itf.requires` and gating tests against the plan (docs/octo-kit/12-spec-itf-core.md §5)."""
+"""`@itf.requires` and gating tests against the plan.
+
+A test asks for a role: `@itf.requires("command")` means the target has a role `command`; `contract=` and
+`shape=` narrow it: `@itf.requires("command", contract="exec.command", shape=["exec"])`. The test then uses
+`target.command`. A test is deselected, before anything is built, with a reason naming what the target has:
+the role is missing, it has another contract, or it lacks members. Which role names a project uses is the
+project's convention; `itf contracts check` can enforce it.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .engine.publish import split_major
 from .engine.scopes import ROOT
 
 _MARK = "__itf_requirements__"
@@ -23,17 +31,35 @@ _MARK = "__itf_requirements__"
 
 @dataclass(frozen=True)
 class Requirement:
-    token: str
+    role: str
+    contract: str | None = None
     shape: tuple[str, ...] | None = None
     scope: str | None = None
+    major: int | None = None
 
 
-def requires(token: str, shape=None, scope: str | None = None):
-    req = Requirement(token, tuple(shape) if shape else None, scope)
+@dataclass(frozen=True)
+class Definition:
+    """What a session may know about a defined contract, handed in (the engine never needs it)."""
+
+    contract: str
+    version: int | None = None
+    stability: str = "stable"  # experimental | stable | deprecated
+    replaced_by: str | None = None
+
+
+def requires(role: str, contract: str | None = None, shape=None, scope: str | None = None):
+    """The test needs the role `role` of the target (`target.<role>`), optionally of `contract` (with `@<major>`)
+    and offering the members in `shape`; `scope` names a scope instead of the root."""
+    if not isinstance(role, str) or not role:
+        raise TypeError("@itf.requires takes a role name, for example @itf.requires('command')")
+    if isinstance(shape, str):
+        raise TypeError("shape is a list of member names, not a string")
+    name, major = split_major(contract) if contract else (None, None)
+    req = Requirement(role, name, tuple(shape) if shape else None, scope, major)
 
     def deco(func):
-        existing = getattr(func, _MARK, ())
-        setattr(func, _MARK, existing + (req,))
+        setattr(func, _MARK, getattr(func, _MARK, ()) + (req,))
         return func
 
     return deco
@@ -49,32 +75,37 @@ class GatingDecision:
     reason: str = ""
 
 
-# Gating reads the plan, never a live target: a test is deselected before anything is built, with a reason
-# that names what the target has. This is what lets one suite run against many recipes.
-def evaluate(requirement: Requirement, target_plan, scope: str, provider_gives: dict) -> GatingDecision:
+def evaluate(requirement: Requirement, target_plan, scope: str, factory_majors: dict | None = None) -> GatingDecision:
     label = "target" if scope == ROOT else f"target.{scope}"
-    tokens = target_plan.tokens(scope)
-    if requirement.token not in tokens:
+    role = requirement.role
+    names = target_plan.names(scope)
+    if role not in names:
+        return GatingDecision(False, f"{label} has no role {role!r}; roles: {', '.join(names) or '(none)'}")
+    node = target_plan.node(f"{scope}.{role}")
+    if requirement.contract is not None and node.contract != requirement.contract:
         return GatingDecision(
-            False,
-            f"{label} lacks {requirement.token!r}; has {', '.join(tokens) or '(nothing)'}",
+            False, f"{label}.{role} ({node.provider}) is {node.contract!r}, the test requires {requirement.contract!r}"
         )
+    if requirement.major is not None:
+        offered = (factory_majors or {}).get(node.provider)
+        if offered is not None and offered != requirement.major:
+            return GatingDecision(
+                False, f"{label}.{role} ({node.provider}) offers @{offered}, the test requires @{requirement.major}"
+            )
     if requirement.shape:
-        # Several nodes may fill the token (a container's files and SFTP's): one offering the shape is enough.
-        shortfalls = []
-        for name in target_plan.names(scope):
-            node = target_plan.node(f"{scope}.{name}")
-            if node.contract != requirement.token:
-                continue
-            gives = provider_gives.get(node.provider)
-            have = {m.name for m in gives.members} if gives else set()
-            missing = [m for m in requirement.shape if m not in have]
-            if not missing:
-                return GatingDecision(True)
-            shortfalls.append(missing)
-        missing = min(shortfalls, key=len, default=list(requirement.shape))
-        return GatingDecision(
-            False,
-            f"{label} offers {requirement.token!r} without member(s): {', '.join(missing)}",
-        )
+        have = {m.name for m in node.gives.members}
+        missing = [m for m in requirement.shape if m not in have]
+        if missing:
+            return GatingDecision(False, f"{label}.{role} ({node.provider}) lacks member(s): {', '.join(missing)}")
     return GatingDecision(True)
+
+
+def deprecations(target_plan, definitions: dict | None) -> list[str]:
+    """Plan-time warnings: a role's contract is defined as deprecated (only when definitions are loaded)."""
+    found = []
+    for node in target_plan.nodes:
+        definition = (definitions or {}).get(node.contract)
+        if definition is not None and definition.stability == "deprecated":
+            use = f"; use {definition.replaced_by!r}" if definition.replaced_by else ""
+            found.append(f"role {node.name} ({node.provider}) is {node.contract!r}, which is deprecated{use}")
+    return found

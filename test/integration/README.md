@@ -10,34 +10,34 @@ SPDX-License-Identifier: Apache-2.0
 *******************************************************************************
 -->
 
-# Integration tests: one suite, many recipes
+# Integration tests: one suite, many compositions
 
-Tests are written once, against capabilities, and gated on them with `@itf.requires(token,
-shape=[...])`. Each `py_itf_test` in `BUILD` runs the **same** suite against a different recipe;
-the planner knows what each recipe's platform provides, so every target runs exactly the tests its
-platform supports and lists the others as deselected, with the reason (`--test_output=all`).
-Supporting a new platform is adding a recipe, not touching a test.
+Tests are written once, against roles, and gated on them with `@itf.requires("<role>", contract=..., shape=[...])`;
+the test uses the role as `target.<role>` (`"command"`, `"files"`, `"platform"`). Each `py_itf_test` in `BUILD` runs the
+**same** suite against a different composition (`itf_target`, compiled during the build); the planner knows what each
+composition's platform provides, so every target runs exactly the tests its platform supports and lists the others as
+deselected, with the reason (`--test_output=all`). Supporting a new platform is adding a composition, not touching a test.
 
 ```
-suite/      generic tests, one file per capability area (command, process, files, shell, platform,
-            ping, console, logs)
-specific/   tests needing one platform's equipment, still gated by shape: a container
-            (`shape=["container"]`), a VM's second disk (`shape=["disk"]`), DLT on the target
-recipes/    one recipe per platform: YAML files, a Starlark twin, and the shared conftest.py
-            (loads the YAML recipe, bench-local actions, itf_verify checks)
+suite/       generic tests, one file per area (command, process, files, shell, platform, ping, console, logs)
+specific/    tests needing one platform's equipment, still gated by shape: a container, a VM's second disk, DLT on the
+             target, and the override file's values
+targets/     one composition per platform (*.itf.yaml) and the shared conftest.py (the project's own actions, the
+             readiness checks); the composition itself comes from configuration (`py_itf_test(target = ...)`)
+overrides/   an override file: the facts of one setup, merged by role into a composition
 ```
 
-| Target | Recipe | Platform |
+| Target | Composition | Platform |
 |---|---|---|
-| `:local` | `local.yaml` | the test host (runs anywhere, no daemon) |
-| `:serial` | `serial.yaml` | a serial console on a pty shell: commands go through `serial.exec` (runs anywhere, no hardware) |
-| `:docker` | `docker.yaml` | a container through the Docker API only |
-| `:docker_ssh` | `docker_ssh.yaml` | a container running sshd: SSH, SFTP, a shell session |
-| `:docker_ssh_starlark`, `:dlt_stream_starlark` | `recipes:docker_ssh_starlark`, `recipes:dlt_stream_starlark` | the same, recipes in Starlark (DR-003); `:recipe_equivalence_test` compares them with YAML |
-| `:dlt_stream`, `:dlt_receive` | `dlt_stream.yaml`, `dlt_receive.yaml` | a dlt-daemon container; stdlib stream or dlt-receive |
-| `:qnx_bridge`, `:qnx_port_forwarding`, `:ubuntu`, `:ebclfsa` | `qemu.yaml` | QEMU machines (manual) |
+| `:local` | `local.itf.yaml` | the test host (runs anywhere, no daemon) |
+| `:local_override` | `local.itf.yaml` + `overrides/local.itf.yaml` | the same host, with the platform's working directory from an override file |
+| `:serial` | `serial.itf.yaml` | a serial console on a pty shell; `command` goes through it (runs anywhere, no hardware) |
+| `:docker` | `docker.itf.yaml` | a container through the Docker API only |
+| `:docker_ssh` | `docker_ssh.itf.yaml` | a container running sshd: SSH, SFTP, a shell session |
+| `:dlt_stream`, `:dlt_receive` | `dlt_stream.itf.yaml`, `dlt_receive.itf.yaml` | a dlt-daemon container; stdlib stream or dlt-receive |
+| `:qnx_bridge`, `:qnx_port_forwarding`, `:ubuntu`, `:ebclfsa` | `qemu.itf.yaml` | QEMU machines (manual) |
 
-What each recipe selects (✓ ran, · deselected by gating, — file not in that target), from a run
+What each composition selects (✓ ran, · deselected by gating, — file not in that target), from a run
 against Podman:
 
 | Test | `local` | `docker` | `docker_ssh` | `dlt_stream` | `dlt_receive` |
@@ -47,7 +47,7 @@ against Podman:
 | command: stderr is part of the output | ✓ | ✓ | ✓ | ✓ | ✓ |
 | console: the console recorded output since it opened | · | · | · | · | · |
 | container: renew starts from a clean container | — | ✓ | ✓ | — | — |
-| container: the recipe volume is mounted | — | ✓ | ✓ | — | — |
+| container: the composition's volume is mounted | — | ✓ | ✓ | — | — |
 | dlt on target: a custom output file is used | — | — | — | ✓ | ✓ |
 | dlt on target: receivers stop when their block ends | — | — | — | ✓ | ✓ |
 | dlt on target: receives over tcp | — | — | — | ✓ | ✓ |
@@ -72,10 +72,10 @@ against Podman:
 | shell: stdout and stderr can be kept apart or merged | · | · | ✓ | · | · |
 | **selected** | **12** | **14** | **19** | **17** | **18** |
 
-On the QEMU recipes the console and ping tests are selected too (`qemu.console`, `icmp.ping`), and
+On the QEMU compositions the console and ping tests are selected too (`console: qemu.console`, `ping: ping.pinger`), and
 the second-disk test on `:ubuntu` and `:ebclfsa`.
 
-The suite also caught a provider bug while this matrix was built: `ssh.process` reported `-1` for a
+The suite also caught a provider bug while this matrix was built: the ssh `process` reported `-1` for a
 stopped process where the container and host providers report `143`. Generic tests hold providers
 of one contract to one behaviour.
 
@@ -84,7 +84,7 @@ of one contract to one behaviour.
 ```bash
 bazel test //test/integration:local                                  # anywhere
 bazel test //test/integration:docker_ssh --test_output=all            # gating decisions in the log
-bazel test //test/integration/recipes:docker_ssh_starlark_plan        # resolve a recipe, no hardware
+bazel build //test/integration:target_docker_ssh                      # compile a composition, no hardware
 bazel test //test/integration:linux_qemu_tests --config=qemu-integration-linux
 ```
 

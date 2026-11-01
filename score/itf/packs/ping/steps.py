@@ -10,22 +10,24 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""`itf.states.platform.up` for a machine nobody here starts (hardware, an externally run VM): it is
+"""`platform.up` for a machine nobody here starts (hardware, an externally run VM): it is
 up once its address answers ICMP echo. Load instead of a platform pack's start action, not beside it."""
 
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Pinger(Protocol):
+    __contract__ = "net.ping"
+
     host: str
 
     def ping(self) -> bool: ...
     def wait_up(self, timeout: float | None = None) -> bool: ...
 
 
-@delivers("itf.states.platform.up", name="icmp.await_boot", uses={"ping": "itf.capabilities.net.ping"})
+@state("platform.up", label="await_boot")
 def await_boot(ping: Pinger) -> None:
     if not ping.wait_up():
         raise TimeoutError(f"{ping.host} did not answer ICMP echo within its boot timeout")

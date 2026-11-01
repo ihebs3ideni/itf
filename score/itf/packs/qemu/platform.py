@@ -55,7 +55,7 @@ def _absolute(path: str | None) -> str | None:
 
 
 class QemuPlatform:
-    """`itf.capabilities.platform.instance`: one QEMU process, its console on stdio."""
+    """`platform`: one QEMU process, its console on stdio."""
 
     qemu_config: QemuConfigModel
     console: PipeConsole | None

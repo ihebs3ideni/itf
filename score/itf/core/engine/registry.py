@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from types import ModuleType
 
 from .hooks import implements_itf_hooks, new_plugin_manager
-from .publish import _STAGING, action_name_of, provider_name_of
+from .publish import _STAGING, label_of
 
 
 class CrossContributorImport(Exception):
@@ -45,7 +45,10 @@ NAMESPACE_PACKAGES = ("score.itf.packs",)
 # Shared by every contributor and owned by none: the core and its public alias. Contracts are not
 # shared code: a provider publishes its shape, a consumer declares what it expects (D-28).
 CORE_PACKAGE = "score.itf.core"
-SHARED_PACKAGES = (CORE_PACKAGE,)
+# The contract definitions and their conformance checks are data about names, owned by no pack; a pack still
+# may not import them (it declares its own expectations), only tools and the conformance entrypoint do.
+CONTRACTS_PACKAGE = "score.itf.contracts"
+SHARED_PACKAGES = (CORE_PACKAGE, CONTRACTS_PACKAGE)
 # Core modules a contributor may import; anything else under `score.itf.core` is an internal.
 PUBLIC_MODULES = frozenset({"score.itf", CORE_PACKAGE, f"{CORE_PACKAGE}.process"})
 
@@ -84,19 +87,19 @@ def _check_no_hookwrappers(mod: ModuleType) -> None:
 
 
 def _suggest(attr_name: str, home: str, val) -> str:
-    name = provider_name_of(val) or action_name_of(val)
+    name = label_of(val)
     if name:
-        return f"refer to it by name instead: using={name!r}"
+        return f"refer to it by its label in the composition instead: {name!r}"
     if isinstance(val, ModuleType):
         return f"list {home!r} in pytest_plugins instead of importing it"
     return f"refer to {attr_name!r} by name instead of importing {home!r}"
 
 
 # Hookwrappers are rejected (_check_no_hookwrappers) because they run around other plugins' hooks and make
-# the order of itf_setup/itf_init observable to unrelated contributors; plain hookimpls keep each
+# the order of itf hooks observable to unrelated contributors; plain hookimpls keep each
 # contributor's claims independent of registration order.
 def _contributor_tops(modules: dict[str, ModuleType]) -> set[str]:
-    # A package that publishes providers or actions is a contributor even if no recipe registered it.
+    # A package that publishes factories or actions is a contributor even if nothing registered it.
     names = (*modules, *_STAGING)
     return {_top_level(name) for name in names if not _is_shared(name)}
 
@@ -135,8 +138,7 @@ def _check_import_statements(mod_name: str, mod: ModuleType, contributor_tops: s
                     node.lineno,
                     module if imported is None else f"{module}.{imported}",
                     f"{top!r} is another contributor",
-                    "refer to its providers/actions by name (using='...') and list its modules in "
-                    "pytest_plugins; only pytest loads contributors (D-28)",
+                    "name its capabilities and actions by label in the composition; packs never import each other",
                 )
 
 
@@ -187,14 +189,16 @@ def _check_cross_contributor_imports(modules: dict[str, ModuleType]) -> None:
                 )
 
 
-ORIGINS = ("plugin", "conftest")  # lowest first: the root conftest overrides every plugin
+# Lowest first: a composition outranks the packs it names (it may choose between two actions making one state true),
+# and the root conftest outranks both.
+ORIGINS = ("plugin", "composition", "conftest")
 
 
 @dataclass(frozen=True)
 class Registry:
     pm: object
     modules: dict = field(default_factory=dict)  # module name -> module
-    origins: dict = field(default_factory=dict)  # module name -> "plugin" | "conftest"
+    origins: dict = field(default_factory=dict)  # module name -> "plugin" | "composition" | "conftest"
 
     def origin_of(self, module: ModuleType) -> str:
         return self.origins[module.__name__]
@@ -236,11 +240,12 @@ def _plugin_names(module: ModuleType) -> list[str]:
     return [names] if isinstance(names, str) else list(names)
 
 
-def register(roots) -> Registry:
-    """Without pytest: `roots` play the root conftest; their `pytest_plugins` are followed as pytest would."""
+def follow(items) -> list[tuple[ModuleType, str]]:
+    """`items`: (module or module name, origin) pairs. Adds every module they name in `pytest_plugins`,
+    as pytest would, at the origin `plugin`; a module is kept when it is a root or an ITF contributor."""
     entries: list[tuple[ModuleType, str]] = []
     seen: set[str] = set()
-    frontier = [(_load(r), "conftest") for r in roots]
+    frontier = [(_load(item), origin) for item, origin in items]
     while frontier:
         next_frontier = []
         for mod, origin in frontier:
@@ -251,4 +256,18 @@ def register(roots) -> Registry:
                 entries.append((mod, origin))
             next_frontier += [(_load(n), "plugin") for n in sorted(_plugin_names(mod))]
         frontier = next_frontier
-    return register_modules(entries)
+    return entries
+
+
+def expand(entries) -> list[tuple[ModuleType, str]]:
+    """Without pytest: a (module, origin) pair is taken as it is; a bare module (or its name) is a pack
+    entrypoint and brings the modules it lists in `pytest_plugins`, at the origin `plugin`."""
+    found: list[tuple[ModuleType, str]] = []
+    for entry in entries:
+        found += [entry] if isinstance(entry, tuple) else follow([(entry, "plugin")])
+    return found
+
+
+def register(roots, extra=()) -> Registry:
+    """Without pytest: `roots` play the root conftest; their `pytest_plugins` are followed as pytest would."""
+    return register_modules([*follow((r, "conftest") for r in roots), *extra])

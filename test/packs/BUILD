@@ -54,21 +54,11 @@ py_itf_unittest(
 )
 
 py_itf_unittest(
-    name = "catalog_test",
-    srcs = ["test_catalog.py"],
-    data = ["//:docs/_generated/catalog.html"],
-    env = {"CATALOG_HTML": "$(rootpath //:docs/_generated/catalog.html)"},
-    deps = ["//tools/catalog"],
-)
-
-py_itf_unittest(
     name = "sim_test",
     srcs = glob(["sim/*.py"]),
     deps = [
-        "//score/itf/packs/dlt:lib",
-        "//score/itf/packs/docker:lib",
+        "//score/itf/core",
         "//score/itf/packs/net:lib",
-        "//score/itf/packs/pcap:lib",
-        "//score/itf/packs/ssh:lib",
+        "//score/itf/packs/sim:lib",
     ],
 )

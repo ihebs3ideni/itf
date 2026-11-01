@@ -10,16 +10,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF core's public surface. Nothing else is exported (docs/octo-kit/11-spec-itf-engine.md §3)."""
+"""ITF core's public surface. Nothing else is exported."""
 
 from .engine.bringup import ExecutionError, ProbeFailed
-from .engine.contexts import CollectionClosed, WrongPhase
 from .engine.hooks import hookimpl
-from .engine.publish import delivers, expect, provides
+from .engine.packs import PackNotFound
+from .engine.publish import DuplicateLabel, capability, state
 from .engine.scopes import InvalidScopeName
 from .engine.realize import RealizationError
 from .engine.registry import CrossContributorImport
-from .frontends.yaml_config import load_init, load_setup, recipe_document
+from .frontends.composition import CompositionError
+from .frontends.target_source import TargetSource, TargetSourceError
+from .frontends.target_source import resolve as resolve_target
+from .frontends.target_source import resolve_overrides
 from .gating import requires
 from .session import (
     ConfigValidationFailed,
@@ -33,17 +36,17 @@ from .session import (
 
 __all__ = [
     "hookimpl",
-    "provides",
-    "delivers",
-    "expect",
+    "capability",
+    "state",
     "requires",
     "Session",
     "describe",
     "compose",
-    "CollectionClosed",
-    "WrongPhase",
     "CrossContributorImport",
+    "CompositionError",
+    "DuplicateLabel",
     "InvalidScopeName",
+    "PackNotFound",
     "RealizationError",
     "ExecutionError",
     "ProbeFailed",
@@ -51,7 +54,8 @@ __all__ = [
     "ConfigValidationFailed",
     "NotReady",
     "TargetNameClash",
-    "load_setup",
-    "load_init",
-    "recipe_document",
+    "TargetSource",
+    "TargetSourceError",
+    "resolve_target",
+    "resolve_overrides",
 ]

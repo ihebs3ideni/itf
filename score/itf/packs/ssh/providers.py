@@ -10,10 +10,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""SSH providers. A session is constructed unconnected; `ssh.open_session` (steps.py) connects it."""
+"""SSH providers. A session is constructed unconnected; `ssh.open` (steps.py) connects it."""
 
 from collections.abc import Iterator
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .session import Credentials, Endpoint, ShellConfig, SshSession
 from .command import Shell, SshExec
@@ -21,43 +21,23 @@ from .process import SshProcess
 from .files import SftpFiles
 
 
-@provides(
-    "itf.capabilities.exec.shell",
-    name="ssh.shell",
-    config_schema=ShellConfig,
-    needs={
-        "endpoint": "itf.capabilities.descriptor.endpoint",
-        "credentials": "itf.capabilities.descriptor.credentials",
-    },
-)
-def make_session(endpoint: Endpoint, credentials: Credentials, config: dict) -> Iterator[SshSession]:
+@capability("exec.shell", label="shell")
+def make_session(endpoint: Endpoint, credentials: Credentials, config: ShellConfig) -> Iterator[SshSession]:
     session = SshSession(endpoint, credentials, config)
     yield session
     session.close()
 
 
-@provides(
-    "itf.capabilities.exec.command",
-    name="ssh.exec",
-    needs={"shell": "itf.capabilities.exec.shell"},
-)
+@capability("exec.command", label="exec")
 def make_exec(shell: Shell) -> SshExec:
     return SshExec(shell)
 
 
-@provides(
-    "itf.capabilities.exec.process",
-    name="ssh.process",
-    needs={"shell": "itf.capabilities.exec.shell"},
-)
+@capability("exec.process", label="process")
 def make_process(shell: Shell) -> SshProcess:
     return SshProcess(shell)
 
 
-@provides(
-    "itf.capabilities.files.transfer",
-    name="sftp.files",
-    needs={"shell": "itf.capabilities.exec.shell"},
-)
+@capability("files.transfer", label="files")
 def make_files(shell: Shell) -> SftpFiles:
     return SftpFiles(shell)

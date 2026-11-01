@@ -12,15 +12,17 @@
 # *******************************************************************************
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Receiver(Protocol):
+    __contract__ = "observe.logs"
+
     def subscribe(self) -> None: ...
     def active(self) -> bool: ...
 
 
-@delivers("itf.states.logs.active", name="dlt.join_multicast", uses={"logs": "itf.capabilities.observe.logs"})
+@state("logs.active", label="join")
 def join_multicast(logs: Receiver) -> None:
     logs.subscribe()
 

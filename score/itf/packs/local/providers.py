@@ -10,11 +10,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""Host providers. Constructing the platform creates nothing: `local.start_platform` does."""
+"""Host providers. Constructing the platform creates nothing: `local.start` does."""
 
 from collections.abc import Iterator
 
-from score.itf.core import provides
+from score.itf.core import capability
 
 from .command import LocalExec, Platform
 from .files import LocalFiles
@@ -23,27 +23,25 @@ from .platform import LocalPlatform, PlatformConfig
 from .process import LocalProcess
 
 
-@provides("itf.capabilities.platform.instance", name="local.instance", config_schema=PlatformConfig)
-def make_platform(config: dict) -> Iterator[LocalPlatform]:
+@capability("platform.instance", label="platform", observes=lambda config: bool(config.get("root")))
+def make_platform(config: PlatformConfig) -> Iterator[LocalPlatform]:
+    """The config is a dict at run time; its dataclass annotation is the schema. With a `root` a later process
+    finds the directory again (a marker file), so the target can be detached and taken down."""
     platform = LocalPlatform(config)
     yield platform
     platform.stop()
 
 
-@provides("itf.capabilities.exec.command", name="local.exec", needs={"platform": "itf.capabilities.platform.instance"})
+@capability("exec.command", label="exec")
 def make_exec(platform: Platform) -> LocalExec:
     return LocalExec(platform)
 
 
-@provides(
-    "itf.capabilities.exec.process", name="local.process", needs={"platform": "itf.capabilities.platform.instance"}
-)
+@capability("exec.process", label="process")
 def make_process(platform: Platform) -> LocalProcess:
     return LocalProcess(platform)
 
 
-@provides(
-    "itf.capabilities.files.transfer", name="local.files", needs={"platform": "itf.capabilities.platform.instance"}
-)
+@capability("files.transfer", label="files")
 def make_files(platform: FilesPlatform) -> LocalFiles:
     return LocalFiles(platform)

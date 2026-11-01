@@ -10,20 +10,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""`itf.states.logs.active` for dlt-receive. Over TCP, add a relation in the recipe so it waits for
-the target: `logs.active requires network.reachable`."""
+"""`logs.active` for dlt-receive. It has no `after=`: over TCP, a project action that waits for the target
+(`@state("logs.active", after=("network.reachable",))`) is chosen with `by:` in the composition."""
 
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Logs(Protocol):
+    __contract__ = "observe.logs"
+
     def subscribe(self) -> None: ...
     def active(self) -> bool: ...
 
 
-@delivers("itf.states.logs.active", name="dlt.start_receive", uses={"logs": "itf.capabilities.observe.logs"})
+@state("logs.active", label="start_receive")
 def start_receive(logs: Logs) -> None:
     logs.subscribe()
 

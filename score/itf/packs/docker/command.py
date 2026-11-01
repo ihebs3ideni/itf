@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 class Platform(Protocol):
+    __contract__ = "platform.instance"
+
     container: object
 
     def client(self): ...
@@ -34,7 +36,7 @@ def _short(text: str, limit: int = 200) -> str:
 
 
 class DockerExec:
-    """`itf.capabilities.exec.command` through the Docker API: works with any image, no SSH needed.
+    """`command` through the Docker API: works with any image, no SSH needed.
     The Docker API has no exec timeout; `timeout` is accepted for the contract and not enforced."""
 
     def __init__(self, platform: Platform):

@@ -10,21 +10,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-from score.itf.core import delivers
+from typing import Protocol
 
-from .stream import DltReceiver
+from score.itf.core import state
 
 
-@delivers(
-    "itf.states.logs.active",
-    name="dlt.subscribe_stream",
-    requires=("itf.states.platform.up",),
-    uses={"logs": "itf.capabilities.observe.logs"},
-)
-def subscribe_stream(logs: DltReceiver) -> None:
+class Logs(Protocol):
+    __contract__ = "observe.logs"
+
+    def subscribe(self) -> None: ...
+    def _live(self) -> bool: ...
+
+
+@state("logs.active", after=("platform.up",), label="subscribe")
+def subscribe_stream(logs: Logs) -> None:
     logs.subscribe()
 
 
 @subscribe_stream.probe
-def is_stream_active(logs: DltReceiver) -> bool:
+def is_stream_active(logs: Logs) -> bool:
     return logs._live()

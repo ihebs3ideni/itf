@@ -12,20 +12,24 @@
 # *******************************************************************************
 from typing import Protocol
 
-from score.itf.core import delivers
+from score.itf.core import state
 
 
 class Platform(Protocol):
+    __contract__ = "platform.instance"
+
     def start(self) -> None: ...
     def running(self) -> bool: ...
 
 
 class Console(Protocol):
+    __contract__ = "exec.console"
+
     def open(self) -> None: ...
     def is_open(self) -> bool: ...
 
 
-@delivers("itf.states.platform.up", name="qemu.start_platform", uses={"platform": "itf.capabilities.platform.instance"})
+@state("platform.up", label="start")
 def start_platform(platform: Platform) -> None:
     platform.start()
 
@@ -35,7 +39,7 @@ def platform_is_up(platform: Platform) -> bool:
     return platform.running()
 
 
-@delivers("itf.states.console.open", name="qemu.open_console", uses={"console": "itf.capabilities.exec.console"})
+@state("console.open", label="open_console")
 def open_console(console: Console) -> None:
     console.open()
 
