@@ -330,9 +330,29 @@ facade is a thin layer in the project, as the legacy example already shows.
 
 ### Bazel
 
-`itf_target(name, src = "target.itf.yaml")` validates the composition during the build and writes its plan.
-`py_itf_test(target = ":ecu")` runs tests against it; its pack dependencies come from the part labels.
-`bazel run :ecu.up` and `:ecu.down` are the lifecycle.
+Bazel adds checking and packaging, not a dialect: the composition reaches a test as the YAML file it is, and the
+engine reads it exactly as `pytest --itf-target` would without Bazel (no generated document, no setup hooks).
+
+```python
+itf_target(
+    name = "ecu",
+    src = "ecu.itf.yaml",
+    packs = ["@score_itf//score/itf/packs/docker"],
+    files = {"ITF_IMAGE_LOAD": "//images:load"},    # the composition says ${ITF_IMAGE_LOAD}
+)
+py_itf_test(name = "smoke", srcs = ["test_smoke.py"], target = ":ecu")
+```
+
+- **Verifier.** `bazel build :ecu` compiles the composition with its packs and overrides (both gates, nothing
+  constructed), writes `ecu.plan.json` and fails with ITF's diagnostics when it does not compile. The run compiles
+  again, because its action plan depends on what the probes observe at that moment.
+- **Bundle.** The target carries the composition, overrides, included files, the project's conftest and the packs'
+  code to every test that uses it. `packs` is the one repetition Bazel needs (it cannot read YAML while analysing),
+  and the build fails if a factory label names a pack not listed.
+- **The one place for `${NAME}` values.** `files` maps a name to a built file's label: every test gets the file in
+  its runfiles and `${NAME}` set to its path. `env` gives the other values. Tests inherit both, so they need no
+  `data` or `$(location)`, and the composition stays plain, portable YAML. While compiling, `${NAME}` is the label
+  written as a path: nothing is opened, so checking a composition never builds or downloads what it points at.
 
 ## Where each thing is defined
 
