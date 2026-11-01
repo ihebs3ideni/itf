@@ -62,3 +62,27 @@ py_itf_unittest(
         "//score/itf/packs/sim:lib",
     ],
 )
+
+py_itf_unittest(
+    name = "catalog_test",
+    srcs = glob(["catalog/*.py"]),
+    data = [
+        "//:docs/_generated/catalog.html",
+        "//:docs/reference/contracts.md",
+    ],
+    deps = [
+        "//score/itf/contracts",
+        "//score/itf/core",
+        "//score/itf/packs/core_dump",
+        "//score/itf/packs/dlt",
+        "//score/itf/packs/docker",
+        "//score/itf/packs/local",
+        "//score/itf/packs/net",
+        "//score/itf/packs/pcap",
+        "//score/itf/packs/ping",
+        "//score/itf/packs/qemu",
+        "//score/itf/packs/serial",
+        "//score/itf/packs/sim",
+        "//score/itf/packs/ssh",
+    ],
+)
