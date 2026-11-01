@@ -23,6 +23,15 @@ the `Eclipse S-CORE project <https://github.com/eclipse-score/score/tree/main/do
 Each record is named ``DR-{number}-{category}.md`` where category is one of
 ``arch``, ``infra``, ``proc``, or ``strat``.
 
+Architecture
+------------
+
+.. toctree::
+   :maxdepth: 1
+   :glob:
+
+   DR-*-arch*
+
 Infrastructure
 --------------
 
