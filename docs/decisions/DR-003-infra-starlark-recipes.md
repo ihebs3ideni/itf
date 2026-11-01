@@ -16,7 +16,8 @@ SPDX-License-Identifier: Apache-2.0
 # DR-003-Infra: Starlark Recipes
 
 **Date:** 2026-10-30
-**Status:** Proposed; implemented on the branch (`bazel/recipe.bzl`, `//test/integration:docker_ssh_starlark`, `:dlt_stream_starlark`)
+**Status:** Proposed; the recipe format it describes (`itf_recipe`) is replaced by compositions and `itf_target`, see
+[DR-006](DR-006-target-composition.md). The decision that a build compiles the target description and fails early stands.
 
 > This record follows the Decision Record convention established by the
 > Eclipse S-CORE project:
@@ -148,7 +149,7 @@ actions the recipe relies on are resolved too.
 | YAML `extends` accepting a generated parent by its working-directory path | done |
 | Starlark twins: `docker_ssh_starlark` (same 19 tests selected as the YAML recipe), `dlt_stream_starlark` (extends a base; the image's `oci_load` given with `location()`; same 17 tests) | done |
 | `//test/integration:recipe_equivalence_test`: the Starlark and YAML `docker_ssh` recipes make the same declarations | done |
-| `bazel run //tools/catalog:query -- recipe <provider>`: a node skeleton in Starlark and YAML | done |
+| `bazel run //tools/catalog:query -- recipe <member|pack[:variant]>`: a node skeleton in Starlark and YAML | done |
 | User guide and agent skill | done |
 
 ## Open Questions

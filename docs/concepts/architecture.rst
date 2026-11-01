@@ -11,7 +11,6 @@
    #
    # SPDX-License-Identifier: Apache-2.0
    # *******************************************************************************
-
 .. _itf_architecture:
 
 Architecture
@@ -23,64 +22,62 @@ depending only on the one below:
 .. code-block:: text
 
    pytest adapter      score/itf/core/adapters/pytest   discovery, gating, bring-up, fixtures
-   ITF core            score/itf/core                   session, contexts, realization, probes,
-                                                         execution, unwind, YAML frontend
+   ITF core            score/itf/core                   session, realization, probes, execution,
+                                                         unwind, the composition format
    OCTO                score/itf/core/octo               the planner: pure standard library
 
-Packs (``score/itf/packs``) and recipes (a test's root ``conftest.py``) depend on the core's public
-API only, and never on each other. Gates in ``//test/core:gates_test`` keep OCTO free of imports
-and both OCTO and the core free of domain words (``ssh``, ``docker``, ``dlt``, ...): domain code
-lives in packs.
+Packs (``score/itf/packs``) and a project's own parts (its root ``conftest.py``) depend on the core's public
+API only, and never on each other. Gates in ``//test/core:gates_test`` keep OCTO free of imports and both
+OCTO and the core free of domain words (``ssh``, ``docker``, ``dlt``, ...): domain code lives in packs.
 
 Contracts instead of a target class
 -----------------------------------
 
-A *capability contract* is a role named by a token (``itf.capabilities.exec.command``); a
-*provider* is one implementation (``docker.exec``, ``ssh.exec``); a *node* is one named instance
-in a scope (``target.command``). A *state contract* is a condition (``itf.states.platform.up``)
-with an action that establishes it and a probe that checks it. Docker and QEMU are two providers
-of ``itf.capabilities.platform.instance``: a test written against the command contract runs on
-either.
+A *capability contract* (``exec.command``) is fulfilled by a *capability factory* (``@capability``, label
+``docker.exec``); a composition places it under a *role* (``command``), and a test uses it as
+``target.command``. A *state contract* (``platform.up``) is fulfilled by an *action* (``@state``, label
+``docker.start``) with a probe that checks it. Docker and QEMU are two packs of ``platform.instance``: a test
+written against ``command`` runs on either. To the planner every name is an opaque string; ITF knows no
+contracts (see :doc:`model`).
 
-Packs never share code. A provider publishes the shape of what it returns; a consumer (another
-provider's slot, an action, a test's ``@itf.requires(..., shape=...)``) states the members it
-needs with its own Protocol. OCTO compares the two at every seam.
+Packs never share code. A factory publishes the shape of what it returns; a consumer (another factory's slot,
+an action, a test's ``@itf.requires(..., shape=...)``) states the members it needs with its own Protocol. OCTO
+compares the two at every seam.
 
 Two gates
 ---------
 
 Before any test is collected, OCTO resolves:
 
-1. **Gate 1, what must exist**: providers chosen, slots bound, shapes checked, construction order.
-2. **Gate 2, what must happen**: from the goals, the actions to run and their order, from
-   ``requires`` (what must hold first) and ``invalidates`` (what an action destroys). Probes run
-   first, so the plan is the delta from what already holds. Actions sharing an implementation
-   collapse into one step that verifies each delivered state with its own probe.
+1. **Gate 1, what must exist**: factories bound to roles, slots bound, shapes checked, settings validated,
+   construction order.
+2. **Gate 2, what must happen**: from the goals, the actions to run and their order, from ``after`` (what must
+   hold first) and ``breaks`` (what an action destroys). Probes run first, so the plan is the delta from what
+   already holds. Actions sharing an implementation collapse into one step that verifies each state with its
+   own probe.
 
-A failure is one diagnostic naming the gate, not hundreds of red tests. ``--itf-plan`` stops here.
+A failure is one diagnostic naming the gate, not hundreds of red tests. ``itf validate``, ``itf plan`` and
+``--itf-plan`` stop here.
 
 Lifecycle
 ---------
 
 .. code-block:: text
 
-   register → publish → itf_setup → Gate 1 → itf_init → probe → Gate 2 → select (gating)
-            → bring-up (execute, verify probes) → itf_verify → tests → itf_teardown → unwind
+   load packs from labels → register → publish → compile composition → gate 1 → probe → gate 2
+        → select (gating) → bring-up (execute, verify probes) → itf_verify → tests → itf_teardown → unwind
 
-Objects are realized lazily: a deselected test's capabilities are never built. Tests change state
-only through the planner: ``target.reach(state)`` and ``target.renew(node)``, the latter
-dismantling a node and its dependents, then reaching the goals again. Per-test isolation is a
-pytest fixture calling ``renew``: pytest's scopes decide when, the planner decides what.
+Roles are realized lazily: a deselected test's capabilities are never built. State changes only through the
+planner: ``session.reach(state)`` and ``session.renew(role)``, the latter dismantling a role and its dependents,
+then reaching the goals again.
 
 Bazel integration
 -----------------
 
-``py_itf_test`` builds a ``py_test`` that loads the ITF adapter and the listed ``py_itf_plugin``
-targets (packs, or plain pytest plugins), adds their runfiles and environment, and expands
-``$(location)`` in ``args`` and ``env``. Packs ship their tools (dlt-receive, tcpdump) as
-Bazel-built data found through runfiles; a hermetic C/C++ toolchain builds them. Run artifacts go
-to ``$TEST_UNDECLARED_OUTPUTS_DIR/itf-run``. ``//tools/catalog`` builds the pack catalog from the
-packs' own decorators.
+``itf_target`` compiles a composition in a build action and writes its plan. ``py_itf_test(target = ...)`` builds
+a ``py_test`` that loads the ITF adapter, the packs the target names, and the composition and its override files
+(``ITF_TARGET`` and ``ITF_OVERRIDE``); ``$(location)`` in ``env`` is expanded. Packs ship their tools (dlt-receive,
+tcpdump) as Bazel-built data found through runfiles. Run artifacts go to ``$TEST_UNDECLARED_OUTPUTS_DIR/itf-run``.
 
-ITF no longer ships the original ``Target`` API; a project keeps old tests running with its own
-legacy layer over the packs (``examples/examples/legacy``); see :doc:`../how-to/migrate`.
+ITF does not ship the original ``Target`` API; a project keeps old tests running with its own facade over the
+packs (``examples/examples/legacy``); see :doc:`../how-to/migrate`.

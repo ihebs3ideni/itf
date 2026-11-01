@@ -17,55 +17,53 @@
 Packs
 =====
 
-Each pack is loaded by Bazel label (``py_itf_test(plugins = [...])``); a recipe selects providers
-by name with ``using:``. The `pack marketplace <../catalog.html>`_ is the same catalog as a browsable page: every contract and
-state with its providers, consumers, packs, configuration and copy-ready recipe snippets. The catalog
-lists every member, signature, config key and prerequisite,
-built from the packs' code:
-
-.. code-block:: bash
-
-   bazel run //tools/catalog:query -- sql "SELECT * FROM v_capability_providers"
-   bazel run //tools/catalog:query -- sql "SELECT * FROM v_state_deliverers"
-   bazel run //tools/catalog:query -- serve
+A pack is loaded from the factory labels of a composition (``docker.exec`` loads ``docker``); under Bazel the
+``packs`` of an ``itf_target`` list the pack targets its labels may name. Each pack's own ``README.md`` carries its
+label table, host prerequisites and a composition excerpt. The labels below are what a composition puts under
+``factory:`` (capability factories) and ``by:`` (actions).
 
 .. list-table::
    :header-rows: 1
 
    * - Label
-     - Providers
+     - Capability factories
      - Actions (state)
    * - ``//score/itf/packs/docker``
-     - ``docker.instance``, ``docker.exec``, ``docker.process``, ``docker.files``, ``docker.endpoint``
-     - ``docker.start_platform`` (platform.up)
+     - ``docker.platform``, ``docker.exec``, ``docker.process``, ``docker.files``, ``docker.endpoint``
+     - ``docker.start`` (platform.up)
    * - ``//score/itf/packs/qemu``
-     - ``qemu.instance``, ``qemu.console``, ``qemu.endpoint``, ``qemu.credentials``
-     - ``qemu.start_platform`` (platform.up), ``qemu.open_console`` (console.open)
+     - ``qemu.platform``, ``qemu.console``, ``qemu.endpoint``, ``qemu.credentials``
+     - ``qemu.start`` (platform.up), ``qemu.open_console`` (console.open)
    * - ``//score/itf/packs/ssh``
-     - ``ssh.shell``, ``ssh.exec``, ``ssh.process``, ``sftp.files``
-     - ``ssh.open_session`` (shell.open, network.reachable)
+     - ``ssh.shell``, ``ssh.exec``, ``ssh.process``, ``ssh.files``
+     - ``ssh.open`` (shell.open, network.reachable)
    * - ``//score/itf/packs/net``
-     - ``static.endpoint``, ``key.credentials``, ``password.credentials``
-     - —
-   * - ``//score/itf/packs/ping`` / ``:boot``
-     - ``icmp.ping``
-     - ``icmp.await_boot`` (platform.up), ``:boot`` only
-   * - ``//score/itf/packs/dlt`` / ``:multicast`` / ``:receive``
-     - ``dlt.stream`` / ``dlt.multicast`` / ``dlt.receive``, ``dlt.receive_tcp``
-     - ``dlt.subscribe_stream`` / ``dlt.join_multicast`` / ``dlt.start_receive`` (logs.active)
+     - ``net.endpoint``, ``net.key``, ``net.password``
+     - none
+   * - ``//score/itf/packs/ping``
+     - ``ping.pinger``
+     - ``ping.await_boot`` (platform.up)
+   * - ``//score/itf/packs/dlt``
+     - ``dlt.stream``, ``dlt.multicast``, ``dlt.receive``, ``dlt.receive_tcp``
+     - ``dlt.subscribe``, ``dlt.join``, ``dlt.start_receive`` (logs.active)
    * - ``//score/itf/packs/dlt:on_target``
      - the ``dlt_on_target`` fixture
-     - —
-   * - ``//score/itf/packs/pcap`` / ``:host``
-     - ``tcpdump.capture``
-     - ``tcpdump.start_capture`` / ``tcpdump.start_host_capture`` (capture.running)
+     - none
+   * - ``//score/itf/packs/pcap``
+     - packet capture
+     - capture.running
    * - ``//score/itf/packs/serial``
-     - ``serial.console``, ``serial.exec``
-     - ``serial.open_console`` (console.open)
+     - ``serial.console``, ``serial.pty_console``, ``serial.exec``
+     - ``serial.open`` (console.open)
+   * - ``//score/itf/packs/local``
+     - ``local.platform``, ``local.exec``, ``local.process``, ``local.files``
+     - ``local.start`` (platform.up)
    * - ``//score/itf/packs/core_dump``
-     - ``itf_teardown`` hook (``--//score/itf/packs/core_dump:extract_core_dumps``)
-     - —
+     - the ``itf_teardown`` hook (``--//score/itf/packs/core_dump:extract_core_dumps``)
+     - none
+   * - ``//score/itf/packs/sim``
+     - ``sim.docker_platform``, ``sim.docker_exec``, ``sim.ssh_shell``, ``sim.dlt_logs``, ``sim.pcap_capture``
+     - the ``sim.*`` actions
 
-Offline variants (``:sim``) of docker, ssh, dlt and pcap stand in when no daemon or hardware is
-available. score_tooling's attribute plugin is ``//:attribute_plugin``. The original plugins are gone; see
-:doc:`../how-to/migrate`.
+The ``sim`` pack stands in when no daemon or hardware is available. score_tooling's attribute plugin is
+``//:attribute_plugin``. The original plugins are gone; see :doc:`../how-to/migrate`.

@@ -1,222 +1,133 @@
 ---
 name: itf
-description: 'Discover and use ITF (score_itf): find what packs provide (capabilities, states, providers, actions) in the SQLite pack catalog, then write a recipe (Python hooks or YAML) and pytest tests, run them with Bazel, or drive ITF from plain Python. Use when: asked what ITF can do on a target/bench; "which pack/provider gives X"; writing or reviewing a recipe, conftest, YAML, BUILD py_itf_test or ITF test; migrating a legacy ITF test (target.execute, docker_plugin); writing a new pack; checking whether a requirement is coverable or needs a new pack.'
-argument-hint: 'A requirement, a capability/state token, a pack, or "how do I ..."'
+description: 'Compose and test targets with ITF (score_itf): write a composition (`*.itf.yaml`, roles, factories, goals, overrides), pytest tests that require roles, `itf_target` and `py_itf_test(target = ...)` in Bazel, and the project''s own parts (`@capability`, `@state`). Use when: asked what ITF can do on a target; writing or reviewing a composition, override file, conftest, BUILD itf_target/py_itf_test or ITF test; "which factory gives X"; migrating a legacy ITF test (target.execute, docker_plugin) or a recipe; writing a pack; defining, mapping or enforcing a contract (`itf contracts map|new|check`); choosing a starter; validating, graphing, bringing up or tearing down a target (`itf validate|plan|graph|up|down|test`).'
+argument-hint: 'A requirement, a role or factory label, a state, a contract name, or "how do I ..."'
 ---
 
-# ITF: discover with the catalog, compose with a recipe, test by contract
+# ITF: compose a target from self-describing parts, test by role
 
-ITF builds a test target from **packs**. A pack publishes:
+ITF is a platform to compose test targets from parts that describe themselves. OCTO plans from those
+descriptions, and only those, before anything exists. Nothing is trusted on its name. Use these words and no
+others (full text: `docs/concepts/model.md`):
 
-| Thing | Form | Example |
+| Word | What it is | Example |
 |---|---|---|
-| capability (contract) | `itf.capabilities.<area>.<name>` | `itf.capabilities.exec.command`: something a test holds |
-| provider | short name, chosen with `using:` | `docker.exec`, `ssh.exec`: implementations of that capability |
-| member | what a test may call on a node | `exec(command, timeout) -> tuple[int, str]` |
-| state | `itf.states.<area>.<name>` | `itf.states.shell.open`: a condition that can hold |
-| action | short name; `requires` / `invalidates` other states | `ssh.open_session` |
-| entrypoint | module a recipe loads (a `py_itf_plugin` target) | `score.itf.packs.ssh.plugin` = `//score/itf/packs/ssh` |
+| capability contract | a name for what a test uses; fulfilled by a capability factory | `exec.command` |
+| state contract | a name for a condition; fulfilled by an action with a probe | `platform.up` |
+| factory | `@capability("exec.command")`; label `<pack>.<function>` | `docker.exec`, `ssh.shell` |
+| action | `@state("platform.up", after=..., breaks=...)` with `@<action>.probe` | `docker.start` |
+| composition | a target: roles, settings, goals; a `*.itf.yaml` file | `target.itf.yaml` |
+| role | the key of a composition's `capabilities:`; `target.<role>` | `command` |
+| scope | one device of a multi-device target | `gw` |
 
-A **recipe** is the test's root `conftest.py`: it wires nodes (`itf_setup`) and states goals
-(`itf_init`), in Python or YAML. **Tests** ask only for capability tokens. OCTO, the planner, turns
-the recipe into a construction order (Gate 1) and an action plan (Gate 2) before any test runs.
+A part outside any pack is `project.<name>`. An override file is a composition holding only what changes (the
+values of one bench), merged by role.
 
-**Contract rule:** nothing imports a pack: not a test, not a recipe, not another pack. Packs are
-loaded through `py_itf_plugin` / `pytest_plugins`; consumers write their *own* Protocols and the
-planner checks at each seam that the provider's shape covers them.
+**ITF knows no contracts.** A contract is whatever name two parts agree on. Definitions are optional. ITF
+provides discovery (`itf contracts map`), skeletons (`itf contracts new --from-usage`) and enforcement
+(`itf contracts check --policy`). The ITF team's contracts are a supported set, not a standard.
 
-## 1. Discover: the catalog is a SQLite database
+**Everything is explicit, nothing is required.** Goals are listed, not inferred; no part enters a target unless
+listed; an empty composition is valid.
 
-```bash
-Q="bazel run --noshow_progress --ui_event_filters=-info,-debug //tools/catalog:query --"
-# the first lines of output are still Bazel's own ("Target ... up-to-date"); the result follows
-$Q schema                          # ALWAYS first: tables, views, column comments
-$Q search "<requirement sentence>" # full-text candidates; "no matches" = likely gap
-$Q sql "SELECT ..." [--json]       # any read-only query
-$Q serve --port 8799               # browsable catalog on 127.0.0.1 (run in background, stop after)
-# The same catalog is published with the docs as the pack marketplace (catalog.html). After changing a
-# pack, refresh it: bazel run //tools/catalog:build -- --out docs/_generated/catalog.html
-$Q recipe docker.instance          # a node skeleton in Starlark and YAML, required config as placeholders
+**Contract rule:** nothing imports a pack. Consumers write their *own* Protocols (a class with
+`__contract__ = "<contract>"` and only the members they use); the planner checks at each seam that the
+offering shape covers them.
+
+## 0. Start from a starter
+
+`examples/examples/starter/{container,ssh,serial}`: each has `target.itf.yaml` (with `# CHANGE:` marks),
+`bench.itf.yaml` (an override file), a conftest (`itf_verify`, `itf_teardown`), one test and a `BUILD` with
+`itf_target` and `py_itf_test(target = ...)`. Copy the closest, change the marks. Other examples:
+`exec_everywhere` (one test file, four compositions), `itf` (docker, dlt, qemu), `vendor_contract` (a vendor's
+own contract), `plain_python`, `legacy` (a facade over the original API).
+
+## 1. The lifecycle
+
+| Command | Does | Hardware |
+|---|---|---|
+| `itf validate [target.itf.yaml] [--override f]` | every metadata rule | no |
+| `itf plan` | the plan, readable; `--json` | no |
+| `itf graph` | roles, wiring and bring-up sequence, Mermaid | no |
+| `itf up [--detach]` / `itf down` | bring up and verify / unwind from observed state | yes |
+| `itf test` | run the tests against the composition | yes |
+| `itf doctor` | host prerequisites of the packs | reads |
+| `itf contracts map` / `new <name> --from-usage` / `check --policy p.yaml` | discover, scaffold, enforce | no |
+
+Under Bazel `itf` is `bazel run @score_itf//score/itf/cli:itf --`; run it in the folder with the composition
+and the conftest. `bazel build //pkg:<itf_target>` compiles a composition and writes `<name>.plan.json`: a wrong
+composition fails the build with rendered diagnostics. Prefer `validate`, `plan` and `graph` to explore; use `up`
+only when the user asks for a live target, never on real hardware to "check".
+
+## 2. Write a composition
+
+```yaml
+capabilities:
+  platform:
+    factory: docker.platform
+    with:
+      image: ubuntu:24.04
+  command: docker.exec          # short form: just the factory
+goals:
+  - platform.up
 ```
 
-It is built from the packs' own decorators on every run, so it cannot drift from the code.
+Wiring comes from what factories need (one candidate: bound; several: `bind:`). A state two listed packs could
+make true needs `by:` (the compiler names both). Details: `references/yaml.md`. Swapping is changing one label:
+`command: docker.exec` becomes `command: ssh.exec`; the test does not change.
 
-| Question | Query |
-|---|---|
-| who provides a capability, from which entrypoint | `SELECT * FROM v_capability_providers WHERE capability = ?` |
-| what a test may call, with signatures | `SELECT provider, member, signature, doc FROM v_provider_api WHERE capability = ?` |
-| how to write the node (slots, config; `!` = required) | `SELECT * FROM v_recipe_node WHERE provider = ?` |
-| what makes a state true, what it needs, what it destroys | `SELECT * FROM v_state_deliverers WHERE state = ?` |
-| config keys, defaults, secrets | `SELECT * FROM provider_config WHERE provider = ?` |
+Which composition a run uses is configuration, never conftest code: `--itf-target`, `ITF_TARGET`, `itf_target`
+in `pytest.ini`, `[tool.itf] target`, or `py_itf_test(target = ...)` (overrides: `--itf-override`, `ITF_OVERRIDE`,
+`itf_override`, `[tool.itf] override`, `itf_target(overrides = [...])`).
 
-Walk prerequisites recursively: a deliverer's `requires` are states whose deliverers come from other
-entrypoints the test must load too (`shell.open` → `platform.up`). One action may deliver several
-states, each with its own probe (`also` relation, e.g. `ssh.open_session` → `shell.open` +
-`network.reachable`). **Choose an entrypoint variant.** When a provider is listed under several entrypoints (for example
-`tcpdump.capture` under `pcap.plugin` and `pcap.host`), compare the `requires` column of
-`v_state_deliverers` per entrypoint and take the variant whose prerequisites the bench can meet: a
-bench with no platform node cannot use an action that requires `platform.up`. Load only one
-deliverer per state.
-
-**Map an entrypoint to a Bazel label.** `score.itf.packs.<pack>.plugin` is the target named after the
-pack, `//score/itf/packs/<pack>`; `score.itf.packs.<pack>.<variant>[.plugin]` is `:<variant>`, so
-`pcap.host` is `//score/itf/packs/pcap:host` and `pcap.sim.plugin` is `:sim`. From another Bazel module
-(such as `examples/`) use the prefix `@score_itf//score/itf/packs/...`. Each pack's BUILD file lists its
-`py_itf_plugin` targets.
-
-**Slots may be filled from another pack.** A provider's `needs` slots (endpoint, credentials, platform) name
-contracts whose providers can live in another pack, whose label the test must list too: `ssh.shell`
-needs an endpoint and credentials, so an SSH-over-container recipe lists `docker` (platform and
-`docker.endpoint`), `net` (`password.credentials`) and `ssh`.
-
-**Note** that a provider built on another capability is a separate node: `serial.exec`
-(`exec.command`) needs a node for the console it runs on (`exec.console`), and a test using
-`exec.command` reaches it through its own node.
-
-## 2. Use it from pytest (Bazel)
-
-```starlark
-load("@score_itf//:defs.bzl", "py_itf_test")
-
-py_itf_test(
-    name = "bench",
-    srcs = ["conftest.py", "test_bench.py"],          # conftest.py is the recipe
-    data = ["recipe.yaml", "//images:load"],
-    env = {"ITF_IMAGE_LOAD": "$(location //images:load)"},   # reaches YAML as ${ITF_IMAGE_LOAD}
-    plugins = ["@score_itf//score/itf/packs/docker", "@score_itf//score/itf/packs/ssh"],
-)
-```
+## 3. Write tests
 
 ```python
-# conftest.py — Python hooks, or YAML through load_setup/load_init (both may be mixed)
-from pathlib import Path
-from score.itf.core import hookimpl, load_init, load_setup
-
-RECIPE = Path(__file__).with_name("recipe.yaml")
-
-@hookimpl
-def itf_setup(ctx):            # what exists: ctx.add / ctx.alias / ctx.scope("gw").add ...
-    load_setup(ctx, RECIPE)
-
-@hookimpl
-def itf_init(ctx):             # what must hold: ctx.goal / ctx.relate / ctx.assume / ctx.state
-    load_init(ctx, RECIPE)
-
-@hookimpl
-def itf_verify(session):       # optional readiness checks after bring-up, before tests
-    session.check("platform.running", session.target.platform.running())
-```
-
-```python
-# test_bench.py
 import score.itf as itf
 
-@itf.requires("itf.capabilities.exec.command")              # deselected (not failed) if absent
-@itf.requires("itf.capabilities.files.transfer", shape=["exists"])   # needs that member too
-def test_upload_lands(target, tmp_path):
-    target.files.upload(str(tmp_path / "f"), "/tmp/f")       # node names come from the recipe
-    assert target.command.exec("test -f /tmp/f")[0] == 0
+@itf.requires("command", contract="exec.command", shape=["exec"])
+def test_hello(target):
+    assert target.command.exec("echo -n hi") == (0, "hi")
 ```
 
-- Write tests against contracts, not platforms: gate each on what it uses and run the same files
-  against several recipes (`test/integration`); each target selects what its platform supports.
-- `target.<node>` is a root node, `target.<scope>.<node>` a device scope's. Never import a pack.
-- States are the recipe's job. A test changes bench state only through the planner:
-  `target.reach("itf.states.shell.open")` (after a restart), `target.renew("platform")`
-  (fresh objects: dismantles the node and everything bound to it, re-reaches the goals). Per-test
-  freshness is a pytest fixture of the scope you want that calls `renew`.
-- One generic conftest can serve several targets: `load_setup(ctx, Path(os.environ["ITF_CONFIG"]))`
-  (and `load_init`) with `py_itf_test(data = ["r.yaml"], env = {"ITF_CONFIG": "$(location r.yaml)"})`
-  per recipe, or use a Starlark recipe (below). To run one test file against several recipes, give
-  nodes the same names by role in every recipe (`command`, `files`, `console`), because tests reach
-  nodes by name; ignore the default names the `recipe` skeleton prints.
-- Stacked `@itf.requires` decorators mean AND: the test is selected only if every one holds.
-- Config formats: `environment` is `"A=1,B=2"`, `ports` is `"22/tcp:2222,3490/tcp"` or `"2222"`,
-  `volumes` is `"/host:/in/container:rw,..."` (see each pack's README). Rootless Podman publishes
-  ports but exposes no container IPs: map the port and use `docker.endpoint` with `via: published`.
-- `py_itf_test` as shown is a complete minimal target: `srcs` lists the conftest and the tests, `data`
-  lists the recipe and anything it names, no `main` or other arguments are needed. A pack that compiles
-  binaries (pcap, dlt) makes the first build slow, about 5 minutes: run it in the background.
-- Validate without hardware: `bazel test //pkg:bench --test_arg=--itf-plan --test_output=all`
-  (long: pipe through `grep -E "ERROR|Gating|deselected|::test"` for the quick check)
-  (add `--test_arg=--itf-strict-shapes`). A clean plan prints no diagnostics section: a problem prints
-  `ERROR: Gate 1 ...` or `Gate 2 ...` with a reason and a fix, and the Gating list shows what is selected
-  or deselected and why. Ordering (a relation such as "capture before console") is a property of the
-  plan, visible as an edge in `plan.json`, not something a test body can observe.
-- Artifacts: `bazel-testlogs/<pkg>/<test>/test.outputs/itf-run/` (`plan.json`, `target.html`,
-  `test.log`, `events.jsonl`).
+`@itf.requires(role, contract=..., shape=[...], scope=...)`: a target without the role (or contract, or
+members) deselects the test with the reason. Use only members the contract's shape lists. Change state with
+`session.reach("shell.open")` and `session.renew("platform")`. Readiness and evidence are conftest hooks
+(`itf_verify(session)` with `session.check(name, ok)`, `itf_teardown(session)`). Details: `references/authoring.md`.
 
-## 3. Use it from Python (no pytest)
+## 4. Project parts, contracts, packs
 
-```python
-from score.itf.core import Session, describe
-print(describe(["my_recipe_module"]).render())       # plan only, constructs nothing
-session = Session(["my_recipe_module"], run_dir="itf-run")
-session.resolve(); session.bring_up()
-try:
-    print(session.target.command.exec("uname -a"))
-finally:
-    session.close()                                   # teardown hooks, then unwind
+- A factory or action written in the root conftest is `project.<function>`. A project action is always
+  considered: if it makes a state true that a pack's action also makes true, compositions need `by:`.
+- Define a contract only when it adds something: `itf contracts new <name> --from-usage`, then fill the
+  `TODO`s; add `conformance:` for a checks module. Enforce conventions with `itf contracts check --policy`
+  (rules: `namespaces`, `roles`, `forbid_stability`). Example: `examples/examples/vendor_contract`.
+- A pack is a directory with `pack.yaml` (`name`, `version`, `prerequisites`), `providers.py` (`@capability`),
+  `steps.py` (`@state`), `plugin.py`; loaded from labels (`score.itf.packs.<name>.plugin` or the entry point
+  `score_itf.packs`). Each pack README has its label table. See `docs/how-to/plugins.md`.
+
+## 5. Bazel
+
+```starlark
+load("@score_itf//:defs.bzl", "itf_target", "py_itf_test")
+
+itf_target(name = "ecu", src = "ecu.itf.yaml", packs = ["@score_itf//score/itf/packs/docker"], srcs = ["conftest.py"])
+py_itf_test(name = "smoke", srcs = ["conftest.py", "test_smoke.py"], target = ":ecu")
 ```
 
-The module plays the root conftest: its `pytest_plugins` list names the pack entrypoints.
+`itf_target(name, src, overrides, packs, data, srcs, contracts, env, files)`: `packs` are the packs the factory
+labels may name (another pack fails the build), `srcs` the conftest so project parts take part in the plan, `files`
+the built files the composition names as `${NAME}` (`{"ITF_IMAGE_LOAD": "//images:load"}`) and `env` its other
+`${NAME}` values. Tests (`py_itf_test(target = ...)`) inherit both: never add `data`/`$(location)` for them. Container tests need `DOCKER_HOST` passed with `--test_env`.
 
-## 4. YAML recipes
+## 6. Without pytest, and legacy
 
-See [references/yaml.md](./references/yaml.md) for the full schema. Essentials: `setup.nodes`
-`[{name, contract, using, bind, config}]`, `setup.scopes.<scope>.{nodes, aliases}`, `init.goals`,
-`init.relations [{state, requires, invalidates}]`, `init.assumptions`, `init.states [{token, using}]`;
-`extends: [base.yaml]` merges by name; node `config` values expand `${NAME}` / `${NAME:-default}`.
+`from score.itf import Session; s = Session(target="x.itf.yaml"); s.resolve(); s.bring_up(); s.target.command...;
+s.close()`. A facade keeps an old API (`examples/examples/legacy`, `docs/how-to/migrate.md`).
 
-### Starlark recipes (Bazel)
+## Checklist before answering
 
-`itf_recipe` (`@score_itf//bazel:recipe.bzl`) writes the same document from Starlark. Arguments:
-`nodes`, `goals`, `relations`, `assumptions`, `states`, `aliases`, `rebinds`, `scopes`, `extends`,
-`plugins` (the packs it needs), `conftest`, `plan_test`; helpers `node(...)`, `scope(...)`,
-`relation(...)`, `location(label)` for Bazel-built files. Pass it
-with `py_itf_test(recipe = ":r")`; the conftest keeps the code hooks. `bazel test //pkg:r_plan`
-checks it without hardware; `bazel run //tools/catalog:query -- recipe <provider>` prints a node.
-
-## Benches without hardware
-
-Prefer a provider that behaves like the device over a stub that only accepts calls:
-
-| Need | Use |
-|---|---|
-| a host to run commands, processes, files on | `//score/itf/packs/local` (`local.exec`, `local.process`, `local.files`) |
-| a serial console that answers | `serial.pty_console`: the console talks to a shell on a pseudo-terminal, so banner, `wait_for`, `run` and `serial.exec` work (a `loop://` port only echoes, so nothing answers) |
-| a platform, shell, logs or capture with no daemon | the `:sim` variants of docker, ssh, dlt, pcap |
-
-Generic tests run unchanged on these (they select by capability), and plan mode still validates a
-recipe that names real hardware. Phrase a command that must fail as `sh -c 'exit 3'`: on a console, a
-bare `exit` ends the session itself.
-
-## 5. Requirements → recipe → tests
-
-Follow [references/authoring.md](./references/authoring.md): decompose the requirement into
-capabilities, states, relations and checks; map every item to a catalog row (an item without a row is
-a **gap**: gate a test on the proposed token, never fake it); pick providers; write the recipe; write
-gated tests; validate with `--itf-plan`.
-
-## 6. Writing a pack
-
-`score/itf/packs/<pack>/`: topic modules (`platform.py`, `session.py`, ...) hold classes, config
-dataclasses and the Protocols they expect; `providers.py` only declares `@provides` factories and
-`steps.py` only `@delivers` actions with `@<action>.probe` (and `.probe_for(state)` for an
-`also_delivers` state); `plugin.py` lists them in `pytest_plugins`; `sim/` holds an offline variant
-when the real one needs hardware or a daemon. A plain token in `needs=`/`uses=` plus a Protocol
-annotation is enough; use `expect(token, shape)` only where no annotation says it. Constructing a
-provider has no side effects (actions connect/start). BUILD: one `py_library(name = "lib")` and one
-`py_itf_plugin` per entrypoint; binaries are Bazel-built `data`, found through runfiles. Then
-`bazel test //test/packs:catalog_test` checks every pack loads and every expectation is met.
-
-## Rules
-
-- Use only tokens, provider names, members and config keys the catalog holds.
-- One deliverer per state per run: load one entrypoint variant, or pin one with `init.states`.
-- Never import `score.itf.packs.*` outside its own pack (and that pack's unit tests).
-- Write YAML recipes in block style, one key per line: no `{...}` mappings and no `[...]` lists.
-- Never put secrets in YAML: credentials name key files or come from `${ENV}`.
-- Never touch real hardware to "check": `--itf-plan` is the check.
-- Tests written for the original API (`target.execute`, `docker_plugin`) need a project-side legacy
-  layer (`examples/examples/legacy`); migrate them with docs/how-to/migrate.md.
+1. Roles named as the project's convention; labels `<pack>.<name>` that exist (read the pack README).
+2. `itf validate` (or the `itf_target` build) passes; read `itf graph` for the order.
+3. Tests ask for roles, not machines; no pack imports; YAML in block style.
+4. New contract names: run `itf contracts map`; no disagreements.

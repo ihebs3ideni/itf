@@ -1,72 +1,64 @@
-# YAML recipes
+# The composition format
 
-`load_setup(ctx, source)` and `load_init(ctx, source)` translate a document into the same `ctx`
-calls a Python recipe makes; `source` is a path, a dict, or inline YAML/JSON text. `--itf-config`
-(or `ITF_CONFIG`) hands a path or text to a recipe that reads `os.environ["ITF_CONFIG"]`.
+A composition is a YAML (or JSON) document, usually `*.itf.yaml`. Keys, in order: `include`, `capabilities`,
+`goals`, `assume`, `scopes`. Unknown keys are errors naming what exists. Block style only (no `{...}`/`[...]`).
 
 ```yaml
-extends:                              # relative to this file; ancestors first, this file last
-  - base.yaml
-setup:
-  contracts:                          # rarely needed: packs publish their own
-    - token: <token>
-      gives: <members>
-      needs: <slots>
-  nodes:                              # root scope: shared bench resources
-    - name: platform                  # target.platform in tests
-      contract: itf.capabilities.platform.instance
-      using: docker.instance          # provider name (catalog: v_capability_providers)
-      bind:                           # only when a slot has several candidates in the scope
-        <slot>: <node name>
-      config:                         # provider_config; flat scalars only
-        image: ubuntu:24.04
-  aliases:                            # target: ".name" (root) or "scope.name"
-    - name: <name>
-      target: <target>
-  rebinds:
-    - name: <name>
-      slots:
-        <slot>: <node name>
-  scopes:
-    gw:                               # a device scope: target.gw.<node>, states gw:<token>
-      nodes:
-        - name: <name>                # same shape as the root nodes
-      aliases:                        # share a root node; nothing falls back
-        - name: capture
-          target: .capture
-init:
-  states:                             # pick the action delivering a token when several are loaded
-    - token: <token>
-      using: <action>
-  goals:
-    - itf.states.shell.open
-  relations:                          # add to the producing action's own requires/invalidates
-    - state: itf.states.platform.up
-      requires:                       # open the console before booting: records the boot
-        - itf.states.console.open
-      invalidates:
-        - gw:itf.states.shell.open
-  assumptions:                        # visible bypass of a producer; prefer a probe
-    - token: <token>
-      owner: <who>
-      reason: <why>
-  scopes:
-    gw:
-      goals:
-        - <state>
-      relations:
-        - <relation>
-      assumptions:
-        - <assumption>
+include:                          # merged first, in order; this file wins
+  - base.itf.yaml
+capabilities:                     # keyed by role: the name tests use (`target.command`)
+  platform:
+    factory: docker.platform      # <pack>.<name>
+    with:                         # settings, checked against the factory's config dataclass
+      image: my-image:latest
+  command: docker.exec            # short form: just the factory
+  shell:
+    factory: ssh.shell
+    bind:                         # only when a slot has more than one candidate: slot -> role
+      endpoint: lab_endpoint
+goals:                            # states to reach; nothing is inferred
+  - platform.up
+  - state: console.open
+    by: serial.open               # only when two actions (of listed packs or the project) could make it true
+assume:                           # a state that holds without ITF
+  - state: rack.ready
+    owner: lab
+    reason: the rack keeps it on
+scopes:                           # one more device
+  gw:
+    capabilities:
+      command: ssh.exec
+    goals:
+      - shell.open
+    share:
+      - platform                  # gw uses the root's platform role
 ```
 
-- References: `token` = own scope, `:token` = root, `gw:token` = device scope `gw`.
-- A slot fills itself when its scope has exactly one node of that contract (aliases count).
-- Merge: dicts key by key; `nodes`, `contracts`, `aliases`, `rebinds`, `assumptions`, `states` by
-  name/token (override one field of one entry); `goals` and `relations` concatenate. To remove an
-  inherited entry, copy the file instead of extending it.
-- Config values expand `${NAME}` and `${NAME:-default}` from the environment (`$${` is a literal);
-  a value that is exactly one reference is read as a YAML scalar (`port: ${PORT}` is an int). Under
-  Bazel, set them with `py_itf_test(env = {"NAME": "$(location //label)"})`.
-- Relative paths in config resolve against the directory pytest runs in (the runfiles root under
-  Bazel): pass Bazel-built files through `$(location)` and `${ENV}`.
+- Role = `target.<role>`; factory = `<pack>.<function>` (a part in the project's conftest: `project.<function>`).
+- `with:` values may read the environment: `${NAME}` or `${NAME:-default}`; a value that is exactly one reference is
+  read as a YAML scalar (`port: ${SSH_PORT:-22}` is an integer); `$${` is a literal `${`.
+- The actions considered are those of the packs of the listed factories plus the project's own. A goal two of them
+  could make true needs `by:`; a slot with two candidates needs `bind:`.
+- Scopes: roles of a scope are `target.<scope>.<role>`; a scope never falls back to the root, `share:` lists the
+  root roles it uses. A role named like a scope or a handle member is rejected.
+
+## Override files
+
+An override file has the composition's own shape and only what changes. Files merge by role, in order (includes
+first, then the target, then each override): `with:` and `bind:` keys are merged, any other key replaces; goals
+and assumptions merge by state. A role cannot be removed.
+
+```yaml
+# bench.itf.yaml
+capabilities:
+  platform:
+    with:
+      image: my-image:debug
+```
+
+## Where a run finds them
+
+`--itf-target`, `ITF_TARGET`, `itf_target` (ini), `[tool.itf] target`; overrides: `--itf-override` (repeatable),
+`ITF_OVERRIDE`, `itf_override` (ini), `[tool.itf] override`. Bazel: `py_itf_test(target = ":x")` sets them from the
+`itf_target`. `Session(target=..., overrides=[...])` without pytest. `itf validate|plan|graph|up|down|test` take the
+composition as an argument or from the same configuration.

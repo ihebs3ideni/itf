@@ -22,5 +22,7 @@ Architecture, design decisions, and explanatory material for ITF.
 .. toctree::
    :maxdepth: 1
 
+   model
+   platform
    architecture
    modeling

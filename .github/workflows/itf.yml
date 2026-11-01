@@ -28,16 +28,23 @@ jobs:
       - name: Run build
         run: |
           bazel build //...
-      - name: Check ITF plans
-        # Reuses the build above: resolves both gates of every ITF test (providers, bindings, shapes,
-        # config, action order, gating) with --itf-plan and stops before constructing, probing or
-        # running anything, so it takes seconds. A wrong recipe fails here, before any container starts.
+      - name: Validate compositions
+        # An itf_target compiles its composition in a build action (both gates, strict shapes, the contract
+        # definitions) and constructs nothing, so a wrong composition fails here, before any container starts.
+        # `itf validate` is the same check from the command line.
         run: |
-          bazel test --test_output=errors \
-            --test_arg=--itf-plan --test_arg=--itf-strict-shapes //test/integration/...
+          bazel build $(bazel query 'kind(_itf_target, //...) except attr(tags, manual, //...)')
+      - name: Check the contract policy
+        run: |
+          bazel run //score/itf/cli:itf -- contracts check --policy tools/contracts_policy.yaml
       - name: Run test
+        # The conformance suites (one test per node and contract check) run with everything else.
         run: |
-          bazel test //...
+          bazel test //... \
+            //test/integration:conformance_local \
+            //test/integration:conformance_serial \
+            //test/integration:conformance_docker \
+            //test/integration:conformance_docker_ssh
 
   itf-qemu-linux:
     runs-on: ubuntu-latest
