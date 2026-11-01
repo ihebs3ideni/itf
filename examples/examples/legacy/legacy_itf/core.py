@@ -12,9 +12,9 @@
 # *******************************************************************************
 """The original target API over contracts, and `requires_capabilities`.
 
-`LegacyTarget` finds the root scope's nodes by contract token and presents them in the original
-shape: `execute`, `execute_async`, `wrap_exec`, `upload`, `download`, `restart`, `ssh`, `sftp`,
-`ping`, `ping_lost`. It works with any recipe providing those contracts.
+`LegacyTarget` finds the root scope's nodes by contract identifier (the form a plan prints) and presents them in
+the original shape: `execute`, `execute_async`, `wrap_exec`, `upload`, `download`, `restart`, `ssh`, `sftp`,
+`ping`, `ping_lost`. It works with any composition providing those contracts.
 """
 
 import functools
@@ -26,16 +26,16 @@ from score.itf.core.process import WrappedProcess
 from .adapters import LegacySftp, LegacySsh
 from .target import Target
 
-COMMAND = "itf.capabilities.exec.command"
-PROCESS = "itf.capabilities.exec.process"
-FILES = "itf.capabilities.files.transfer"
-PLATFORM = "itf.capabilities.platform.instance"
-SHELL = "itf.capabilities.exec.shell"
-PING = "itf.capabilities.net.ping"
+COMMAND = "exec.command"
+PROCESS = "exec.process"
+FILES = "files.transfer"
+PLATFORM = "platform.instance"
+SHELL = "exec.shell"
+PING = "net.ping"
 
 
 def node_of(view, token: str, name: str | None = None):
-    """Node `name` if given and present, else the first node of `token` in the scope (by name)."""
+    """Node `name` if given and present, else the first node of contract `token` (an identifier) in the scope."""
     names = sorted(n["name"] for n in view.plan()["target"]["nodes"] if n["contract"] == token)
     if name in names:
         return view.get(name)
@@ -50,7 +50,7 @@ class LegacyTarget(Target):
     def _node(self, token: str, name: str | None = None):
         node = node_of(self.view, token, name)
         if node is None:
-            raise NotImplementedError(f"the recipe declares no {token} node")
+            raise NotImplementedError(f"the composition has no {token} role")
         return node
 
     def execute(self, command: str):
@@ -76,7 +76,7 @@ class LegacyTarget(Target):
         self._node(PLATFORM).restart()
 
     def ssh(self, username=None, password=None, pkey_path=None, port=None, **_ignored):
-        """The recipe's SSH session. One login per node: a different login needs its own node."""
+        """The composition's SSH session. One login per role: a different login needs its own role."""
         shell = self._node(SHELL)
         credentials = shell.credentials
         for asked, have in (
@@ -87,7 +87,7 @@ class LegacyTarget(Target):
         ):
             if asked is not None and asked != have:
                 raise NotImplementedError(
-                    "target.ssh() with another login or port: declare a shell node for it in the recipe"
+                    "target.ssh() with another login or port: declare a shell role for it in the composition"
                 )
         return LegacySsh(shell)
 

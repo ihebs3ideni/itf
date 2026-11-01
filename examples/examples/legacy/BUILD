@@ -14,16 +14,17 @@ load("@rules_python//python:defs.bzl", "py_library")
 load("@score_itf//:defs.bzl", "py_itf_test")
 
 # Legacy infra: ITF's original test cases, unchanged apart from imports, running on the new
-# framework through this project's recipes (recipes/) and facade (conftest.py, legacy_itf/).
+# framework through this project's compositions (targets/) and facade (conftest.py, legacy_itf/).
 
-# The facade: adapters over the recipe's nodes; it imports no pack.
+# The facade: adapters over the composition's roles; it imports no pack.
 py_library(
     name = "legacy_itf",
     srcs = glob(["legacy_itf/**/*.py"]),
     imports = ["."],
 )
 
-RECIPES = glob(["recipes/*.yaml"])
+# The composition the original options select (conftest.py passes it as --itf-target).
+TARGETS = glob(["targets/*.itf.yaml"])
 
 DOCKER_PACKS = [
     "@score_itf//score/itf/packs/docker",
@@ -39,7 +40,7 @@ QEMU_PACKS = [
 
 DLT_PACKS = [
     "@score_itf//score/itf/packs/dlt:on_target",
-    "@score_itf//score/itf/packs/dlt:receive",
+    "@score_itf//score/itf/packs/dlt",
 ]
 
 py_itf_test(
@@ -50,7 +51,7 @@ py_itf_test(
         "test_docker.py",
     ],
     args = ["--docker-image=ubuntu:24.04"],
-    data = RECIPES,
+    data = TARGETS,
     plugins = DOCKER_PACKS,
     deps = [":legacy_itf"],
 )
@@ -62,7 +63,7 @@ py_itf_test(
         "test_ssh.py",
     ],
     args = ["--docker-image=linuxserver/openssh-server:version-10.2_p1-r0"],
-    data = RECIPES,
+    data = TARGETS,
     plugins = DOCKER_PACKS,
     deps = [":legacy_itf"],
 )
@@ -80,7 +81,7 @@ py_itf_test(
         "--dlt-on-target-files=files",
         "--dlt-on-target-process=process",
     ],
-    data = RECIPES + [
+    data = TARGETS + [
         "dlt_config.json",
         "//examples/docker:dlt_image_load",
     ],
@@ -102,7 +103,7 @@ py_itf_test(
         "--qemu-config=$(location //examples/itf:%s.json)" % config,
         "--qemu-image=$(location //examples/itf/qnx:init)",
     ],
-    data = RECIPES + [
+    data = TARGETS + [
         "//examples/itf/qnx:init",
         "//examples/itf:%s.json" % config,
     ],

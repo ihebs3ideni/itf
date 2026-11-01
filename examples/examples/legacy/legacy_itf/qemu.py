@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""The original QEMU target: the legacy API with SSH, SFTP and ping from the recipe's nodes."""
+"""The original QEMU target: the legacy API with SSH, SFTP and ping from the composition's roles."""
 
 from .core import LegacyTarget
 

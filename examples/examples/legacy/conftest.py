@@ -13,10 +13,10 @@
 """Legacy infra policy: ITF's original command-line options, fixtures and target API, served by
 ITF packs.
 
-Declarative half: the recipe the options select (recipes/docker*.yaml for --docker-image,
-recipes/qemu*.yaml for --qemu-config; the *_dlt variants when DLT options are given),
+Declarative half: the composition the options select (targets/docker*.itf.yaml for --docker-image,
+targets/qemu*.itf.yaml for --qemu-config; the *_dlt variants when DLT options are given),
 parameterised through the environment. Code half: the original fixtures (`target`,
-`docker_configuration`, `dlt_config`, `dlt`), returning adapters over the recipe's nodes.
+`docker_configuration`, `dlt_config`, `dlt`), returning adapters over the composition's roles.
 `dlt_on_target` comes from the dlt pack itself. The container is renewed per test unless
 --keep-target, as the original plugin did.
 """
@@ -33,14 +33,12 @@ from legacy_itf import dlt as legacy_dlt
 from legacy_itf.docker import DockerTarget
 from legacy_itf.qemu import QemuTarget
 from legacy_itf.target import UnsupportedTarget
-from score.itf.core import hookimpl, load_init, load_setup
+from score.itf.core import hookimpl
 
 logger = logging.getLogger(__name__)
 
-COMMAND = "itf.capabilities.exec.command"
-CONSOLE = "itf.capabilities.exec.console"
 EVIDENCE = Path(os.environ.get("TEST_UNDECLARED_OUTPUTS_DIR", ".")) / "evidence"
-RECIPES = Path(__file__).with_name("recipes")
+TARGETS = Path(__file__).with_name("targets")
 _policy: dict = {}
 
 
@@ -77,7 +75,7 @@ def _dlt_settings(config) -> dict:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
-    """Translate the original options into a recipe and its environment."""
+    """Translate the original options into a composition (`--itf-target`) and its environment."""
     option = config.getoption
     with_dlt = bool(option("dlt_receive_path") or option("dlt_config"))
     if option("docker_image"):
@@ -99,32 +97,21 @@ def pytest_configure(config):
         settings = {k: os.path.abspath(v) for k, v in paths.items() if v}
     else:
         return
-    _policy["recipe"] = RECIPES / f"{_policy['kind']}{'_dlt' if with_dlt else ''}.yaml"
+    _policy["composition"] = TARGETS / f"{_policy['kind']}{'_dlt' if with_dlt else ''}.itf.yaml"
     if with_dlt:
         dlt = _dlt_settings(config)
         settings |= {"LEGACY_DLT_HOST_IP": dlt["host_ip"], "LEGACY_DLT_MULTICAST": ",".join(dlt["multicast_ips"])}
     os.environ.update({k: v for k, v in settings.items() if v is not None})
-
-
-@hookimpl
-def itf_setup(ctx):
-    if "recipe" in _policy:
-        load_setup(ctx, _policy["recipe"])
-
-
-@hookimpl
-def itf_init(ctx):
-    if "recipe" in _policy:
-        load_init(ctx, _policy["recipe"])
+    config.option.itf_target = str(_policy["composition"])  # the same as `pytest --itf-target ...`
 
 
 @hookimpl
 def itf_verify(session):
-    """Nothing to check yet for a docker recipe: the container is started per test by the `target` fixture
+    """Nothing to check yet for a docker composition: the container is started per test by the `target` fixture
     (as the original plugin did), so only what the session itself has up is verified."""
     target = session.target
-    logger.info("verify: target offers %s", ", ".join(sorted(target.tokens())))
-    if target.has("itf.capabilities.platform.instance") and target.platform.running() and target.has(COMMAND):
+    logger.info("verify: target offers %s", ", ".join(sorted(target.names())))
+    if target.has("platform") and target.platform.running() and target.has("command"):
         code, output = target.command.exec("echo -n ready")
         session.check("command.answers", code == 0 and output.strip().endswith("ready"), detail=f"exit {code}")
 
@@ -134,13 +121,11 @@ def itf_teardown(session):
     """Evidence, collected while the target still runs: console transcript and container output."""
     target = session.target
     EVIDENCE.mkdir(parents=True, exist_ok=True)
-    if target.has(CONSOLE):
+    if target.has("console"):
         path = EVIDENCE / "console.txt"
         path.write_text("\n".join(target.console.lines()), encoding="utf-8")
         logger.info("teardown: console transcript (%d lines) saved to %s", len(target.console.lines()), path)
-    container = (
-        getattr(target.platform, "container", None) if target.has("itf.capabilities.platform.instance") else None
-    )
+    container = getattr(target.platform, "container", None) if target.has("platform") else None
     if container is not None:
         path = EVIDENCE / "container.log"
         path.write_bytes(container.logs())
@@ -198,7 +183,7 @@ def target(request, docker_configuration):
                 setattr(platform, key, value)
             else:
                 logger.warning("docker_configuration key %r is not supported and is ignored", key)
-        session.reach("itf.states.platform.up")
+        session.reach("platform.up")
         _applied["configuration"] = configuration
     yield DockerTarget(session.target)
 
@@ -212,9 +197,9 @@ def dlt_config(request):
 
 @pytest.fixture(scope="session")
 def dlt(session):
-    """Records DLT for the session when the recipe has a logs node (QEMU targets request it)."""
-    if session is None or not session.target.has(legacy_dlt.LOGS):
+    """Records DLT for the session when the composition has a logs role (QEMU targets request it)."""
+    if session is None or not session.target.has("logs"):
         yield
         return
-    session.reach("itf.states.logs.active")  # the recipe's logs node records for the session
+    session.reach("logs.active")  # the composition's logs role records for the session
     yield

@@ -10,14 +10,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-# docker.yaml with the original dlt_plugin: DLT received on the host (dlt.receive), from --dlt-config.
-extends:
-  - docker.yaml
-setup:
-  nodes:
-    - name: logs
-      contract: itf.capabilities.observe.logs
-      using: dlt.receive
-      config:
-        host_ip: ${LEGACY_DLT_HOST_IP:-127.0.0.1}
-        multicast_ips: ${LEGACY_DLT_MULTICAST:-}
+# A bench with a simulated relay (the vendor's contract) and a status LED (the project's own contract).
+# Swapping the simulation for real hardware is changing one word: `acme.simulated_relay` becomes the label of
+# a factory that drives it. The test does not change.
+packs:
+  acme: acme.plugin             # the vendor's pack is not installed: say where it lives
+capabilities:
+  power: acme.simulated_relay
+  led: project.status_led

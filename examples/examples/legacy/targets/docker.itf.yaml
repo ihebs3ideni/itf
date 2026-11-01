@@ -1,0 +1,40 @@
+# *******************************************************************************
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+# The original docker_plugin as a composition: one container from --docker-image. The platform is not a
+# goal: the `target` fixture starts it once docker_configuration (a fixture) is known. The SSH roles serve
+# target.ssh() and sftp() on images running sshd (port 2222, score/score, as the plugin did); roles are built
+# only when used. Port 2222 is published and the endpoint takes the published port, which works with Docker
+# and with rootless Podman (no container IPs).
+capabilities:
+  platform:
+    factory: docker.platform
+    with:
+      image: ${LEGACY_DOCKER_IMAGE}
+      bootstrap: ${LEGACY_DOCKER_BOOTSTRAP:-}
+      extract_coverage: ${LEGACY_EXTRACT_COVERAGE:-false}
+      coverage_dir: ${LEGACY_COVERAGE_DIR:-}
+      ports: 2222/tcp
+  command: docker.exec
+  process: docker.process
+  files: docker.files
+  endpoint:
+    factory: docker.endpoint
+    with:
+      port: 2222
+  credentials:
+    factory: net.password
+    with:
+      user: score
+      password: score
+  shell: ssh.shell
+  sftp: ssh.files

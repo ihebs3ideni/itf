@@ -10,17 +10,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""ITF's original DLT classes, presented over the recipe's `dlt.receive` logs node.
+"""ITF's original DLT classes, presented over the composition's `logs` role (`dlt.receive`).
 
 Both open a bounded recording (`window()`) aimed where the caller says: protocol, interface,
 target and multicast groups are per-call arguments, as they were. The binary path belongs to the
-recipe and is ignored here.
+composition and is ignored here.
 """
 
 import logging
 from enum import Enum, auto
 
-LOGS = "itf.capabilities.observe.logs"
+LOGS = "observe.logs"
 DEFAULT_LOGGER = "dlt_receive_window"
 _session = {}
 
@@ -41,7 +41,7 @@ def _logs():
         raise RuntimeError("legacy DLT helpers are not bound to a session")
     names = sorted(n["name"] for n in session.target.plan()["target"]["nodes"] if n["contract"] == LOGS)
     if not names:
-        raise NotImplementedError("the recipe declares no logs node: pass --dlt-receive-path or --dlt-config")
+        raise NotImplementedError("the composition has no logs role: pass --dlt-receive-path or --dlt-config")
     return session.target.get(names[0])
 
 

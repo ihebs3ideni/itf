@@ -10,62 +10,80 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@score_itf//:defs.bzl", "py_itf_test")
+load("@score_itf//:defs.bzl", "itf_target", "py_itf_test")
 
-# One generic test file, four targets: each runs it against its own recipe, with the packs that recipe uses.
+# One test file (test_exec.py) on four targets. Each test asks for the roles it uses (`command`, `files`,
+# `console`), so a target runs the tests its composition supports and lists the others as deselected, with
+# the reason. A composition per target says what the target is made of (`<name>.itf.yaml`); conftest.py keeps
+# the code (readiness checks, evidence, the action that waits for the fake ECU).
+#
+# `bazel build //examples/exec_everywhere:target_container` compiles a composition and writes
+# `target_container.plan.json`: the roles, the wiring and the ordered actions, before anything exists.
 
 DOCKER = "@score_itf//score/itf/packs/docker"
 
-[
-    py_itf_test(
-        name = name,
-        srcs = [
-            "conftest.py",
-            "test_exec.py",
-        ],
-        data = [recipe] + data,
-        env = {"ITF_CONFIG": "$(location %s)" % recipe} | env,
-        plugins = plugins,
-    )
-    for name, recipe, plugins, data, env in [
-        # A plain container, through the container API.
-        (
-            "container",
-            "a_container.yaml",
-            [DOCKER],
-            [],
-            {},
-        ),
-        # A container running sshd, over SSH.
-        (
-            "ssh",
-            "b_ssh.yaml",
-            [
-                DOCKER,
-                "@score_itf//score/itf/packs/net",
-                "@score_itf//score/itf/packs/ssh",
-            ],
-            [],
-            {},
-        ),
-        # A serial console on a shell over a pseudo-terminal: no container, no hardware.
-        (
-            "serial",
-            "c_serial.yaml",
-            ["@score_itf//score/itf/packs/serial"],
-            [],
-            {},
-        ),
-        # A serial device in a container: fake_ecu.py answers on a TCP port, reached with pyserial's socket:// URL.
-        (
-            "serial_device",
-            "d_serial_device.yaml",
-            [
-                DOCKER,
-                "@score_itf//score/itf/packs/serial",
-            ],
-            ["fake_ecu.py"],
-            {"FAKE_ECU_SCRIPT": "$(location fake_ecu.py)"},
-        ),
-    ]
+NET = "@score_itf//score/itf/packs/net"
+
+SERIAL = "@score_itf//score/itf/packs/serial"
+
+SSH = "@score_itf//score/itf/packs/ssh"
+
+SRCS = [
+    "conftest.py",
+    "test_exec.py",
 ]
+
+# (name, packs, data, test environment, stand-ins while the composition compiles)
+TARGETS = [
+    (
+        "container",
+        [DOCKER],
+        [],
+        {},
+        {},
+    ),
+    (
+        "ssh",
+        [
+            DOCKER,
+            NET,
+            SSH,
+        ],
+        [],
+        {},
+        {},
+    ),
+    (
+        "serial",
+        [SERIAL],
+        [],
+        {},
+        {},
+    ),
+    (
+        "serial_device",
+        [
+            DOCKER,
+            SERIAL,
+        ],
+        ["fake_ecu.py"],
+        {"FAKE_ECU_SCRIPT": "$(rootpath fake_ecu.py)"},
+        {"FAKE_ECU_SCRIPT": "fake_ecu.py"},
+    ),
+]
+
+[itf_target(
+    name = "target_" + name,
+    src = name + ".itf.yaml",
+    srcs = ["conftest.py"],
+    env = stand_ins,
+    packs = packs,
+) for name, packs, data, env, stand_ins in TARGETS]
+
+[py_itf_test(
+    name = name,
+    srcs = SRCS,
+    data = data,
+    env = env,
+    target = ":target_" + name,
+) for name, packs, data, env, stand_ins in TARGETS]

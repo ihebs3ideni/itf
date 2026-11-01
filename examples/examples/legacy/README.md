@@ -18,9 +18,9 @@ original plugins (`target.execute()`, `docker_plugin`, `--docker-image`, `docker
 
 | Piece | Role |
 |---|---|
-| `recipes/docker.yaml`, `recipes/qemu.yaml` | The declarative half: what the original options declared, parameterised by `${LEGACY_*}` |
-| `conftest.py` | The policy: the original options select and fill a recipe; facade fixtures (`target`, `docker_configuration`, `dlt_config`, `dlt`, `dlt_on_target`) |
-| `legacy_itf/` | `LegacyTarget` over contracts, the original `Ssh`, `Sftp`, ping and DLT helpers, `requires_capabilities` |
+| `targets/docker.itf.yaml`, `targets/qemu.itf.yaml` (and the `_dlt` ones, which include them) | The declarative half: compositions of what the original options declared, parameterised by `${LEGACY_*}` |
+| `conftest.py` | The policy: the original options select a composition (`--itf-target`) and fill its environment; facade fixtures (`target`, `docker_configuration`, `dlt_config`, `dlt`, `dlt_on_target`) |
+| `legacy_itf/` | `LegacyTarget` over the composition's roles, found by contract, the original `Ssh`, `Sftp`, ping and DLT helpers, `requires_capabilities` |
 | `test_*.py` | ITF's original integration tests; only `score.itf.plugins.*` imports changed to `legacy_itf.*` |
 
 The container is renewed per test unless `--keep-target`, as the original plugin did. With QEMU,

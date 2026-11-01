@@ -10,14 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-# qemu.yaml with the original dlt_plugin: DLT received on the host (dlt.receive), from --dlt-config.
-extends:
-  - qemu.yaml
-setup:
-  nodes:
-    - name: logs
-      contract: itf.capabilities.observe.logs
-      using: dlt.receive
-      config:
-        host_ip: ${LEGACY_DLT_HOST_IP:-127.0.0.1}
-        multicast_ips: ${LEGACY_DLT_MULTICAST:-}
+"""The pack's entry point (named by the `score_itf.packs` entry point): the module ITF loads for the label
+`acme.<name>`."""
+
+pytest_plugins = ["acme.providers"]

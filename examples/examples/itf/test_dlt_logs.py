@@ -10,14 +10,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-"""DLT logs of the target, received by the session (itf.capabilities.observe.logs)."""
+"""DLT logs of the target, received by the session (`logs`)."""
 
 import time
 
 import score.itf as itf
-
-LOGS = "itf.capabilities.observe.logs"
-COMMAND = "itf.capabilities.exec.command"
 
 
 def wait_for_text(logs, needle: str, timeout: float = 10.0) -> list:
@@ -29,15 +26,15 @@ def wait_for_text(logs, needle: str, timeout: float = 10.0) -> list:
     return []
 
 
-@itf.requires(LOGS)
-@itf.requires(COMMAND)
+@itf.requires("logs")
+@itf.requires("command")
 def test_a_message_sent_on_the_target_reaches_the_session_logs(target):
     code, output = target.command.exec("echo -n 'hello from the app' | dlt-adaptor-stdin")
     assert code == 0, output
     assert wait_for_text(target.logs, "hello from the app"), "the message never arrived in the session logs"
 
 
-@itf.requires(LOGS)
+@itf.requires("logs")
 def test_messages_can_be_filtered_by_application_id(target):
     target.command.exec("echo -n 'filter me' | dlt-adaptor-stdin")
     assert wait_for_text(target.logs, "filter me")
