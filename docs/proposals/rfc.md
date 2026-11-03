@@ -96,7 +96,7 @@ def test_run_a_command(target):
 ```
 
 A target file: a container running an SSH server, and a shell session into it (shortened; the full file is
-`examples/examples/starter/ssh/target.itf.yaml` on the implementation branch).
+`examples/examples/starter/ssh/targets/target.itf.yaml` on the implementation branch).
 
 ```yaml
 capabilities:
