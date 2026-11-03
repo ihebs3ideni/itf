@@ -36,8 +36,10 @@ documentation on the implementation branch use these words and no others.
 | **slot** | A parameter of a part: what the part needs, annotated with the part's own Protocol, which carries `__contract__` | `platform: Platform` |
 | **shape** | The list of members a factory publishes, or a slot expects. Compared as data | `exec`, `run` |
 | **role** | A key under `capabilities:`: the name a placed factory answers to | `command` |
-| **label** | The name of a part: `<pack>.<name>`, or `project.<name>` for project code | `docker.exec` |
-| **pack** | A directory with a `pack.yaml` and its parts | `docker`, `ssh` |
+| **label** | The name of a part: `<pack>.<name>`, or `local.<name>` for a part in the project's policy | `docker.exec`, `local.start_daemon` |
+| **pack** | A directory with a `pack.yaml` and its parts. The name `local` is reserved for the policy | `docker`, `ssh`, `localhost` |
+| **policy** | `policy.py` beside the target file: the project's own ITF code (`itf_verify`, `itf_teardown`, its own parts). ITF loads it, not pytest; it outranks the target file and the packs | `local.start_daemon` |
+| **contract rules** | A project's rules over contracts, enforced by `itf contracts check --rules rules.yaml` | `rules.yaml` |
 | **scope** | One device of a multi-device target; its roles are `target.<scope>.<role>` | `gw` |
 | **override file** | A target file that holds only what changes, merged by role over another | `override.itf.yaml` |
 | **assumption** | A state that holds without ITF, listed under `assume:` with an owner and a reason | `platform.up` on a lab board |
@@ -63,5 +65,9 @@ These appear in today's ITF, in itf-core or in earlier drafts. Reviewers who kno
 | bench values, bench file | override file | One structure for every kind of change |
 | token | contract | "Token" was the itf-core word for a contract's name |
 | member name | role | Roles are chosen by the target file, not by the contract |
+| conftest (for ITF code) | policy (`policy.py`) | A conftest is pytest's, for fixtures; ITF loads the policy itself |
+| `project.<name>` | `local.<name>` | Read as "defined here"; reserved, so no pack can shadow it |
+| the `local` pack | `localhost` | It is the test host; `local` now means the project's policy |
+| contract policy | contract rules | "Policy" is the project's code layer, as in itf-core |
 | catalog, marketplace | contract map | It maps; it does not sell or register |
 | the platform (as a product name) | ITF | "Platform" is a factory's contract (`platform.instance`) |

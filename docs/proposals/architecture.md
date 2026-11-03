@@ -29,8 +29,8 @@ This paper describes the parts of the proposed ITF and how a run flows through t
                                           |
   planner    OCTO: claims in, plan or diagnostics out (standard library only)
                                           |
-  parts      packs: docker, qemu, ssh, net, ping, dlt, pcap, serial, local, core_dump, sim; project parts
-  optional   contract library: map, skeletons, policy, conformance
+  parts      packs: docker, qemu, ssh, net, ping, dlt, pcap, serial, localhost, core_dump, sim; the policy
+  optional   contract library: map, skeletons, contract rules, conformance
 ```
 
 | Layer | Directory | Depends on | Knows |
@@ -40,7 +40,7 @@ This paper describes the parts of the proposed ITF and how a run flows through t
 | session | `score/itf/core/session.py` | engine | one run of one target file |
 | fronts | `score/itf/core/adapters`, `score/itf/cli`, `bazel/` | session | how a user starts a run |
 | packs | `score/itf/packs/<name>` | `score.itf.core` decorators only | their own devices and tools. A pack never imports another pack |
-| contract library | `score/itf/contracts` | engine (read only) | contract definitions, policy, conformance |
+| contract library | `score/itf/contracts` | engine (read only) | contract definitions, contract rules, conformance |
 
 A gate in CI checks that `score/itf/core` names no domain thing (no "docker", "ssh", "dlt").
 
@@ -93,7 +93,7 @@ globally; a session reads the descriptors of the packs its target file names.
 ```text
  target.itf.yaml ─┐
  override files ───────┼─> merge by role ─> claims ─> OCTO gate 1 ─> target plan ─┐
- project conftest ─────┘   (frontend)      (registry)  (what exists)               │
+ policy.py ────────────┘   (frontend)      (registry)  (what exists)               │
                                                        OCTO gate 2 ─> action plan ─┤  resolve(): pure, builds nothing
                                                        (what happens, from goals)  │
  ──────────────────────────────────────────────────────────────────────────────────┘
@@ -103,7 +103,7 @@ globally; a session reads the descriptors of the packs its target file names.
 ```
 
 1. **Load.** The frontend reads the target file, its includes and override files, and merges them by role. It
-   finds the packs from the labels (or `packs:`) and the project's parts in the conftest beside the target file.
+   finds the packs from the labels (or `packs:`) and the project's policy (`policy.py`) beside the target file.
 2. **Claims.** The registry turns each part's descriptor and each target file entry into OCTO claims: roles,
    slots, shapes, settings, states, relations, assumptions.
 3. **Gate 1: what must exist.** OCTO picks the factory of each role, binds each slot (explicit `bind`, else the
@@ -131,14 +131,14 @@ globally; a session reads the descriptors of the packs its target file names.
 | Bazel | `itf_target`, `py_itf_test(target=...)` | the target file is compiled during `bazel build` |
 
 All fronts find the target file the same way: an explicit value, then `ITF_TARGET`, then `itf_target`
-in `pytest.ini`, then `[tool.itf] target file` in `pyproject.toml`.
+in `pytest.ini`, then `[tool.itf] target` in `pyproject.toml`.
 
 ## Bazel
 
 ```text
  itf_target(src, overrides, packs, srcs, data, env, files)
    ├─ compile action: itf validate on label placeholders ─> plan.json   (fails bazel build on an error)
-   └─ ItfTargetInfo: target file, overrides, conftest, packs, runfiles, env, files
+   └─ ItfTargetInfo: target file, overrides, policy, packs, runfiles, env, files
                      │
  py_itf_test(target = ":x") ─> sets ITF_TARGET/ITF_OVERRIDE, adds packs and files to runfiles
 ```
@@ -152,7 +152,7 @@ in `pytest.ini`, then `[tool.itf] target file` in `pyproject.toml`.
 
 | Pack | Factories (examples) | Actions (examples) |
 |---|---|---|
-| local | `local.platform`, `local.exec`, `local.process`, `local.files` | `local.start` |
+| localhost | `localhost.platform`, `localhost.exec`, `localhost.process`, `localhost.files` | `localhost.start` |
 | docker | `docker.platform`, `docker.exec`, `docker.process`, `docker.files`, `docker.endpoint` | `docker.start` |
 | qemu | `qemu.platform`, `qemu.endpoint`, `qemu.credentials`, `qemu.console` | `qemu.start`, `qemu.open_console` |
 | ssh | `ssh.shell`, `ssh.exec`, `ssh.process`, `ssh.files` | `ssh.open` |

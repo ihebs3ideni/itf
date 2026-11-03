@@ -58,7 +58,7 @@ itf_target(name = "target", src = "target.itf.yaml", packs = ["@score_itf//score
 py_itf_test(name = "test_hello", srcs = ["test_hello.py"], target = ":target")
 ```
 
-Changing `command: docker.exec` to `ssh.exec` or `local.exec` moves the same test to another target. A target
+Changing `command: docker.exec` to `ssh.exec` or `localhost.exec` moves the same test to another target. A target
 file that does not fit together fails `bazel build`. `itf up` and `itf down` bring a target up from a terminal.
 
 **Existing tests.** ITF drops the original plugins. A facade example runs ITF's original integration tests with

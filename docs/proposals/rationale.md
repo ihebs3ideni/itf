@@ -78,7 +78,7 @@ goals:
 ```
 
 The proposed form is longer for one test on one container. It pays off from the second target onwards: the same
-test runs on a host (`command: local.exec`), over SSH (`command: ssh.exec`) or on QEMU, with no change to the test
+test runs on a host (`command: localhost.exec`), over SSH (`command: ssh.exec`) or on QEMU, with no change to the test
 or its `BUILD` except the target file it names.
 
 ### Topic by topic
@@ -120,13 +120,13 @@ or its `BUILD` except the target file it names.
 | Topic | itf-core | Proposed | Why |
 |---|---|---|---|
 | Describing a target | code: the root conftest implements `itf_setup` and `itf_init` and calls `ctx` methods (D-23, D-29); a YAML frontend translated to the same calls (D-31) | a target file, keyed by role | One declarative file can be validated, drawn, diffed and run by every front. The hooks mixed description and code |
-| Where code lives | the conftest held both the description and code | the conftest holds code only: `itf_verify`, `itf_teardown`, fixtures, project parts | Structure in the file, behaviour in Python |
+| Where code lives | the conftest held both the description and code | the project's policy, `policy.py` beside the target file, holds its ITF code (`itf_verify`, `itf_teardown`, parts labelled `local.<name>`); conftests stay pytest's | Structure in the file, behaviour in Python |
 | Declaring a part | `@provides(token, name=, needs={slot: token})`, shapes through `expect()` (D-34) | `@capability`, `@state`; slots are parameters; `config` dataclass; the return type is the shape | The signature says everything. In the packs, about 50 uses of `needs=` and `expect()` became none |
 | Naming a part | a free provider name | a label `<pack>.<name>` | One rule, and packs load from labels |
 | Finding packs | `pytest_plugins` lists them (D-26, D-29) | the labels in the target file name them; `packs:` locates uninstalled ones | No second list to keep in sync |
 | Derived nodes | binding step 3 derives a node when exactly one provider fits (D-7) | removed | Nothing enters a target unless listed |
 | Goals | declared in `itf_init` | listed in the target file; `by:` when two actions could make a state true | Explicit and reviewable |
-| Precedence | origins ranked as data (D-3): plugin < policy | packs < target file < project code | Same idea, with the target file as its own level |
+| Precedence | origins ranked as data (D-3): plugin < policy | packs < target file < policy | Same idea and word, with the target file as its own level |
 | Contracts | tokens chosen by contributors; no definition files | any name; optional definitions; tools to map, define and enforce them | Projects own their contracts; ITF provides the tooling |
 | Tests | gated on tokens, then used a node by name | gated on roles, and use the same role | The test asks for the name it uses |
 

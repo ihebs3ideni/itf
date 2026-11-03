@@ -186,7 +186,7 @@ with today's ITF and with the itf-core design it builds on.
 | Test author | `target.execute(...)`, `target.ssh()`; a test runs on Docker or fails on QEMU at run time | `@itf.requires("command")`, `target.command.exec(...)`; the test runs wherever a `command` exists, and is deselected with a reason elsewhere |
 | Target owner | command-line options per plugin, `docker_configuration` fixtures, plugin lists in `BUILD` | one target file, override files per setup, `itf_target` in `BUILD` |
 | Pack author | a pytest plugin and a `Target` subclass | decorated functions: `@capability` and `@state` with a probe |
-| CI owner | runs tests | also `bazel build` fails on a target file that does not compile; `itf contracts check` enforces a project's policy |
+| CI owner | runs tests | also `bazel build` fails on a target file that does not compile; `itf contracts check` enforces a project's contract rules |
 | Developer at a desk | starts a container by hand | `itf up target.itf.yaml`, `itf down` |
 
 ## Alternatives considered

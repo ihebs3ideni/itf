@@ -41,7 +41,7 @@ documentation on the implementation branch, rounded.
 | 5 | command line and contract tools | `itf` lifecycle commands; `itf contracts map\|new\|check\|reference`; the generated contract map and reference, kept current by a test | ~2,800 | 2, 4 |
 | 6 | examples | starters, `exec_everywhere`, `vendor_contract`, `plain_python`, the legacy facade running the original tests | ~4,500 | 4 |
 | 7 | remove the original plugins and `Target` | `score/itf/plugins` removed; breaking change, pointing at the migration guide and the facade from 6 | removal | 6 |
-| 8 | documentation and CI | concepts, how-to guides, tutorial, glossary, DR-002; CI builds every `itf_target` and checks the contract policy of ITF's packs | ~3,900 | 5, 6 |
+| 8 | documentation and CI | concepts, how-to guides, tutorial, glossary, DR-002; CI builds every `itf_target` and checks the contract rules of ITF's packs | ~3,900 | 5, 6 |
 
 Pull requests 2 and 4 are the largest. If review capacity is short, 2 splits at the line between OCTO
 (`score/itf/core/octo`, standard library only, about 2,500 lines) and the engine, and 4 splits per pack.

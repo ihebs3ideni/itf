@@ -47,7 +47,7 @@ how a target is described and how parts declare themselves. The words are define
    probes). A target file lists capabilities by role and states as goals.
 1. **ITF knows no contracts.** A contract is whatever name two parts agree on, with whatever shape they publish
    and expect. ITF lets projects discover (`itf contracts map`), define (optional definition files,
-   `itf contracts new --from-usage`) and enforce (`itf contracts check --policy`) their contracts. It does not
+   `itf contracts new --from-usage`) and enforce (`itf contracts check --rules`) their contracts. It does not
    ship a vocabulary everyone must follow. The ITF team maintains the contracts its own packs use, with
    conformance checks, as a supported set, not a standard.
 2. **A target file is keyed by role.** `capabilities:` maps a role to a factory label (`command: docker.exec`) or
@@ -70,7 +70,7 @@ how a target is described and how parts declare themselves. The words are define
 7. **Parts declare themselves in code.** `@capability("exec.command")` wraps a factory, and
    `@state("platform.up", after=..., breaks=...)` wraps an action with `@<action>.probe`. A slot is a parameter
    whose annotation, the consumer's own Protocol, carries `__contract__`. `config: <dataclass>` is the settings
-   schema. The label is `<pack>.<function>`, and code outside any pack is the pack `project`. Shapes are always
+   schema. The label is `<pack>.<function>`; the project's own parts are `local.<function>` (decision 14). Shapes are always
    checked.
 8. **Override files** are target files that hold only what changes, merged by role. `remove: true` takes a role
    out. A different factory in the same role starts from no settings.
@@ -87,6 +87,13 @@ how a target is described and how parts declare themselves. The words are define
     (`files` for built files, `env` for the rest).
 13. **Facades keep old APIs.** A project maps the composed roles onto its old classes in a thin layer of its own.
     ITF ships an example of such a layer, not the original plugins.
+14. **The project's policy.** A project's own ITF code (`itf_verify`, `itf_teardown`, its own capability
+    factories and actions) is its **policy**: `policy.py` beside the target file, the word itf-core used for the
+    project's layer (D-3). ITF loads it; pytest never does. Conftests stay pytest's, for fixtures; ITF code in a
+    conftest is an error that points to `policy.py`. The policy's parts are labelled `local.<name>`, and `local`
+    is reserved: no pack may be named `local`, so `local.x` always means this project's policy. The policy
+    outranks the target file, which outranks the packs. The pack for the test host is `localhost`. A project's
+    rules over contracts are **contract rules** (`itf contracts check --rules rules.yaml`).
 
 ## No trust
 

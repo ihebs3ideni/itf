@@ -41,7 +41,7 @@ summarised under "Alternatives" in DR-002.
 ## 3. Detached targets for containers and QEMU
 
 `itf down` runs in a later process and must find what `itf up --detach` created. Only factories that can observe
-earlier work allow it: today `local.platform` and the simulated platform.
+earlier work allow it: today `localhost.platform` and the simulated platform.
 
 | Option | Cost |
 |---|---|
@@ -62,7 +62,7 @@ earlier work allow it: today `local.platform` and the simulated platform.
 | B. Let simulations claim weaker contracts | Suites written for `exec.command` stop running on simulations |
 | C. Exempt simulations from conformance | Hides the problem |
 
-**Recommendation: A**, and a policy rule that a pack's CI passes conformance for every factory it ships.
+**Recommendation: A**, and a rule that a pack's CI passes conformance for every factory it ships.
 
 ## 5. One role key, or also a list form
 
@@ -118,3 +118,17 @@ The planner and engine move into ITF.
 Legacy `test_dlt` fails under rootless Podman, which does not route multicast.
 
 **Recommendation:** tag it so local runs skip it with the reason; CI with a rootful engine keeps running it.
+
+## 13. Removing a relation in an override file
+
+An override file can add relations but not remove one: relations of one state are joined when files merge. An
+override that turns a container target into a real machine (`remove: true` on the platform role) therefore keeps
+the target file's `shell.open after platform.up`, and must `assume: platform.up`.
+
+| Option | Cost |
+|---|---|
+| A. Keep joining; a real machine gets its own target file, sharing parts with `include:` | One more file per kind of target |
+| B. `remove: true` on a relation entry, as on a role | One more merge rule to learn |
+| C. Drop relations that name a state no listed action makes and nothing assumes | An inference: a forgotten action would silently lose its ordering |
+
+**Recommendation: A for now**; revisit B if real projects ask for it. C is ruled out: it guesses.

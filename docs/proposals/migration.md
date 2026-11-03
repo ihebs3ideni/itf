@@ -33,6 +33,7 @@ does. The words are those of the [glossary](glossary.md).
 | File | Purpose |
 |---|---|
 | `targets/docker.itf.yaml`, `targets/qemu.itf.yaml` | what `--docker-image` and `--qemu-config` declared, as target files with `${LEGACY_*}` settings |
+| `targets/policy.py` | the project's policy beside the target files: readiness checks and evidence |
 | `conftest.py` | the original options (which select the target file) and the fixtures `target`, `docker_configuration`, `dlt_config`, `dlt`, `dlt_on_target` |
 | `legacy_itf/` | `LegacyTarget` (`execute`, `upload`, ... over the composed roles), the original SSH, SFTP, ping and DLT helpers, `requires_capabilities` |
 
@@ -98,7 +99,8 @@ def is_on(relay: Relay) -> bool:
     return relay.read()
 ```
 
-A project's own parts can live in the conftest beside its target file; their labels are `project.<name>`.
+A project's own parts live in its policy, `policy.py` beside its target file; their labels are `local.<name>`.
+Keep pytest fixtures in `conftest.py`: ITF code found in a conftest is an error that points to `policy.py`.
 
 ## Effort
 

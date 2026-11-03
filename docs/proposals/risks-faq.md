@@ -75,7 +75,7 @@ Out of scope. Exclusive use of a board inside one plan is a separate proposal; s
 belongs to the CI system.
 
 **How does a project with its own `Target` subclass migrate?**
-It writes a pack, or project parts in the conftest beside its target file: one factory per capability, one
+It writes a pack, or parts in its policy (`policy.py` beside its target file): one factory per capability, one
 action with a probe per setup step. See the [migration guide](migration.md).
 
 **What happens to itf-core?**
