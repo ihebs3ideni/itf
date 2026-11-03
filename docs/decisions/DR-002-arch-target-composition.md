@@ -73,7 +73,9 @@ and how parts declare themselves. The words are defined in the [glossary](../pro
    checked.
 8. **Override files** are target files that hold only what changes, merged by role. `remove: true` takes a role
    out. A different factory in the same role starts from no settings.
-9. **Tests ask for roles:** `@itf.requires("<role>", contract=..., shape=[...])` and `target.<role>`.
+9. **Tests ask for roles:** `@itf.requires("<role>", contract=..., shape=[...])` and `target.<role>`. A
+   requirement can also sit on a test class, a module or a package (`itf_requires = itf.requires(...)`); a test
+   needs every requirement on it and above it.
 10. **One session, one discovery.** `Session(target=..., overrides=...)` is the one session of every front.
     `resolve()` plans and builds nothing. `bring_up()` runs the actions. `reach`, `discard`, `renew` and `probe`
     change and read state during tests, always through the planner. The target file is found in the same order

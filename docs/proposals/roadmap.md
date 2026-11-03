@@ -38,7 +38,7 @@ documentation on the implementation branch, rounded.
 | 2 | core: OCTO and the session | `score/itf/core`: OCTO, target file frontend, registry, realization, bring-up, probes, unwind, evidence, the pytest adapter, `ProcessWrapper`; unit tests | ~10,000 code, ~6,000 tests | 1 |
 | 3 | Bazel: `itf_target` and `py_itf_test(target=)` | `bazel/`, `defs.bzl`; the compile action; analysis tests | ~900 | 2 |
 | 4 | packs | the 11 packs with their contract definitions and conformance checks; pack tests; the integration suite running one capability-gated suite on many target files | ~7,700 code, ~3,000 tests | 2, 3 |
-| 5 | command line and contract tools | `itf` lifecycle commands; `itf contracts map\|new\|check\|reference`; the generated contract map and reference, kept current by a test | ~2,800 | 2, 4 |
+| 5 | command line and contract tools | `itf` lifecycle commands; `itf contracts map\|new\|check\|reference`; the generated contract map and reference, kept current by a test; the planning benchmark (`tools/benchmark`) | ~3,300 | 2, 4 |
 | 6 | examples | starters, `exec_everywhere`, `vendor_contract`, `plain_python`, the legacy facade running the original tests | ~4,500 | 4 |
 | 7 | remove the original plugins and `Target` | `score/itf/plugins` removed; breaking change, pointing at the migration guide and the facade from 6 | removal | 6 |
 | 8 | documentation and CI | concepts, how-to guides, tutorial, glossary, DR-002; CI builds every `itf_target` and checks the contract rules of ITF's packs | ~3,900 | 5, 6 |
