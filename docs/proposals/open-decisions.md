@@ -18,27 +18,7 @@ SPDX-License-Identifier: Apache-2.0
 Each entry gives the question, the options and a recommendation. The community decides; the recommendation is
 the author's.
 
-## 1. How the series lands
-
-The implementation branch has 12 commits. The first 8 introduce an earlier stage of the same work (recipes,
-providers, Starlark recipes) that the last 4 replace.
-
-| Option | Cost |
-|---|---|
-| A. Land the 12 commits as they are | Reviewers read code and words that do not survive |
-| B. Re-cut into the eight pull requests of the [roadmap](roadmap.md), final design only | Rework of the history; no change to the final tree |
-
-**Recommendation: B.**
-
-## 2. Decision record numbering
-
-The implementation branch records the design as DR-006, after three records (DR-003, DR-004, DR-005) of its
-earlier stage that it supersedes. `main` has only DR-001.
-
-**Recommendation:** land one record, DR-002 (this proposal's), and drop the superseded records. Their content is
-summarised under "Alternatives" in DR-002.
-
-## 3. Detached targets for containers and QEMU
+## 1. Detached targets for containers and QEMU
 
 `itf down` runs in a later process and must find what `itf up --detach` created. Only factories that can observe
 earlier work allow it: today `localhost.platform` and the simulated platform.
@@ -51,7 +31,7 @@ earlier work allow it: today `localhost.platform` and the simulated platform.
 
 **Recommendation: B for Docker now; QEMU later, through a pidfile the QEMU part owns.**
 
-## 4. Conformance of the `sim` pack
+## 2. Conformance of the `sim` pack
 
 `sim.exec` claims `exec.command` but does not return shell exit codes or stderr; the simulated platform exposes
 `running` as an attribute where the check calls `running()`.
@@ -64,13 +44,13 @@ earlier work allow it: today `localhost.platform` and the simulated platform.
 
 **Recommendation: A**, and a rule that a pack's CI passes conformance for every factory it ships.
 
-## 5. One role key, or also a list form
+## 3. One role key, or also a list form
 
 Target files key capabilities by role. A list form (`- ssh.exec`) would be shorter where no role name is needed.
 
 **Recommendation:** keep the role key only. One form is easier to teach and to merge.
 
-## 6. The contracts ITF supports
+## 4. The contracts ITF supports
 
 ITF maintains the contracts its own packs use (`exec.command`, `exec.shell`, `exec.process`, `files.transfer`,
 `platform.instance`, `descriptor.endpoint`, `descriptor.credentials`, `observe.logs`, `platform.up`, `shell.open`, and others in each pack's `contracts/`). Once released, their
@@ -78,7 +58,7 @@ names and members are public API.
 
 **Decide:** which of them are marked `stable` in the first release, and which `experimental`.
 
-## 7. Where the legacy facade lives
+## 5. Where the legacy facade lives
 
 | Option | Cost |
 |---|---|
@@ -87,20 +67,20 @@ names and members are public API.
 
 **Recommendation: A**, for one release, then remove it.
 
-## 8. Python 3.14
+## 6. Python 3.14
 
 `pydantic==2.10.6` has no wheel for Python 3.14.
 
 **Recommendation:** move the pin to a release with 3.14 wheels and regenerate the lock files, in its own pull
 request.
 
-## 9. Tests that need multicast
+## 7. Tests that need multicast
 
 Legacy `test_dlt` fails under rootless Podman, which does not route multicast.
 
 **Recommendation:** tag it so local runs skip it with the reason; CI with a rootful engine keeps running it.
 
-## 10. Removing a relation in an override file
+## 8. Removing a relation in an override file
 
 An override file can add relations but not remove one: relations of one state are joined when files merge. An
 override that turns a container target into a real machine (`remove: true` on the platform role) therefore keeps

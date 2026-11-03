@@ -19,7 +19,7 @@ SPDX-License-Identifier: Apache-2.0
 |---|---|
 | **Status** | Proposed, open for review |
 | **Decision record** | [DR-002-Arch: Target Composition](../decisions/DR-002-arch-target-composition.md) |
-| **Implementation** | branch `ihsa_itf_platform`: 12 commits on `main`; every commit passes Bazel analysis, and the last passes every test |
+| **Implementation** | branch `ihsa_itf_platform`: 6 commits on `main`, one idea each; every commit builds and passes its own tests |
 | **Words** | defined once, in the [glossary](glossary.md) |
 
 ## Summary
@@ -209,7 +209,7 @@ with today's ITF.
 
 ## Cost
 
-- A larger repository: the change is about 40,000 added and 5,000 removed lines across 478 files, of which
+- A larger repository: the change is about 41,000 added and 5,000 removed lines across 486 files, of which
   about 10,700 are tests and 3,900 documentation.
 - New words to learn: target file, role, part, capability factory, action, state, probe. The
   [glossary](glossary.md) defines all of them on one page.

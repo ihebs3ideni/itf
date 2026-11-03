@@ -74,7 +74,7 @@ toolchain, and a breaking change softened by the facade.
 - Implementation: branch `ihsa_itf_platform`
 
 **Questions for the community** (details in `docs/proposals/open-decisions.md`):
-1. Land the change as eight re-cut pull requests showing only the final design?
+1. Land it as the six pull requests of the roadmap, with the breaking core and the facade close together?
 2. Which contracts that ITF's packs use should be `stable` in the first release?
 3. Should the legacy facade live in ITF as an example for one release?
 4. Docker detach by container labels now, QEMU later?

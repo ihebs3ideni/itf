@@ -26,7 +26,7 @@ Podman.
 | `bazel test //test/...` and the format checks | 29 of 29 test targets pass |
 | Copyright check | passes |
 | Examples (`bazel test //...` in `examples/`) | 20 of 21 pass. Legacy `test_dlt` fails because rootless Podman does not route multicast; it is unchanged from `main` |
-| Every commit of the series | passes Bazel analysis (`bazel build --nobuild //...`) |
+| Every commit of the series | builds and passes its own tests |
 | Line coverage of `score/itf` by unit tests alone (no containers) | 81%. Pack code that only container and QEMU tests reach is not counted here |
 | Functions with cyclomatic complexity of 11 or more | 21, down from 63 during the cleanup. The highest is the SSH client's read loop (34) |
 | Planning a target file (no bring-up) | 3.5–7 ms in a running process; 0.18–0.33 s for a fresh process (one `itf validate`, one Bazel compile step), most of it Python imports. OCTO's two gates take under 1 ms of it. A 200-device target plans in about 60 ms |
@@ -38,14 +38,14 @@ Podman.
 
 | Risk | Effect | Mitigation |
 |---|---|---|
-| Size of the change | Reviewers cannot read 40,000 lines with equal care | The [pull request plan](roadmap.md) cuts it into eight reviewable steps; OCTO (2,500 lines, standard library only) can be reviewed alone |
+| Size of the change | Reviewers cannot read 40,000 lines with equal care | The [pull request plan](roadmap.md) cuts it into six reviewable steps; OCTO (2,500 lines, standard library only) can be reviewed alone |
 | Breaking change for every project | Existing tests stop working when the original plugins are removed | The facade example keeps them running with only imports changed; removal is its own pull request, after the facade lands |
 | New words | A larger first lesson for test authors | One [glossary](glossary.md); a test author needs three words (role, `@itf.requires`, `target.<role>`); starters and a tutorial |
 | Orderings move to target files | A target file that forgets a relation opens SSH before the platform is up | The probe fails with the evidence; the starters show the common relations; `itf graph` shows the order before any run |
 | Pack code with low unit coverage | Defects in container and SSH paths are found only by integration tests | Integration compositions run in CI on every change; conformance checks per contract |
 | The `sim` pack does not pass the conformance checks of its contracts | A test can pass on a simulation and fail on a real target | [Open decision](open-decisions.md) 4: make the simulations conform and run their checks in CI |
-| Detached targets only for `local` and `sim` | `itf up --detach` is refused for containers and QEMU | [Open decision](open-decisions.md) 3 |
-| Python 3.14 | `pydantic==2.10.6` has no wheel for 3.14 | [Open decision](open-decisions.md) 8 |
+| Detached targets only for `localhost` and `sim` | `itf up --detach` is refused for containers and QEMU | [Open decision](open-decisions.md) 1 |
+| Python 3.14 | `pydantic==2.10.6` has no wheel for 3.14 | [Open decision](open-decisions.md) 6 |
 
 ## FAQ
 

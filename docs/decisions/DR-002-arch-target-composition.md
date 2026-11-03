@@ -18,8 +18,7 @@ SPDX-License-Identifier: Apache-2.0
 **Date:** 2026-11-03
 **Status:** Proposed
 **Proposal:** [RFC: compose ITF test targets from self-describing parts](../proposals/rfc.md)
-**Implementation:** branch `ihsa_itf_platform` (recorded there as DR-006; see
-[open decisions](../proposals/open-decisions.md))
+**Implementation:** branch `ihsa_itf_platform`, where this record is DR-002 too
 
 > This record follows the Decision Record convention established by the
 > Eclipse S-CORE project:
