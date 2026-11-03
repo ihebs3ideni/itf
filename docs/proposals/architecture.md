@@ -168,12 +168,12 @@ Each pack ships the definitions and conformance checks of the contracts it uses,
 
 ## Evidence
 
-Every run writes `itf-run/` under Bazel's undeclared outputs: the plan, the bring-up log, each probe result,
-`evidence.json` and `evidence.html`. A failed plan or bring-up adds a report naming the failing part, the
-diagnostic and the fix.
+A run writes `itf-run/` under Bazel's undeclared outputs. How much is one setting (`--itf-artifacts`):
 
-## What OCTO keeps from itf-core
+| Level | The run directory gets |
+|---|---|
+| `none` | nothing; ITF's output is what pytest prints |
+| `standard` (default) | what a person reads: the run log, the plan report and the evidence (`evidence.html`, `evidence.json`) after a bring-up, the diagnostics when planning fails |
+| `full` | every file, for debugging ITF or a pack: plan, claims, gating, run and unwind records, the event stream, a DEBUG log |
 
-OCTO is the itf-core planner with three removals: node derivation, the switch that relaxed shape checks, and
-binding actions by role name. Everything else (claims, the two gates, precedence of origins, diagnostics) is
-unchanged. The [rationale](rationale.md) lists each itf-core decision and what became of it.
+A failed plan or bring-up prints a report naming the failing part, the diagnostic and the fix.

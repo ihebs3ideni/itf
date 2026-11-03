@@ -18,7 +18,7 @@ SPDX-License-Identifier: Apache-2.0
 ## Where the implementation stands
 
 The implementation branch `ihsa_itf_platform` holds the whole design as 12 commits on `main`. The first 8 are an
-earlier stage (ITF on the itf-core engine, with recipes and providers); the last 4 move it to target
+earlier stage of the same work (with recipes and providers); the last 4 move it to target
 target file. Every commit passes Bazel analysis, and the last one passes every test (see
 [risks and FAQ](risks-faq.md) for what was verified).
 
@@ -52,9 +52,7 @@ Pull requests 2 and 4 are the largest. If review capacity is short, 2 splits at 
 |---|---|---|
 | Conformance on every pack | the `sim` pack passes the conformance checks of the contracts it claims; CI runs them | open decision 4 |
 | Detached targets for containers | `itf up --detach` and `itf down` for `docker.platform` | open decision 3 |
-| Packaging | ITF installable without Bazel (wheels, entry points, `[tool.itf]`) | open decision 8 |
-| Exclusive hardware | a plan holds a board exclusively | open decision 9 |
-| Python 3.14 | move the `pydantic` pin to a release with 3.14 wheels | open decision 10 |
+| Python 3.14 | move the `pydantic` pin to a release with 3.14 wheels | open decision 8 |
 
 ## Review aids
 

@@ -78,4 +78,3 @@ toolchain, and a breaking change softened by the facade.
 2. Which contracts that ITF's packs use should be `stable` in the first release?
 3. Should the legacy facade live in ITF as an example for one release?
 4. Docker detach by container labels now, QEMU later?
-5. Archive itf-core, or keep it as OCTO's standalone home?

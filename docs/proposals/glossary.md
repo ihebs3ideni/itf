@@ -53,7 +53,7 @@ documentation on the implementation branch use these words and no others.
 
 ## Words not used, and what replaces them
 
-These appear in today's ITF, in itf-core or in earlier drafts. Reviewers who know those will meet them.
+These appear in today's ITF or in the implementation branch's history. Reviewers who know those will meet them.
 
 | Not used | Use instead | Why |
 |---|---|---|
@@ -63,11 +63,10 @@ These appear in today's ITF, in itf-core or in earlier drafts. Reviewers who kno
 | node | role (in user text) | "Node" stays inside OCTO's own code |
 | recipe; composition file | target file | One word for the file, named after what it describes |
 | bench values, bench file | override file | One structure for every kind of change |
-| token | contract | "Token" was the itf-core word for a contract's name |
 | member name | role | Roles are chosen by the target file, not by the contract |
 | conftest (for ITF code) | policy (`policy.py`) | A conftest is pytest's, for fixtures; ITF loads the policy itself |
 | `project.<name>` | `local.<name>` | Read as "defined here"; reserved, so no pack can shadow it |
 | the `local` pack | `localhost` | It is the test host; `local` now means the project's policy |
-| contract policy | contract rules | "Policy" is the project's code layer, as in itf-core |
+| contract policy | contract rules | "Policy" is the project's code layer |
 | catalog, marketplace | contract map | It maps; it does not sell or register |
 | the platform (as a product name) | ITF | "Platform" is a factory's contract (`platform.instance`) |

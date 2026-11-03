@@ -13,12 +13,11 @@ SPDX-License-Identifier: Apache-2.0
 *******************************************************************************
 -->
 
-# Rationale: how the proposal compares with today's ITF and with itf-core
+# Rationale: how the proposal compares with today's ITF
 
-The proposal has two ancestors. **Today's ITF** (`main`) is what projects use: a `Target` class and one pytest
-plugin per environment. **itf-core** is a prototype that introduced the OCTO planner, contracts and probes,
-recorded in its decisions D-1 to D-36. This paper compares the proposal with both, topic by topic, and says why
-each choice was made. The words are those of the [glossary](glossary.md).
+Today's ITF (`main`) is a `Target` class and one pytest plugin per environment. This paper compares the proposal
+with it, topic by topic, then lists the main design choices with the alternative each one was weighed against.
+The words are those of the [glossary](glossary.md).
 
 ## Today's ITF and the proposal
 
@@ -96,39 +95,22 @@ or its `BUILD` except the target file it names.
 | Running without tests | not possible | `itf up`, `itf down` | Debugging and demos |
 | Old tests | | a facade of the project's own; ITF ships an example | ITF does not carry two APIs |
 
-## itf-core and the proposal
+## Design choices
 
-### Kept unchanged
-
-| itf-core decision | Says | In the proposal |
-|---|---|---|
-| D-5 two graphs; D-15 the core constructs nothing | plan what exists and what happens, from metadata only | OCTO's two gates |
-| D-1 identity is (scope, name) | a thing is named by its scope and name, not by its contract | roles: `target.command`, `target.gw.command` |
-| D-7, D-8 binding order; ambiguity is a question | explicit, then the sole candidate, then an error | the same, minus derivation (below) |
-| D-10, D-11 shapes as data; the consumer sets fidelity | shapes are member lists; the consumer decides how much it checks | a slot's Protocol is its expected shape |
-| D-28 contributors meet only through names | parts never import each other | packs never import each other |
-| D-20, D-21 state contracts and probes | a state is named by what it delivers; a probe checks it | `@state` and `@<action>.probe` |
-| D-6 third-party temporal relations | anyone may order states | the target file's `relations:` |
-| D-14, D-35 aliases; devices never fall back | sharing is explicit | `share:` in a scope |
-| D-16 unwind from observed state | teardown starts from what probes see | also enables `itf down` |
-| D-24, D-25 startup checks and teardown hooks | `itf_verify`, `itf_teardown` | the only hooks left |
-| D-30 `assume` | a skipped producer is a visible, owned decision | `assume:` with owner and reason |
-| D-36 kinds plug into OCTO | the planner knows no kind | unchanged |
-
-### Changed
-
-| Topic | itf-core | Proposed | Why |
+| Topic | Chosen | Alternative weighed | Why |
 |---|---|---|---|
-| Describing a target | code: the root conftest implements `itf_setup` and `itf_init` and calls `ctx` methods (D-23, D-29); a YAML frontend translated to the same calls (D-31) | a target file, keyed by role | One declarative file can be validated, drawn, diffed and run by every front. The hooks mixed description and code |
-| Where code lives | the conftest held both the description and code | the project's policy, `policy.py` beside the target file, holds its ITF code (`itf_verify`, `itf_teardown`, parts labelled `local.<name>`); conftests stay pytest's | Structure in the file, behaviour in Python |
-| Declaring a part | `@provides(token, name=, needs={slot: token})`, shapes through `expect()` (D-34) | `@capability`, `@state`; slots are parameters; `config` dataclass; the return type is the shape | The signature says everything. In the packs, about 50 uses of `needs=` and `expect()` became none |
-| Naming a part | a free provider name | a label `<pack>.<name>` | One rule, and packs load from labels |
-| Finding packs | `pytest_plugins` lists them (D-26, D-29) | the labels in the target file name them; `packs:` locates uninstalled ones | No second list to keep in sync |
-| Derived nodes | binding step 3 derives a node when exactly one provider fits (D-7) | removed | Nothing enters a target unless listed |
-| Goals | declared in `itf_init` | listed in the target file; `by:` when two actions could make a state true | Explicit and reviewable |
-| Precedence | origins ranked as data (D-3): plugin < policy | packs < target file < policy | Same idea and word, with the target file as its own level |
-| Contracts | tokens chosen by contributors; no definition files | any name; optional definitions; tools to map, define and enforce them | Projects own their contracts; ITF provides the tooling |
-| Tests | gated on tokens, then used a node by name | gated on roles, and use the same role | The test asks for the name it uses |
+| Describing a target | a target file, keyed by role | code in a conftest calling setup functions | One declarative file can be validated, drawn, diffed and run by every front; code mixed description with behaviour |
+| Where project code lives | the policy, `policy.py` beside the target file; conftests stay pytest's | the conftest | Structure in the file, ITF code in one known file, pytest fixtures where pytest expects them |
+| Declaring a part | `@capability`, `@state`; slots are parameters; a `config` dataclass; the return type is the shape | a decorator listing needs and shapes by hand | The signature says everything once |
+| Naming a part | a label `<pack>.<name>`; `local.<name>` in the policy | free names | One rule, and packs load from labels |
+| Finding packs | the labels in the target file name them; `packs:` locates uninstalled ones | a plugin list kept beside the target | No second list to keep in sync |
+| Filling a missing part | never: nothing enters a target unless listed | derive one when exactly one candidate fits | No hidden parts in a plan |
+| Goals | listed in the target file; `by:` when two actions could make a state true | inferred from what tests need | Explicit and reviewable |
+| Precedence | packs < target file < policy | one level | The project can always override, visibly |
+| Contracts | any name; optional definitions; tools to map, define and enforce them | a fixed vocabulary owned by ITF | Projects own their contracts |
+| Tests | gated on roles, and use the same role | gated on contract names | The test asks for the name it uses |
+| Planning | from declarations only, in two gates (what exists, then what happens) | building as you go | Mistakes are found before anything starts |
+| Teardown | from what probes observe | replaying the plan backwards | Correct after a crash and from a later process |
 
 ### Added
 

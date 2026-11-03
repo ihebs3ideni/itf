@@ -20,8 +20,8 @@ the author's.
 
 ## 1. How the series lands
 
-The implementation branch has 12 commits. The first 8 introduce an earlier stage (recipes, providers, Starlark
-recipes) that the last 4 replace.
+The implementation branch has 12 commits. The first 8 introduce an earlier stage of the same work (recipes,
+providers, Starlark recipes) that the last 4 replace.
 
 | Option | Cost |
 |---|---|
@@ -32,10 +32,10 @@ recipes) that the last 4 replace.
 
 ## 2. Decision record numbering
 
-The implementation branch records the design as DR-006, after three drafts (DR-003, DR-004, DR-005) that it
-supersedes. `main` has only DR-001.
+The implementation branch records the design as DR-006, after three records (DR-003, DR-004, DR-005) of its
+earlier stage that it supersedes. `main` has only DR-001.
 
-**Recommendation:** land one record, DR-002 (this proposal's), and drop the superseded drafts. Their content is
+**Recommendation:** land one record, DR-002 (this proposal's), and drop the superseded records. Their content is
 summarised under "Alternatives" in DR-002.
 
 ## 3. Detached targets for containers and QEMU
@@ -87,39 +87,20 @@ names and members are public API.
 
 **Recommendation: A**, for one release, then remove it.
 
-## 8. Packaging without Bazel
-
-ITF works without Bazel in a virtual environment today. It is not yet published as wheels with packs as entry
-points.
-
-**Decide:** when to publish, and whether packs ship as one distribution or one per pack.
-
-## 9. Exclusive hardware in a plan
-
-A plan cannot yet say that it holds a board exclusively.
-
-**Decide:** whether this lands before the first release on this design.
-
-## 10. Python 3.14
+## 8. Python 3.14
 
 `pydantic==2.10.6` has no wheel for Python 3.14.
 
 **Recommendation:** move the pin to a release with 3.14 wheels and regenerate the lock files, in its own pull
 request.
 
-## 11. Where itf-core goes
-
-The planner and engine move into ITF.
-
-**Decide:** whether the itf-core repository is archived, or kept as the home of OCTO as a standalone library.
-
-## 12. Tests that need multicast
+## 9. Tests that need multicast
 
 Legacy `test_dlt` fails under rootless Podman, which does not route multicast.
 
 **Recommendation:** tag it so local runs skip it with the reason; CI with a rootful engine keeps running it.
 
-## 13. Removing a relation in an override file
+## 10. Removing a relation in an override file
 
 An override file can add relations but not remove one: relations of one state are joined when files merge. An
 override that turns a container target into a real machine (`remove: true` on the platform role) therefore keeps

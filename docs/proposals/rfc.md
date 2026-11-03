@@ -75,7 +75,7 @@ These problems come from using ITF on real projects:
 ## Non-goals
 
 - A test-case language or a replacement for pytest. pytest remains the test runner.
-- Scheduling of shared hardware between pipelines. Exclusive use of a board in one plan is a separate proposal.
+- Scheduling of shared hardware, inside a plan or between pipelines.
 - A central registry of contracts or packs.
 - Keeping the original plugin API inside ITF. A project that needs it keeps a thin facade of its own (see the
   [migration guide](migration.md)); ITF provides a complete example of one.
@@ -177,7 +177,7 @@ def exec(shell: Shell) -> SshExec:
 ```
 
 The [architecture](architecture.md) describes every piece. The [rationale](rationale.md) compares each choice
-with today's ITF and with the itf-core design it builds on.
+with today's ITF.
 
 ## What changes for whom
 

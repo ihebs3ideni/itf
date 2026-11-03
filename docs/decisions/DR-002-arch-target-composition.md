@@ -18,7 +18,7 @@ SPDX-License-Identifier: Apache-2.0
 **Date:** 2026-11-03
 **Status:** Proposed
 **Proposal:** [RFC: compose ITF test targets from self-describing parts](../proposals/rfc.md)
-**Implementation:** branch `ihsa_itf_platform` (recorded there as DR-006, after three superseded drafts; see
+**Implementation:** branch `ihsa_itf_platform` (recorded there as DR-006; see
 [open decisions](../proposals/open-decisions.md))
 
 > This record follows the Decision Record convention established by the
@@ -31,10 +31,9 @@ ITF models a test target as one class, `Target`, subclassed per environment and 
 environment. Bring-up order lives in each plugin, tests call fixed methods, and every mistake shows up at run
 time. The [RFC](../proposals/rfc.md) gives the motivation in full.
 
-The design builds on the itf-core prototype and its decision record (D-1 to D-36): the OCTO planner, parts that
-meet only through names, probes as evidence, and unwind from observed state. This record keeps those and decides
-how a target is described and how parts declare themselves. The words are defined in the
-[glossary](../proposals/glossary.md).
+The design rests on four principles: a planner (OCTO) that plans from declarations only, parts that meet only
+through names, probes as evidence, and teardown from observed state. This record decides how a target is described
+and how parts declare themselves. The words are defined in the [glossary](../proposals/glossary.md).
 
 ## Decisions
 
@@ -88,8 +87,7 @@ how a target is described and how parts declare themselves. The words are define
 13. **Facades keep old APIs.** A project maps the composed roles onto its old classes in a thin layer of its own.
     ITF ships an example of such a layer, not the original plugins.
 14. **The project's policy.** A project's own ITF code (`itf_verify`, `itf_teardown`, its own capability
-    factories and actions) is its **policy**: `policy.py` beside the target file, the word itf-core used for the
-    project's layer (D-3). ITF loads it; pytest never does. Conftests stay pytest's, for fixtures; ITF code in a
+    factories and actions) is its **policy**: `policy.py` beside the target file. ITF loads it; pytest never does. Conftests stay pytest's, for fixtures; ITF code in a
     conftest is an error that points to `policy.py`. The policy's parts are labelled `local.<name>`, and `local`
     is reserved: no pack may be named `local`, so `local.x` always means this project's policy. The policy
     outranks the target file, which outranks the packs. The pack for the test host is `localhost`. A project's
