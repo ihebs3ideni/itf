@@ -76,9 +76,17 @@ request.
 
 ## 7. Tests that need multicast
 
-Legacy `test_dlt` fails under rootless Podman, which does not route multicast.
+Legacy `test_dlt` fails under rootless Podman, which does not route multicast. Whether multicast works is a
+property of where a target runs, not of the test: a rootful engine on a laptop routes it, a bench behind a switch
+that drops it does not.
 
-**Recommendation:** tag it so local runs skip it with the reason; CI with a rootful engine keeps running it.
+| Option | Cost |
+|---|---|
+| A. Tag the test; skip the tag locally, run it in CI | Encodes where a test runs, not what it needs; wrong on rootful laptops and locked-down benches |
+| B. A condition: a state only a probe can make known (`network.multicast`), probed after bring-up through the composed target; a test that requires it is skipped with the probe's reason when it does not hold; a target file may assume it | A small extension of gate 2: a producer that observes and changes nothing |
+
+**Recommendation: B**, after the series lands. Until then the test stays as it is and fails only where multicast
+is not routed.
 
 ## 8. Removing a relation in an override file
 
