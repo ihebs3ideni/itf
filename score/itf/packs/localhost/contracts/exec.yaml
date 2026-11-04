@@ -25,9 +25,9 @@ contracts:
       keeps one session. Prefer a child shell (`sh -c '...'`) when a command must not affect the session.
     members:
       - name: exec
-        signature: "(command: str, timeout: float = 30.0) -> tuple[int, str]"
+        signature: "(command: str, timeout: float = 30.0) -> tuple[int, bytes]"
         semantics: >
-          Returns the exit code and the output, stdout followed by stderr. A nonzero exit is returned,
+          Returns the exit code and the output as bytes, stdout followed by stderr. A nonzero exit is returned,
           never raised. A command that does not finish within the timeout is an error of the factory.
     guarantees:
       - A nonzero exit code is returned, not raised.
@@ -68,31 +68,25 @@ contracts:
     kind: capability
     role: shell
     version: 1
-    summary: An open interactive shell session with separate stdout and stderr and a run-time limit.
+    summary: An open shell session with ITF's original `Ssh` command API.
     description: >
-      A connected session (for example SSH) that offers more than one-shot commands: output split into
-      lines, stdout and stderr kept apart or merged, a bound on how long a command may run. Those are the
-      member `exec_lines`, which is not required: real SSH offers it, a simulation may not, so tests gate on
-      it with `shape=["exec_lines"]` and its checks run only where it exists (the exit code is -1 when the
-      command exceeds max_exec_time). Other capabilities (command, process, files) are built on top of one
-      shell. The session is opened by the state `shell.open`.
+      A connected session (for example SSH) offering the original `Ssh` methods: output split into lines,
+      stdout and stderr kept apart or merged, a bound on how long a command may run (exit code -1 when
+      the command exceeds max_exec_time). Other capabilities (command, process, files) are built on top
+      of one shell. The session is opened by the state `shell.open`.
     members:
-      - name: exec
-        signature: "(command: str, timeout: float = 30.0) -> tuple[int, str]"
-        semantics: Exit code and stdout followed by stderr; never raises on a nonzero exit.
-      - name: run
-        signature: "(command: str, timeout: float = 30.0) -> str"
-        semantics: Returns stdout; raises RuntimeError carrying stderr when the command exits nonzero.
-      - name: exec_lines
-        required: false
-        signature: "(command: str, timeout: float | None = None, max_exec_time: float | None = None, separate_stderr: bool = True, log: bool = True) -> tuple[int, list[str], list[str]]"
+      - name: execute_command_output
+        signature: "(cmd: str, timeout: float = 30, max_exec_time: float = 180, logger_in=None, verbose: bool = True, separate_stderr: bool = True) -> tuple[int, list[str], list[str]]"
         semantics: >
-          Returns the exit code, the stdout lines and the stderr lines, each line keeping its newline. The
-          exit code is -1 when the command exceeds max_exec_time.
+          Returns the exit code, the stdout lines and the stderr lines, each line keeping its newline;
+          stderr is merged into stdout unless separate_stderr. The exit code is -1 when the command
+          exceeds max_exec_time.
+      - name: execute_command
+        signature: "(cmd: str, timeout: float = 30, max_exec_time: float = 180, logger_in=None, verbose: bool = True) -> int"
+        semantics: Returns the exit code; never raises on a nonzero exit.
     guarantees:
-      - run raises on a nonzero exit; exec returns the code.
-      - Where exec_lines is offered, line splitting preserves each newline and a command exceeding
-        max_exec_time reports exit code -1.
+      - Line splitting preserves each newline.
+      - A command exceeding max_exec_time reports exit code -1.
     see_also:
       - exec.command
       - shell.open
