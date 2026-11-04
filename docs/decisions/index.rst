@@ -31,3 +31,12 @@ Infrastructure
    :glob:
 
    DR-*-infra*
+
+Architecture
+------------
+
+.. toctree::
+   :maxdepth: 1
+   :glob:
+
+   DR-*-arch*
