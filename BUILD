@@ -82,6 +82,9 @@ copyright_checker(
         "//:main.py",
     ],
     config = "@score_tooling//cr_checker/resources:config",
+    # main's tests run unchanged in test/integration/legacy (the compatibility promise); one of them carries a
+    # header the checker reads as missing, and it must not be edited.
+    exclusion = "copyright_exclusions.txt",
     template = "@score_tooling//cr_checker/resources:templates",
     visibility = ["//visibility:public"],
 )
