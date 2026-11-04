@@ -22,6 +22,183 @@ load("//:defs.bzl", "itf_target", "py_itf_test")
 
 SUITE = glob(["suite/*.py"])
 
+OBSERVABILITY_SUITE = [
+    "suite/test_command.py",
+    "suite/test_console.py",
+    "suite/test_multicast.py",
+]
+
+PCAP_SUITE = ["suite/test_capture.py"]
+
+itf_target(
+    name = "target_qemu_observability_pcap",
+    src = "targets/observability/qnx.itf.yaml",
+    srcs = [
+        "targets/observability/policy.py",
+        "targets/observability/qnx_policy.py",
+    ],
+    files = {
+        "ITF_QEMU_CONFIG": "//test/resources:qemu_bridge_config",
+        "ITF_QEMU_KERNEL": "//test/resources/qnx:init",
+    },
+    packs = [
+        "//score/itf/packs/qemu",
+        "//score/itf/packs/ssh",
+        "//score/itf/packs/pcap",
+        "//score/itf/packs/dlt",
+    ],
+    tags = ["manual"],
+    tools = {"ITF_TCPDUMP": "//score/itf/packs/pcap:tcpdump_bin"},
+)
+
+itf_target(
+    name = "target_qemu_observability",
+    src = "targets/observability/qnx_no_pcap.itf.yaml",
+    srcs = [
+        "targets/observability/policy.py",
+        "targets/observability/qnx_policy.py",
+    ],
+    files = {
+        "ITF_QEMU_CONFIG": "//test/resources:qemu_bridge_config",
+        "ITF_QEMU_KERNEL": "//test/resources/qnx:init",
+    },
+    packs = [
+        "//score/itf/packs/qemu",
+        "//score/itf/packs/ssh",
+        "//score/itf/packs/dlt",
+    ],
+    tags = ["manual"],
+)
+
+itf_target(
+    name = "target_qemu_serial_observability_pcap",
+    src = "targets/observability/qnx.itf.yaml",
+    srcs = [
+        "targets/observability/policy.py",
+        "targets/observability/qnx_policy.py",
+    ],
+    files = {
+        "ITF_QEMU_CONFIG": "//test/resources:qemu_bridge_config",
+        "ITF_QEMU_KERNEL": "//test/resources/qnx:init",
+    },
+    overrides = ["overrides/qemu_serial.itf.yaml"],
+    packs = [
+        "//score/itf/packs/qemu",
+        "//score/itf/packs/ssh",
+        "//score/itf/packs/pcap",
+        "//score/itf/packs/dlt",
+        "//score/itf/packs/serial",
+    ],
+    tags = ["manual"],
+    tools = {"ITF_TCPDUMP": "//score/itf/packs/pcap:tcpdump_bin"},
+)
+
+itf_target(
+    name = "target_qemu_serial_observability",
+    src = "targets/observability/qnx_no_pcap.itf.yaml",
+    srcs = [
+        "targets/observability/policy.py",
+        "targets/observability/qnx_policy.py",
+    ],
+    data = glob(["targets/**/*.itf.yaml"]),
+    files = {
+        "ITF_QEMU_CONFIG": "//test/resources:qemu_bridge_config",
+        "ITF_QEMU_KERNEL": "//test/resources/qnx:init",
+    },
+    overrides = ["overrides/qemu_serial.itf.yaml"],
+    packs = [
+        "//score/itf/packs/qemu",
+        "//score/itf/packs/ssh",
+        "//score/itf/packs/dlt",
+        "//score/itf/packs/serial",
+    ],
+    tags = ["manual"],
+)
+
+itf_target(
+    name = "target_docker_observability_pcap",
+    src = "targets/observability/docker.itf.yaml",
+    srcs = ["targets/observability/policy.py"],
+    files = {"ITF_UDP_SENDER": "//test/resources/qnx:udp_sender"},
+    packs = [
+        "//score/itf/packs/docker",
+        "//score/itf/packs/pcap",
+        "//score/itf/packs/dlt",
+    ],
+    tags = ["manual"],
+    tools = {"ITF_TCPDUMP": "//score/itf/packs/pcap:tcpdump_bin"},
+)
+
+itf_target(
+    name = "target_docker_observability",
+    src = "targets/observability/docker_no_pcap.itf.yaml",
+    srcs = ["targets/observability/policy.py"],
+    files = {"ITF_UDP_SENDER": "//test/resources/qnx:udp_sender"},
+    packs = [
+        "//score/itf/packs/docker",
+        "//score/itf/packs/dlt",
+    ],
+    tags = ["manual"],
+)
+
+py_itf_test(
+    name = "observability",
+    timeout = "long",
+    srcs = ["conftest.py"] + OBSERVABILITY_SUITE,
+    tags = ["manual"],
+    target = select({
+        "@platforms//os:qnx": ":target_qemu_observability",
+        "//conditions:default": ":target_docker_observability",
+    }),
+)
+
+py_itf_test(
+    name = "observability_pcap",
+    timeout = "long",
+    srcs = ["conftest.py"] + PCAP_SUITE,
+    tags = [
+        "local",
+        "manual",
+    ],
+    target = select({
+        "@platforms//os:qnx": ":target_qemu_observability_pcap",
+        "//conditions:default": ":target_docker_observability_pcap",
+    }),
+)
+
+py_itf_test(
+    name = "observability_serial",
+    timeout = "long",
+    srcs = ["conftest.py"] + OBSERVABILITY_SUITE,
+    tags = ["manual"],
+    target = ":target_qemu_serial_observability",
+)
+
+py_itf_test(
+    name = "observability_serial_pcap",
+    timeout = "long",
+    srcs = ["conftest.py"] + PCAP_SUITE,
+    tags = [
+        "local",
+        "manual",
+    ],
+    target = ":target_qemu_serial_observability_pcap",
+)
+
+py_itf_test(
+    name = "qemu_observability_specialist",
+    timeout = "long",
+    srcs = [
+        "conftest.py",
+        "specific/test_qemu_observability.py",
+    ],
+    tags = [
+        "manual",
+        "qemu",
+    ],
+    target = ":target_qemu_observability_pcap",
+)
+
 # ---- the test host: runs anywhere, no daemon
 
 itf_target(
@@ -253,8 +430,11 @@ py_itf_test(
 # Ubuntu with a second disk.
 itf_target(
     name = "target_ubuntu",
-    src = "targets/qemu.itf.yaml",
-    srcs = ["targets/policy.py"],
+    src = "targets/ubuntu/ubuntu.itf.yaml",
+    srcs = [
+        "targets/policy.py",
+        "targets/ubuntu/policy.py",
+    ],
     data = glob(["targets/**/*.itf.yaml"]),
     files = {
         "ITF_QEMU_CONFIG": "@os_images//ubuntu_x86_64:qemu_config",
@@ -334,6 +514,9 @@ test_suite(
 # building its files: the QEMU targets above are manual, so no build compiles them otherwise.
 filegroup(
     name = "target_files",
-    srcs = glob(["targets/**/*.itf.yaml"]) + ["targets/policy.py"],
+    srcs = glob([
+        "targets/**/*.itf.yaml",
+        "targets/**/*policy.py",
+    ]),
     visibility = ["//test/plans:__pkg__"],
 )

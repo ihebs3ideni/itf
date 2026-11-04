@@ -1,0 +1,35 @@
+policies:
+  - test/integration/targets/observability/policy.py
+packs:
+  docker: score.itf.packs.docker.plugin
+  dlt: score.itf.packs.dlt.plugin
+capabilities:
+  platform:
+    factory: docker.platform
+    with:
+      image: ubuntu:24.04
+      network: host
+      volumes: ${ITF_UDP_SENDER}:/itf/udp_sender:ro
+  command: docker.exec
+  process: docker.process
+  files: docker.files
+  logs:
+    factory: dlt.multicast
+    with:
+      sources: 0.0.0.0=239.255.42.99
+      port: 3490
+      dlt_file: ${TEST_UNDECLARED_OUTPUTS_DIR:-itf-run}/multicast.dlt
+  traffic:
+    factory: local.traffic
+    with:
+      host: 127.0.0.1
+      sender: /itf/udp_sender
+goals:
+  - state: platform.up
+    by: docker.start
+  - state: logs.active
+    by: dlt.join
+relations:
+  - state: platform.up
+    after:
+      - logs.active
