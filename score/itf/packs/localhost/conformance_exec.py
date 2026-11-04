@@ -28,20 +28,25 @@ CONSOLE = "exec.console"
 @check()
 def output_and_exit_code_are_returned(node):
     result = node.exec("echo -n hello")
-    expect(result == (0, "hello"), f"exec('echo -n hello') returned {result!r}, expected (0, 'hello')")
+    expect(result == (0, b"hello"), f"exec('echo -n hello') returned {result!r}, expected (0, b'hello')")
 
 
 @check()
 def a_failing_command_reports_its_exit_code_without_raising(node):
     # A child shell: on a console the session itself persists, and a bare `exit` would end it.
     code, output = node.exec("sh -c 'exit 3'")
-    expect(code == 3, f"exec of a command exiting 3 returned code {code} (output {output!r})")
+    expect(
+        code == 3 and isinstance(output, bytes), f"exec of a command exiting 3 returned code {code} (output {output!r})"
+    )
 
 
 @check()
 def stderr_is_part_of_the_output(node):
     code, output = node.exec("echo oops >&2")
-    expect(code == 0 and "oops" in output, f"stderr text missing from the output: ({code}, {output!r})")
+    expect(
+        code == 0 and isinstance(output, bytes) and b"oops" in output,
+        f"stderr text missing from the output: ({code}, {output!r})",
+    )
 
 
 CHECKS = {
@@ -103,46 +108,37 @@ CHECKS[PROCESS] = [
 
 
 @check()
-def exec_returns_the_exit_code_and_the_output(node):
-    code, output = node.exec("echo -n out; echo err 1>&2; exit 4")
-    expect(code == 4 and "out" in output and "err" in output, f"exec returned ({code}, {output!r})")
+def execute_command_returns_the_exit_code(node):
+    code = node.execute_command("exit 4")
+    expect(code == 4, f"execute_command('exit 4') returned {code}")
 
 
 @check()
-def run_returns_stdout_and_raises_on_failure(node):
-    out = node.run("echo -n ok")
-    expect(out == "ok", f"run('echo -n ok') returned {out!r}")
-    try:
-        node.run("exit 1")
-    except RuntimeError:
-        return
-    raise AssertionError("run() of a failing command did not raise RuntimeError")
-
-
-@check(shape=("exec_lines",))
 def stdout_and_stderr_can_be_kept_apart_or_merged(node):
     command = "echo out; echo err 1>&2; exit 7"
-    code, out, err = node.exec_lines(command, separate_stderr=True)
+    code, out, err = node.execute_command_output(command, separate_stderr=True)
     expect(code == 7 and "out" in "".join(out) and "err" in "".join(err), f"separate: got ({code}, {out!r}, {err!r})")
-    code, out, err = node.exec_lines(command, separate_stderr=False)
+    code, out, err = node.execute_command_output(command, separate_stderr=False)
     expect(err == [] and "err" in "".join(out), f"merged: got ({code}, {out!r}, {err!r}); stderr should be in stdout")
 
 
-@check(shape=("exec_lines",))
+@check()
 def line_splitting_is_preserved(node):
-    result = node.exec_lines("printf 'a\\nb\\n'")
-    expect(result == (0, ["a\n", "b\n"], []), f"exec_lines returned {result!r}, expected (0, ['a\\n', 'b\\n'], [])")
+    result = node.execute_command_output("printf 'a\\nb\\n'")
+    expect(
+        result == (0, ["a\n", "b\n"], []),
+        f"execute_command_output returned {result!r}, expected (0, ['a\\n', 'b\\n'], [])",
+    )
 
 
-@check(shape=("exec_lines",))
+@check()
 def a_command_running_too_long_reports_minus_one(node):
-    code = node.exec_lines("sleep 5", max_exec_time=1)[0]
-    expect(code == -1, f"exec_lines over max_exec_time returned code {code}, expected -1")
+    code = node.execute_command_output("sleep 5", max_exec_time=1)[0]
+    expect(code == -1, f"execute_command_output over max_exec_time returned code {code}, expected -1")
 
 
 CHECKS[SHELL] = [
-    exec_returns_the_exit_code_and_the_output,
-    run_returns_stdout_and_raises_on_failure,
+    execute_command_returns_the_exit_code,
     stdout_and_stderr_can_be_kept_apart_or_merged,
     line_splitting_is_preserved,
     a_command_running_too_long_reports_minus_one,
