@@ -38,3 +38,4 @@ contracts:
     see_also:
       - logs.active
       - descriptor.endpoint
+    conformance: score.itf.packs.dlt.conformance_observe

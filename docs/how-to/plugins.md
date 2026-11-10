@@ -141,6 +141,35 @@ def is_reachable(shell: Shell) -> bool: ...
 - An action is a candidate in a scope only if all its slots can be filled there; when a slot has several
   candidates the target file chooses with `actions:` and `bind:`.
 
+## Conformance and definitions
+
+Every built-in pack uses the same local manifest layout, not its own copies of shared specifications.
+Each `score/itf/packs/<pack>/contracts/<contract-id>.yaml` contains only:
+
+```yaml
+$ref: ../../../contracts/definitions/<contract-id>.yaml
+```
+
+The shared library owns `score/itf/contracts/definitions/<contract-id>.yaml`, with exactly one entry under
+`contracts:` per file. Pack manifests cover the contracts a pack uses and may also expose available
+definitions beyond its active providers; they do not confer ownership of those definitions. This applies
+uniformly even when a contract currently has only one provider. External packs may keep optional,
+independently authored full specifications in their own `contracts/` directories; no global registry is
+required. The canonical definition may name a
+`conformance:` module whose `CHECKS` (keyed by contract name) hold the checks:
+
+```python
+@check()
+def a_failing_command_reports_its_exit_code_without_raising(node):
+    code, _ = node.exec("sh -c 'exit 3'")
+    expect(code == 3, f"exit code was {code}")   # raises with the message when the condition is false
+```
+
+`//score/itf/contracts:conformance` runs every check against every part of a target that claims the contract.
+See [Use, define and enforce contracts](contracts.md#shared-definitions-and-pack-manifests) for the required
+declaring-file-relative reference resolution, physical-file deduplication, duplicate-definition handling and
+reference errors.
+
 ## BUILD
 
 Every built-in pack's BUILD bundles both its local references and the canonical definition files they reach

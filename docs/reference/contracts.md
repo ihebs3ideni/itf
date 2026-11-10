@@ -19,7 +19,7 @@ ITF knows no contracts: a contract is a name two parts agree on. These are the o
 its own packs, as a supported set and not as a standard. A **capability contract** is fulfilled by a capability
 factory (`@capability`) and used in a test through a role; a **state contract** is made true by an action
 (`@state`) and listed under `goals:`. A definition adds meaning, a version, members, a suggested role, a
-stability. `itf contracts map` shows every contract in use, with its disagreements.
+stability and a conformance suite. `itf contracts map` shows every contract in use, with its disagreements.
 
 ## Index
 
@@ -68,6 +68,10 @@ Something the project defines, typically a health query on the application.
 
 None in the supported packs.
 
+### Conformance checks
+
+No checks defined.
+
 ## `capture.running`
 
 State contract, version 1, stable. A packet capture is running.
@@ -91,6 +95,10 @@ The capture process is alive.
 - `pcap.start_on_host`
 - `sim.capture_start`
 
+### Conformance checks
+
+No checks defined.
+
 ## `console.open`
 
 State contract, version 1, stable. A console is open and recording.
@@ -111,6 +119,10 @@ The console reports it is open and its reader thread is alive.
 
 - `qemu.open_console`
 - `serial.open`
+
+### Conformance checks
+
+No checks defined.
 
 ## `descriptor.credentials`
 
@@ -142,6 +154,11 @@ Data, not behaviour. Secrets are never printed: password and key_path are marked
 - `net.password`
 - `qemu.credentials`
 
+### Conformance checks
+
+- `user_is_a_nonempty_string`
+- `a_secret_is_a_string_or_none`
+
 ## `descriptor.endpoint`
 
 Capability contract, version 1, stable. Where a service listens: a host and a TCP port.
@@ -171,6 +188,11 @@ Data, not behaviour. Clients (SSH, DLT, ping) take an endpoint and connect to it
 - `net.endpoint`
 - `qemu.endpoint`
 
+### Conformance checks
+
+- `host_is_a_nonempty_string`
+- `port_is_a_valid_tcp_port`
+
 ## `diagnostics.core_dump`
 
 Capability contract, version 1, stable. Copy the target's core files to the host, when the test or a policy decides to.
@@ -197,6 +219,10 @@ Looks in the usual core file places of Linux and QNX targets with a command and 
 ### Capability factories that fulfil it
 
 - `core_dump.collector`
+
+### Conformance checks
+
+No checks defined.
 
 ## `exec.command`
 
@@ -228,6 +254,12 @@ The simplest way to act on a target: hand over a command line, get back what hap
 - `serial.exec`
 - `sim.exec`
 - `ssh.exec`
+
+### Conformance checks
+
+- `output_and_exit_code_are_returned`
+- `a_failing_command_reports_its_exit_code_without_raising`
+- `stderr_is_part_of_the_output`
 
 ## `exec.console`
 
@@ -266,6 +298,13 @@ Everything the console prints is kept in a bounded buffer from the moment it ope
 - `serial.console`
 - `serial.pty_console`
 
+### Conformance checks
+
+- `the_console_is_open`
+- `the_console_recorded_output_since_it_opened`
+- `run_reports_the_exit_code_and_the_output`
+- `written_text_is_seen_after_a_mark`
+
 ## `exec.process`
 
 Capability contract, version 1, stable. Start a program asynchronously and control it through a handle.
@@ -297,6 +336,13 @@ For anything that must keep running while the test does something else: servers,
 - `localhost.process`
 - `ssh.process`
 
+### Conformance checks
+
+- `a_process_reports_pid_running_and_exit_code`
+- `stop_terminates_a_long_running_process`
+- `output_is_captured`
+- `cwd_is_honoured`
+
 ## `exec.shell`
 
 Capability contract, version 1, stable. An open shell session with ITF's original `Ssh` command API.
@@ -325,6 +371,13 @@ A connected session (for example SSH) offering the original `Ssh` methods: outpu
 
 - `sim.shell`
 - `ssh.shell`
+
+### Conformance checks
+
+- `execute_command_returns_the_exit_code`
+- `stdout_and_stderr_can_be_kept_apart_or_merged`
+- `line_splitting_is_preserved`
+- `a_command_running_too_long_reports_minus_one`
 
 ## `files.transfer`
 
@@ -356,6 +409,12 @@ Upload and download single files, creating missing directories on the destinatio
 - `localhost.files`
 - `ssh.files`
 
+### Conformance checks
+
+- `upload_then_download_round_trips`
+- `downloading_creates_the_local_directory`
+- `remote_file_management`
+
 ## `image.present`
 
 State contract, version 1, stable. The software image under test is installed on the platform.
@@ -376,6 +435,10 @@ Something the project defines, for example the image checksum on the device.
 ### Actions that make it true
 
 None in the supported packs.
+
+### Conformance checks
+
+No checks defined.
 
 ## `logs.active`
 
@@ -399,6 +462,10 @@ The stream's reader is alive.
 - `dlt.join`
 - `dlt.start_receive`
 - `sim.subscribe`
+
+### Conformance checks
+
+No checks defined.
 
 ## `logs.on_target`
 
@@ -428,6 +495,10 @@ Receives DLT where the target's own network sees it (multicast inside the target
 ### Capability factories that fulfil it
 
 - `dlt.on_target`
+
+### Conformance checks
+
+No checks defined.
 
 ## `net.ping`
 
@@ -459,6 +530,11 @@ The host pings an endpoint. Used as a boot detector (the target is up when it an
 - `ping.ping`
 - `ping.pinger`
 
+### Conformance checks
+
+- `host_is_a_nonempty_string`
+- `ping_returns_a_boolean`
+
 ## `network.reachable`
 
 State contract, version 1, stable. The target's endpoint accepts connections from the test host.
@@ -480,6 +556,10 @@ A TCP connection to the endpoint succeeds.
 
 - `sim.open`
 - `ssh.open`
+
+### Conformance checks
+
+No checks defined.
 
 ## `observe.capture`
 
@@ -510,6 +590,11 @@ A capture of network traffic written to a file. It is started by the state `capt
 
 - `pcap.capture`
 - `sim.capture`
+
+### Conformance checks
+
+- `a_capture_is_running`
+- `the_capture_has_a_file`
 
 ## `observe.logs`
 
@@ -542,6 +627,13 @@ The session subscribes to the target's log stream and keeps a bounded buffer of 
 - `dlt.receive`
 - `dlt.receive_tcp`
 - `sim.logs`
+
+### Conformance checks
+
+- `a_subscribed_stream_is_active`
+- `lines_is_a_list_of_messages`
+- `filter_with_unknown_ids_is_empty`
+- `filter_without_criteria_never_returns_more_than_lines`
 
 ## `platform.instance`
 
@@ -576,6 +668,11 @@ Constructing the object creates nothing: the action delivering `platform.up` sta
 - `qemu.platform`
 - `sim.platform`
 
+### Conformance checks
+
+- `the_platform_is_running_once_up`
+- `a_restart_leaves_a_running_platform`
+
 ## `platform.up`
 
 State contract, version 1, stable. The platform exists and is running.
@@ -601,6 +698,10 @@ The platform reports running().
 - `qemu.start`
 - `sim.start`
 
+### Conformance checks
+
+No checks defined.
+
 ## `shell.open`
 
 State contract, version 1, stable. A shell session is connected and can run commands.
@@ -623,3 +724,7 @@ The session reports it is connected.
 
 - `sim.open`
 - `ssh.open`
+
+### Conformance checks
+
+No checks defined.

@@ -217,6 +217,17 @@ py_itf_test(
     target_compatible_with = ["@platforms//os:linux"],
 )
 
+py_itf_test(
+    name = "conformance_localhost",
+    timeout = "long",
+    srcs = [
+        "conformance/test_conformance.py",
+        "conftest.py",
+    ],
+    plugins = ["//score/itf/contracts:conformance"],
+    target = ":target_localhost",
+    target_compatible_with = ["@platforms//os:linux"],
+)
 
 # The same host with an override file: the facts of one setup (the platform's working directory).
 itf_target(
@@ -276,6 +287,17 @@ py_itf_test(
     target_compatible_with = ["@platforms//os:linux"],
 )
 
+py_itf_test(
+    name = "conformance_serial",
+    timeout = "long",
+    srcs = [
+        "conformance/test_conformance.py",
+        "conftest.py",
+    ],
+    plugins = ["//score/itf/contracts:conformance"],
+    target = ":target_serial",
+    target_compatible_with = ["@platforms//os:linux"],
+)
 
 # ---- containers (Docker or rootless Podman)
 
@@ -290,6 +312,7 @@ itf_target(
         "SSH_USER": "score",
     },
     # The volume the container mounts: one of the target's own files, so it is in the runfiles of every test of the
+    # target (the suite and the conformance run). A missing bind source would be created by a rootful Docker
     # daemon, as root, inside the test's sandbox.
     files = {"ITF_EXTRA_MOUNT": "targets/docker/docker.itf.yaml"},
     packs = ["//score/itf/packs/docker"],
@@ -307,6 +330,18 @@ py_itf_test(
     target_compatible_with = ["@platforms//os:linux"],
 )
 
+py_itf_test(
+    name = "conformance_docker",
+    timeout = "long",
+    srcs = [
+        "conformance/test_conformance.py",
+        "conftest.py",
+    ],
+    plugins = ["//score/itf/contracts:conformance"],
+    tags = ["requires-docker"],
+    target = ":target_docker",
+    target_compatible_with = ["@platforms//os:linux"],
+)
 
 # A container running sshd: SSH, SFTP and a shell session.
 itf_target(
@@ -319,6 +354,7 @@ itf_target(
         "SSH_USER": "score",
     },
     # The volume the container mounts: one of the target's own files, so it is in the runfiles of every test of the
+    # target (the suite and the conformance run). A missing bind source would be created by a rootful Docker
     # daemon, as root, inside the test's sandbox.
     files = {"ITF_EXTRA_MOUNT": "targets/docker_ssh/docker_ssh.itf.yaml"},
     packs = [
@@ -345,6 +381,18 @@ py_itf_test(
     }),
 )
 
+py_itf_test(
+    name = "conformance_docker_ssh",
+    timeout = "long",
+    srcs = [
+        "conformance/test_conformance.py",
+        "conftest.py",
+    ],
+    plugins = ["//score/itf/contracts:conformance"],
+    tags = ["requires-docker"],
+    target = ":target_docker_ssh",
+    target_compatible_with = ["@platforms//os:linux"],
+)
 
 # A dlt-daemon container: DLT received on the host over TCP, and dlt-receive run on the container.
 itf_target(

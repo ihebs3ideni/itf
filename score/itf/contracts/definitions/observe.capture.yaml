@@ -43,3 +43,4 @@ contracts:
       - running() is true while a capture is on.
     see_also:
       - capture.running
+    conformance: score.itf.packs.dlt.conformance_observe

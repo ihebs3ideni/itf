@@ -245,6 +245,7 @@ including `itf-run/preflight.json`, the console transcript, pcap windows and mul
 A build-analysis success is not a runtime pass. QNX TCG coverage is required; KVM and Linux-image QEMU
 coverage are separate environment gates, not inferred from a TCG run.
 
+Container changes additionally run native Docker and Docker/SSH targets, their conformance targets,
 and the unchanged legacy Docker/SSH suites. Record any unavailable image or daemon prerequisite explicitly.
 The throwaway local runner under `tasks/` may collect these logs, but it is not a repository CI dependency.
 
@@ -253,6 +254,7 @@ Verification on 2026-11-10 used QNX SDP 8.0.3 and QEMU 6.2 TCG. The native pytes
 scenario. The complete Bazel runner subsequently passed all six configurations with fresh artifacts:
 both common selections, renewal, host PTY, SSH API and pcap cleanup. This exposed and fixed an asset
 visibility error and a host/target configuration error: tcpdump must be supplied through execution-built
+``tools``, not cross-compiled through QNX ``files``. Docker and Docker/SSH native, conformance and unchanged
 legacy Bazel targets also completed successfully. KVM was not exercised; these results do not imply KVM
 or Linux-image QEMU coverage.
 
