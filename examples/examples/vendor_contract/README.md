@@ -22,10 +22,13 @@ acme_pack/                      what Acme ships
     pack.yaml                   the pack's name: acme
     plugin.py                   the pack's entrypoint module
     providers.py                capability factories: one fulfilling acme/power.relay (a simulation)
+    contracts/power.yaml        the definition: meaning, members, version, stability, role, conformance
+    conformance.py              the checks every factory claiming the contract must pass
 targets/                        what ITF reads
   target.itf.yaml               a target file with the relay as the role `power`
   policy.py                     the project's own part: a status LED, contract `bench/led`, never defined
 test_relay.py                   tests that require the roles
+test_conformance.py             runs the vendor's checks against the part that claims the contract
 ```
 
 In a pack, `providers.py` holds the capability factories and `steps.py` the actions (this pack has no actions).
@@ -45,8 +48,10 @@ is read from its return annotation. A factory for real hardware fulfils the same
 ## 2. The definition is optional, and the vendor's
 
 `acme_pack/acme/contracts/power.yaml` gives the contract meaning: summary, members with signatures, guarantees,
+`version: 1`, `stability: experimental`, a suggested `role: power`, and `conformance: acme.conformance`. `toggle`
 is `required: false`: a factory may omit it, and a test that needs it says so with `shape`. Without this file
 the target file still compiles: wiring and gating use the names and the shapes the parts publish and expect. A
+definition adds meaning, versions and conformance.
 
 This vendor example keeps its independently authored definitions in its own `contracts/` directory. That
 does not make a provider pack the owner of ITF's shared specifications: the built-in pack layout
@@ -107,15 +112,17 @@ Swapping the simulation for a real relay is changing the factory label.
 
 ## 4. The vendor's checks
 
+`conformance.py` is written like ITF's own (`score/itf/contracts/conformance/`): `@check()` functions that take
+the offered object and call `expect`, collected in `CHECKS` keyed by the contract name. `:conformance` runs them
 against every part of the target that claims `acme/power.relay`: the simulation here, a customer's hardware
 factory in their pipeline.
 
 ## 5. See what is in use
 
 Run from the `examples/` MODULE root, with the example's `acme_pack` on the Python import path for direct
-CLI use (`PYTHONPATH=examples/vendor_contract/acme_pack`). The YAML policy path is relative to this working
-directory, not the YAML parent. Bazel bundles the selected module in `itf_target.srcs`; it does not select
-policies. There is no native directory discovery.
+CLI use (`PYTHONPATH=examples/vendor_contract/acme_pack`). The YAML policy path is relative to the declaring
+target file. Bazel bundles the selected module in `itf_target.srcs`; it does not select policies. There is no
+native directory discovery.
 
 ```
 itf contracts map examples/vendor_contract/targets/target.itf.yaml
@@ -145,5 +152,6 @@ forbid_stability:
 ```
 
 ```
+bazel test //examples/vendor_contract:test //examples/vendor_contract:conformance     # from examples/
 bazel build //examples/vendor_contract:target                                    # target.plan.json
 ```

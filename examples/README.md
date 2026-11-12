@@ -21,9 +21,9 @@ beside them. A target file lists capabilities by **role**
 `py_itf_test(target = ...)` runs tests against it.
 
 Native policies are selected explicitly by YAML `policies:`, not by filename or directory discovery.
-These examples declare paths such as `examples/starter/container/targets/policy.py`, relative to this
-`examples/` MODULE root. Run the commands below here, not in an example's `targets/` directory. When copying
-an example, update its policy paths to the copied modules and bundle those files in `itf_target.srcs`.
+Paths such as `policy.py` and `../policy.py` are relative to the YAML that declares them. Run the commands
+below here, not in an example's `targets/` directory. When copying an example, keep the relative layout
+or update its policy paths, and bundle those files in `itf_target.srcs`.
 YAML selects modules; `srcs` only bundles them. Contributions do not trigger actions absent goals.
 
 Tests declare small consumer Protocols for the calls they use. When every test in a module shares a
@@ -38,6 +38,7 @@ the tests never use. Return annotations document the API; gating does not valida
 | `starter/` | three copy-and-edit starters (`container`, `ssh`, `serial`): a target file with `# CHANGE:` marks, an override file, a policy, one test; start here |
 | `exec_everywhere/` | one test file on four target files (`container`, `ssh`, `serial`, `serial_device`); the fake ECU's readiness is an action in the project's policy (`policy.py`) |
 | `itf/` | `example_app` and `dlt`: one test file on a container, or on a QEMU machine when building for QNX (a `select()` of the target); the project's policy (`policy.py`) starts the DLT daemon |
+| `vendor_contract/` | a vendor defines its own contract `acme/power.relay` (no registry), ships a definition and a conformance check in its pack; a factory fulfils it, a test requires the role; `itf contracts map` shows it |
 | `facade/` | **tutorial for projects adopting ITF**: a project's own target API (`target.run`, `push`, `pull`) kept as an `itf.Facade` in `conftest.py`; its tests run unchanged on the host and in a container, only the target files are new ([README](examples/facade/README.md)) |
 | `plain_python/` | compose and run a target from a script with `Session(target=...)`, without pytest |
 | `cpp/`, `docker/` | the example application and the images the examples run |
@@ -71,9 +72,9 @@ itf test examples/starter/container/targets/target.itf.yaml -- examples/starter/
 itf contracts map examples/starter/container/targets/target.itf.yaml
 ```
 
-Policy paths are absolute or relative to invocation working directory, never the YAML parent.
-`./policy.py` works when invoked where that Python file lives; `/home/alice/bench/policy.py` is an absolute
-example. Direct Session, CLI and pytest share the YAML selection; legacy discovery stays in compat.
+Policy paths in file-backed YAML are absolute or relative to the declaring YAML; inline YAML uses the
+invocation working directory. `/home/alice/bench/policy.py` is an absolute example. Direct Session, CLI and
+pytest share the YAML selection; legacy discovery stays in compat.
 
 ## Running
 
