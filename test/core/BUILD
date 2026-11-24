@@ -50,10 +50,10 @@ py_itf_unittest(
     deps = [
         "//score/itf/core",
         "//score/itf/core/process",
-        "//score/itf/packs/dlt:dlt",
-        "//score/itf/packs/docker:docker",
-        "//score/itf/packs/localhost:localhost",
-        "//score/itf/packs/qemu:qemu",
+        "//score/itf/packs/dlt",
+        "//score/itf/packs/docker",
+        "//score/itf/packs/localhost",
+        "//score/itf/packs/qemu",
     ],
 )
 
