@@ -12,16 +12,26 @@
 # *******************************************************************************
 """dlt-receive arguments: the node's transport, and a per-recording override (window())."""
 
+import os
+import socket
+import subprocess
+import threading
+import time
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
 from score.itf.core.process import ProcessWrapper
-from score.itf.packs.dlt.receive.process import DltReceive
+from score.itf.packs.dlt.receive.process import DltReceive, bundled
 from score.itf.packs.dlt.receive.window import DltWindow
 from score.itf.packs.dlt.receive.providers import make_receive, make_receive_tcp
 from score.itf.packs.dlt.receive.capture import DltCapture, Transport
+
+# First network frame from dlt-daemon's tests/testfile.dlt, without its storage header.
+DLT_FRAME = bytes.fromhex(
+    "35 00 00 1f 45 43 55 00 3f 88 62 3a 16 01 41 50 50 00 43 4f 4e 00 11 00 00 00 04 72 65 6d 6f"
+)
 
 
 def _udp():
@@ -50,6 +60,57 @@ def test_a_udp_node_joins_its_groups_on_its_interface():
 def test_a_tcp_node_connects_to_its_endpoint():
     node = _tcp()
     assert node._args == ["-o", node.path(), "--tcp", "10.0.0.5"]
+
+
+def test_tcp_receiver_reconnects_and_records_data_after_daemon_disconnect(tmp_path):
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    listener.settimeout(7)
+    port = listener.getsockname()[1]
+    reconnected = threading.Event()
+    accept_errors = []
+
+    def accept_then_close():
+        try:
+            connection, _ = listener.accept()
+            connection.close()
+            connection, _ = listener.accept()
+            connection.sendall(DLT_FRAME)
+            connection.close()
+            reconnected.set()
+        except OSError as error:
+            accept_errors.append(error)
+        finally:
+            listener.close()
+
+    server = threading.Thread(target=accept_then_close, daemon=True)
+    server.start()
+    recording = tmp_path / "reconnected.dlt"
+    receiver = subprocess.Popen(
+        [bundled("dlt-receive"), "-o", str(recording), "--tcp", "127.0.0.1"],
+        env={**os.environ, "DLT_DAEMON_TCP_PORT": str(port)},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        assert reconnected.wait(timeout=7)
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and (not recording.exists() or DLT_FRAME not in recording.read_bytes()):
+            time.sleep(0.01)
+        assert recording.is_file(), "dlt-receive did not create its recording after reconnect"
+        assert DLT_FRAME in recording.read_bytes()
+        assert receiver.poll() is None
+        assert not accept_errors
+    finally:
+        receiver.terminate()
+        try:
+            receiver.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            receiver.kill()
+            receiver.wait(timeout=3)
+        listener.close()
+        server.join(timeout=2)
 
 
 @pytest.fixture
