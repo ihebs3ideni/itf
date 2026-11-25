@@ -208,6 +208,11 @@ Statuses:
 - Serial EIO spin: EIO is end of file.
 - DR-001 still pointed to `test/unit/`.
 - The `platform.md` anchor.
+- `Session` was one 900-line class: it is now a package
+  ([#25](https://github.com/ihebs3ideni/itf/pull/25)). `Session` keeps the phase and delegates to `Resolution`
+  (target file to the two plans, nothing built), `TargetStates` (probe, plan the delta, run it: bring-up with
+  retries, `reach`, `discard`, drift) and `RunRecord` (what the run did, only reported). `artifacts.py` and
+  `evidence.py` read `session.record` and public properties; the 52 reads of private fields are gone.
 
 **Justified:**
 - `tcpdump` as a non-dev `bazel_dep`: the pcap pack needs it at run time for consumers. Bazel fetches and builds it
@@ -219,9 +224,6 @@ Statuses:
   is possible once the docs workflow can run the CLI.
 
 **Open (follow-ups):**
-- `Session` publishes a frozen `RunRecord`, instead of `artifacts.py` and `evidence.py` reading private fields
-  (52 reads).
-- Split `Session` into collaborators: retry, drift, secrets, artifacts.
 - Move the HTML report out of `core/engine` (into an adapter or the CLI).
 - Common base exceptions (`ItfUserError`, `ItfRuntimeError`) instead of catching `TypeError`/`ValueError`
   wholesale.
