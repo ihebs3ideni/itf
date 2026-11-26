@@ -60,16 +60,16 @@ composition step by step. #154 stays open as the overview and links each step.
 | # | Pull request | Size (lines +/−) | Notes |
 |---|---|---|---|
 | 01 | [#18](https://github.com/ihebs3ideni/itf/pull/18) fix(qnx): correct emulated timer and guest network setup | +4 / −2 | independent fix |
-| 02 | [#19](https://github.com/ihebs3ideni/itf/pull/19) fix(ci): deploy generated documentation through GitHub Pages | +63 / −6 | independent fix; the docs jobs run only from an upstream branch |
+| 02 | [#19](https://github.com/ihebs3ideni/itf/pull/19) fix(ci): deploy generated documentation through GitHub Pages | +41 / −5 | independent fix; the docs jobs run only from an upstream branch |
 | 03 | [#20](https://github.com/ihebs3ideni/itf/pull/20) fix(dlt): reconnect dlt-receive after a TCP disconnect | +72 | independent fix; bounded retries |
 | 04 | [#21](https://github.com/ihebs3ideni/itf/pull/21) fix(qemu): bind forwarded host ports to 127.0.0.1 | +2 / −2 | independent fix |
 | 05 | [#22](https://github.com/ihebs3ideni/itf/pull/22) docs(decisions): propose DR-002, target composition | +153 / −2 | design only; agree first |
-| 06 | [#23](https://github.com/ihebs3ideni/itf/pull/23) build: provide a hermetic C/C++ toolchain and pinned runtime dependencies | +239 / −41 |  |
+| 06 | [#23](https://github.com/ihebs3ideni/itf/pull/23) build: provide a hermetic C/C++ toolchain and pinned runtime dependencies | +184 / −34 |  |
 | 07 | [#24](https://github.com/ihebs3ideni/itf/pull/24) feat(octo): add the target planner | +5.0k | stdlib only, no users yet |
-| 08 | [#25](https://github.com/ihebs3ideni/itf/pull/25) feat(core): compose targets from target files | +16.8k / −0.3k | additive; includes the localhost pack |
-| 09 | [#26](https://github.com/ihebs3ideni/itf/pull/26) feat(packs): add capability packs for main's existing targets | +10.7k |  |
-| 10 | [#33](https://github.com/ihebs3ideni/itf/pull/33) feat(packs): add serial and pcap packs | +1.6k | capabilities main does not have |
-| 11 | [#27](https://github.com/ihebs3ideni/itf/pull/27) feat(compat): serve the original plugins and Target API from the packs | +3.3k / −3.8k | the original plugins move onto the packs; legacy gate |
+| 08 | [#25](https://github.com/ihebs3ideni/itf/pull/25) feat(core): compose targets from target files | +17.1k / −0.3k | additive; includes the localhost pack |
+| 09 | [#26](https://github.com/ihebs3ideni/itf/pull/26) feat(packs): add capability packs for main's existing targets | +10.9k |  |
+| 10 | [#33](https://github.com/ihebs3ideni/itf/pull/33) feat(packs): add serial and pcap packs | +1.7k / −13 | capabilities main does not have |
+| 11 | [#27](https://github.com/ihebs3ideni/itf/pull/27) feat(compat): serve the original plugins and Target API from the packs | +3.3k / −4.0k | the original plugins move onto the packs; legacy gate |
 | 12 | [#28](https://github.com/ihebs3ideni/itf/pull/28) feat(contracts): add contract metadata, rules and conformance checks | +3.6k |  |
 | 13 | [#29](https://github.com/ihebs3ideni/itf/pull/29) feat(cli): add the itf command line | +3.3k |  |
 | 14 | [#30](https://github.com/ihebs3ideni/itf/pull/30) docs: document target composition, examples and CI | +11.5k / −1.5k |  |
@@ -143,7 +143,7 @@ Every commit is authored and SSH-signed by one identity.
 |---|---|---|
 | `*` in the SSH client signature | Answered | It makes the following parameters keyword-only. |
 | Remove `examples/evidence/console.txt` | Resolved | Removed. |
-| Use the S-CORE C++ toolchain (`score_bazel_cpp_toolchains`) | Justified, open to change | The S-CORE toolchain in ITF is configured for QNX. For Linux, main used the host compiler (and `toolchains_llvm` in the examples). [#23](https://github.com/ihebs3ideni/itf/pull/23) builds dlt-daemon and libpcap with a hermetic GCC so that builds do not depend on the host. On this machine, `main` itself fails to link dlt-daemon with the host compiler. If `score_bazel_cpp_toolchains` offers a Linux x86_64 GCC/Clang, we will switch to it in [#23](https://github.com/ihebs3ideni/itf/pull/23); it is one isolated change. |
+| Use the S-CORE C++ toolchain (`score_bazel_cpp_toolchains`) | Justified, open to change | The S-CORE toolchain in ITF is configured for QNX. For Linux, main used the host compiler (and `toolchains_llvm` in the examples). [#23](https://github.com/ihebs3ideni/itf/pull/23) builds dlt-daemon with a hermetic GCC so that builds do not depend on the host; tcpdump and libpcap use it from [#33](https://github.com/ihebs3ideni/itf/pull/33), which also adds libpcap's `-D_DEFAULT_SOURCE`. On this machine, `main` itself fails to link dlt-daemon with the host compiler. If `score_bazel_cpp_toolchains` offers a Linux x86_64 GCC/Clang, we will switch to it in [#23](https://github.com/ihebs3ideni/itf/pull/23); it is one isolated change. |
 | Examples use the same toolchain | Justified | Same reason; one toolchain for the repository and its examples. |
 
 ## 4. The review document (etas-contrib/score_itf#2)
@@ -193,7 +193,9 @@ Statuses:
 ### Further findings
 
 **Resolved:**
-- Rebase on Python 3.12-only `main`: the stack is based on `118287d`.
+- Rebase on `main`: the stack is based on `501c396`, which adds UEFI boot to the qemu plugin (#162). The qemu pack
+  and the compatibility layer support it too; a UEFI-booted Ubuntu passes the native suite and main's legacy
+  `test_ubuntu`.
 - Personal path in the docs.
 - Missing license headers: 11 files fixed; `copyright.check` passes.
 - `py_itf_test`: the host transition now uses `--host_platform`, so a project's `select()` matches as it did with
@@ -216,7 +218,7 @@ Statuses:
   `evidence.py` read `session.record` and public properties; the 52 reads of private fields are gone.
 
 **Justified:**
-- `tcpdump` as a non-dev `bazel_dep`: the pcap pack needs it at run time for consumers. Bazel fetches and builds it
+- `tcpdump` as a non-dev `bazel_dep` ([#33](https://github.com/ihebs3ideni/itf/pull/33)): the pcap pack needs it at run time for consumers. Bazel fetches and builds it
   only when a consumer's target depends on it.
 - A second pluggy manager for `itf_verify` and `itf_teardown`: these hooks also run under `itf up` and plain
   Python, with no pytest.
