@@ -22,7 +22,7 @@ Thank you for the reviews. This reply covers every comment on
 [etas-contrib/score_itf#2](https://github.com/etas-contrib/score_itf/pull/2) (v2, at `8a6c468`), checked against the
 code as it now stands.
 
-#154 is now a stack of 13 pull requests, open as drafts in the fork
+#154 is now a stack of 14 pull requests, open as drafts in the fork
 ([ihebs3ideni/itf#18](https://github.com/ihebs3ideni/itf/pull/18) to
 [#30](https://github.com/ihebs3ideni/itf/pull/30)) so that each step can be reviewed and run in CI before it goes
 upstream. The first four fix the existing code on `main` and can merge on their own. The rest build target
@@ -30,7 +30,7 @@ composition step by step. #154 stays open as the overview and links each step.
 
 ## 1. What changed
 
-- **The PR is split** into 13 stacked pull requests (section 2). Each one builds and passes its tests on its own,
+- **The PR is split** into 14 stacked pull requests (section 2). Each one builds and passes its tests on its own,
   so every step can be reviewed, bisected and reverted alone.
 - **Fixes to the existing code come first** ([#18](https://github.com/ihebs3ideni/itf/pull/18)–[#21](https://github.com/ihebs3ideni/itf/pull/21)): the QNX image, the Pages deployment, the DLT
   TCP reconnect, and the QEMU port forwarding. They do not depend on target composition.
@@ -67,11 +67,12 @@ composition step by step. #154 stays open as the overview and links each step.
 | 06 | [#23](https://github.com/ihebs3ideni/itf/pull/23) build: provide a hermetic C/C++ toolchain and pinned runtime dependencies | +239 / −41 |  |
 | 07 | [#24](https://github.com/ihebs3ideni/itf/pull/24) feat(octo): add the target planner | +5.0k | stdlib only, no users yet |
 | 08 | [#25](https://github.com/ihebs3ideni/itf/pull/25) feat(core): compose targets from target files | +16.8k / −0.3k | additive; includes the localhost pack |
-| 09 | [#26](https://github.com/ihebs3ideni/itf/pull/26) feat(packs): add interchangeable capability packs | +12.4k |  |
-| 10 | [#27](https://github.com/ihebs3ideni/itf/pull/27) feat(compat): serve the original plugins and Target API from the packs | +3.3k / −3.8k | the original plugins move onto the packs; legacy gate |
-| 11 | [#28](https://github.com/ihebs3ideni/itf/pull/28) feat(contracts): add contract metadata, rules and conformance checks | +3.6k |  |
-| 12 | [#29](https://github.com/ihebs3ideni/itf/pull/29) feat(cli): add the itf command line | +3.3k |  |
-| 13 | [#30](https://github.com/ihebs3ideni/itf/pull/30) docs: document target composition, examples and CI | +11.5k / −1.5k |  |
+| 09 | [#26](https://github.com/ihebs3ideni/itf/pull/26) feat(packs): add capability packs for main's existing targets | +10.7k |  |
+| 10 | [#33](https://github.com/ihebs3ideni/itf/pull/33) feat(packs): add serial and pcap packs | +1.6k | capabilities main does not have |
+| 11 | [#27](https://github.com/ihebs3ideni/itf/pull/27) feat(compat): serve the original plugins and Target API from the packs | +3.3k / −3.8k | the original plugins move onto the packs; legacy gate |
+| 12 | [#28](https://github.com/ihebs3ideni/itf/pull/28) feat(contracts): add contract metadata, rules and conformance checks | +3.6k |  |
+| 13 | [#29](https://github.com/ihebs3ideni/itf/pull/29) feat(cli): add the itf command line | +3.3k |  |
+| 14 | [#30](https://github.com/ihebs3ideni/itf/pull/30) docs: document target composition, examples and CI | +11.5k / −1.5k |  |
 
 Each pull request's base is the one before it (the first one's is `main`), so each shows only its own change.
 Pull requests 01–04 do not depend on each other or on the rest.
