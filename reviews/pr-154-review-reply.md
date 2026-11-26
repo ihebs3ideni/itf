@@ -24,7 +24,7 @@ code as it now stands.
 
 #154 is now a stack of 14 pull requests, open as drafts in the fork
 ([ihebs3ideni/itf#18](https://github.com/ihebs3ideni/itf/pull/18) to
-[#30](https://github.com/ihebs3ideni/itf/pull/30)) so that each step can be reviewed and run in CI before it goes
+[#30](https://github.com/ihebs3ideni/itf/pull/30); [stack view](https://github.com/ihebs3ideni/itf/stack/34)) so that each step can be reviewed and run in CI before it goes
 upstream. The first four fix the existing code on `main` and can merge on their own. The rest build target
 composition step by step. #154 stays open as the overview and links each step.
 
