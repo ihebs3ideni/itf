@@ -49,6 +49,15 @@ MODULE root: their policy paths start with `examples/starter/...`, not relative 
 Other examples: `exec_everywhere` (one test file, four target files), `itf` (docker, dlt,
 qemu), `vendor_contract` (a vendor's own contract), `plain_python`, `facade` (adopting ITF with a project's own target API). Tests written for the original API run unchanged on the compatibility layer (`score/itf/compat`).
 
+## VS Code Navigation
+
+The repository includes a Go to Definition extension for ITF factories, actions, and state contracts in target YAML.
+From the ITF repository root, run `bash tools/vscode-itf/install.sh`. It packages a VSIX and installs it using the
+`code` CLI found on `PATH` (or `ITF_VSCODE_CLI`). Run it in the local terminal to install locally, or in the
+integrated terminal of a Remote-SSH window to install on that remote host. Packaging requires Bash, Node.js 22+
+and npm; navigation requires Python 3.8+ and a trusted workspace. The script supports Linux/macOS and Linux
+Remote-SSH, not native Windows PowerShell/cmd.
+
 ## 1. The lifecycle
 
 Which command answers which question, and the rules for using them: `references/cli.md`.

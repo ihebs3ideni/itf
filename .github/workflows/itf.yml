@@ -16,6 +16,40 @@ on:
   merge_group:
     types: [checks_requested]
 jobs:
+  vscode-navigation:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: tools/vscode-itf
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/vscode-itf/package-lock.json
+      - name: Install dependencies and run provider tests
+        run: |
+          npm ci
+          npm test
+          bash -n install.sh
+      - name: Verify the VSIX contents
+        run: |
+          npm exec -- vsce package --dependencies --allow-missing-repository --out "$RUNNER_TEMP/itf-navigation.vsix"
+          python3 - "$RUNNER_TEMP/itf-navigation.vsix" <<'PY'
+          import sys
+          import zipfile
+          with zipfile.ZipFile(sys.argv[1]) as archive:
+              expected = {"extension/" + name for name in (
+                  "extension.js", "resolve.py", "yaml-target.js", "pack-discovery.js",
+                  "node_modules/yaml/package.json", "LICENSE.txt", "NOTICE",
+              )}
+              assert expected <= set(archive.namelist()), expected - set(archive.namelist())
+          PY
   # Every job runs on a pinned image: ubuntu-latest moves to a new release under a running pull request.
   itf-targets:
     # Every target file compiles on its own, before and without any test: an itf_target runs both gates, the

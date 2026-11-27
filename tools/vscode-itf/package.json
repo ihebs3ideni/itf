@@ -1,0 +1,57 @@
+{
+  "name": "itf-yaml-navigation",
+  "displayName": "ITF YAML Navigation",
+  "description": "Go to ITF factory and action definitions from target YAML",
+  "version": "0.0.1",
+  "publisher": "itf-local",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22",
+    "vscode": "^1.85.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Navigation launches a Python AST resolver and reads explicitly referenced source files."
+    },
+    "virtualWorkspaces": false
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml"
+  ],
+  "main": "./extension.js",
+  "files": [
+    "extension.js",
+    "LICENSE",
+    "NOTICE",
+    "node_modules/yaml/**",
+    "pack-discovery.js",
+    "resolve.py",
+    "yaml-target.js"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "ITF YAML Navigation",
+      "properties": {
+        "itf.definition.python": {
+          "type": "string",
+          "default": "python3",
+          "scope": "machine-overridable",
+          "description": "Python interpreter used to index ITF decorators."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^4.1.1"
+  }
+}
